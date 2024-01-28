@@ -18,14 +18,13 @@ function Main(props) {
 
 
     const firebaseConfig = {
-      apiKey: "AIzaSyDlfsAURNGgAD9OVsRlXS28dtv28eiLASs",
-      authDomain: "yaara-mallka.firebaseapp.com",
-      //authDomain: "YaaraMallka",
-      projectId: "yaara-mallka",
-      storageBucket: "yaara-mallka.appspot.com",
-      messagingSenderId: "665221289464",
-      appId: "1:665221289464:web:d2f8a91d9cded3265e320d",
-      measurementId: "G-WS6M5TLZWD"
+      apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
+      authDomain: "final-project-d6ce7.firebaseapp.com",
+      projectId: "final-project-d6ce7",
+      storageBucket: "final-project-d6ce7.appspot.com",
+      messagingSenderId: "1056060530572",
+      appId: "1:1056060530572:web:d08d859ca2d25c46d340a9",
+      measurementId: "G-LD61QH3VVP"
     };
   
     if (!firebase.apps.length){
@@ -82,7 +81,7 @@ function Main(props) {
               </View>
 
 
-              <Text style={styles.title}>Tahel Store</Text>
+              <Text style={styles.title}>סמי שמעון</Text>
 
               
               {!isLoggedIn && (
@@ -94,24 +93,9 @@ function Main(props) {
                 <Text style={styles.loginText}>לחץ להתחברות או הרשמה</Text>
               </TouchableOpacity>
               )}
-            
-              <TouchableOpacity onPress={() => props.navigation.navigate('Category_1')} style={styles.catgory_1_btn}>
-                <Text style={styles.loginText}>קטגוריה 1</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity onPress={() => props.navigation.navigate('Category_2')} style={styles.catgory_2_btn}>
-                <Text style={styles.loginText}>קטגוריה 2</Text>
-              </TouchableOpacity>
+
     
-              <TouchableOpacity onPress={() => props.navigation.navigate('Category_3')} style={styles.catgory_3_btn}>
-                <Text style={styles.loginText}>קטגוריה 3</Text>
-              </TouchableOpacity>
-    
-              <TouchableOpacity onPress={() => props.navigation.navigate('Category_4')} style={styles.catgory_4_btn}>
-                <Text style={styles.loginText}>קטגוריה 4</Text>
-              </TouchableOpacity>
-    
-              <Text style={styles.title_toolbar_down}>עקבו אחרי</Text>
+              <Text style={[styles.toolbar_down, { marginTop:550 }]}></Text>
     
                <View style={{ flexDirection: 'row',}}>
                 <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
@@ -134,7 +118,7 @@ function Main(props) {
               </View>
      
               
-              <Text style={styles.title_toolbar_yovel}> יובל פיתח אפליקציות | ydgroup</Text>
+              <Text style={styles.title_toolbar_yovel}> יובל ליאור פיתח אפליקציות | ylgroup</Text>
     
     
     

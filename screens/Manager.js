@@ -12,14 +12,13 @@ function Manager(props) {
   const [displayText, setDisplayText] = useState('Hello!');
 
   const firebaseConfig = {
-    apiKey: "AIzaSyDlfsAURNGgAD9OVsRlXS28dtv28eiLASs",
-    authDomain: "yaara-mallka.firebaseapp.com",
-    //authDomain: "YaaraMallka",
-    projectId: "yaara-mallka",
-    storageBucket: "yaara-mallka.appspot.com",
-    messagingSenderId: "665221289464",
-    appId: "1:665221289464:web:d2f8a91d9cded3265e320d",
-    measurementId: "G-WS6M5TLZWD"
+    apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
+    authDomain: "final-project-d6ce7.firebaseapp.com",
+    projectId: "final-project-d6ce7",
+    storageBucket: "final-project-d6ce7.appspot.com",
+    messagingSenderId: "1056060530572",
+    appId: "1:1056060530572:web:d08d859ca2d25c46d340a9",
+    measurementId: "G-LD61QH3VVP"
   };
 
   if (!firebase.apps.length){
