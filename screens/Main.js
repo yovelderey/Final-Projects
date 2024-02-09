@@ -81,7 +81,7 @@ function Main(props) {
               </View>
 
 
-              <Text style={styles.title}>סמי שמעון</Text>
+              <Text style={styles.title}>סמי </Text>
 
               
               {!isLoggedIn && (
