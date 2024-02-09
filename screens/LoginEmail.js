@@ -39,12 +39,9 @@ function LoginEmail() {
     try {
       await firebase.auth().signInWithEmailAndPassword(email, password);
 
-
-
-     
     
       // You can navigate to your app's main screen upon successful login.
-      navigation.navigate('Main');
+      props.navigation.navigate('Home');
     } catch (error) {
       Alert.alert('Authentication Error', error.message);
     }

@@ -65,7 +65,7 @@ function Login(props) {
       .then((userCredential) => {
         setCode('');
         Alert.alert('Login successful');
-
+        props.navigation.navigate('Home');
         const phoneNumberSave = userCredential.user.phoneNumber;
         const databaseRef = ref(getDatabase(), 'users/' + userCredential.user.uid);
 
@@ -129,7 +129,7 @@ function Login(props) {
 
         <Button
           title="back"
-          onPress={() => props.navigation.navigate('Main')} 
+          onPress={() => props.navigation.navigate('Home')} 
           buttonStyle={styles.back}
         />
       </View>

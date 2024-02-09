@@ -10,6 +10,7 @@ import RePassword from './screens/RePassword';
 import LoginEmail from './screens/LoginEmail';
 import Setting from './screens/Setting';
 import Manager from './screens/Manager';
+import Home from './screens/Home';
 
 
 
@@ -27,6 +28,7 @@ const App = () => {
         <Stack.Screen name="LoginEmail" component={LoginEmail}/>
         <Stack.Screen name="Setting" component={Setting}/>
         <Stack.Screen name="Manager" component={Manager}/>
+        <Stack.Screen name="Home" component={Home}/>
 
       </Stack.Navigator>
    </NavigationContainer>       
