@@ -129,7 +129,7 @@ function Login(props) {
 
         <Button
           title="back"
-          onPress={() => props.navigation.navigate('Home')} 
+          onPress={() => props.navigation.navigate('Main')} 
           buttonStyle={styles.back}
         />
       </View>

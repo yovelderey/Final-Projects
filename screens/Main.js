@@ -13,6 +13,8 @@ function Main(props) {
   //console.log(props);
 
     const [isLoggedIn, setLoggedIn] = useState(false);
+    const [isCreate, setisCreate] = useState(false);
+
     const [user, setUser] = useState(null);
     const Tab = createBottomTabNavigator();
 
@@ -42,7 +44,19 @@ function Main(props) {
           setUser(null);
           setLoggedIn(false);
         }
+
+        if (authUser) { //button create event is not seen
+          console.log("the user is logged in:", authUser.email);
+          setUser(authUser);
+          setisCreate(false)
+        } else {
+          console.log("the user is not logged in");
+          setUser(null);
+          setisCreate(true)
+        }
       });
+
+      
   
       return () => unsubscribeAuth();
     }, []);
@@ -93,7 +107,11 @@ function Main(props) {
                 <Text style={styles.loginText}>לחץ להתחברות או הרשמה</Text>
               </TouchableOpacity>
               )}
-
+              {!isCreate && (
+               <TouchableOpacity onPress={() => props.navigation.navigate('Home')} style={styles.loginBtn}>
+                <Text style={styles.loginText}>צור אירוע חדש</Text>
+              </TouchableOpacity>
+              )}
     
               <Text style={[styles.toolbar_down, { marginTop:550 }]}></Text>
     
