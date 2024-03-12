@@ -2,21 +2,25 @@
 import React, { useEffect,useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, Button,TextInput, TouchableOpacity, ImageBackground, StyleSheet, StatusBar,ScrollView ,Image} from 'react-native';
+import { View, Text, Button,TextInput, TouchableOpacity, TouchableHighlight, StyleSheet, StatusBar,ScrollView ,Image} from 'react-native';
 import  firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { getDatabase, ref, set,onValue } from 'firebase/database';
+import 'firebase/database'; // Import the Realtime Database module
+import ListItem from './ListItem';
+import { useNavigation } from '@react-navigation/native';
 
 
 function Main(props) {
-  //console.log(props);
 
     const [isLoggedIn, setLoggedIn] = useState(false);
     const [isCreate, setisCreate] = useState(false);
-
     const [user, setUser] = useState(null);
     const Tab = createBottomTabNavigator();
+    const [events, setEvents] = useState([]);
+    const [eventName, setEventName] = useState('');
 
 
     const firebaseConfig = {
@@ -33,9 +37,42 @@ function Main(props) {
           firebase.initializeApp(firebaseConfig);
     }
 
+  const navigation = useNavigation();
+  const [pages, setPages] = useState(['Page 1', 'Page 2', 'Page 3', 'Login']);
+
+  const handlePagePress = (page) => {
+    if (page === 'Login') {
+      navigation.navigate('Login');
+    } else {
+      // Handle other pages
+      navigation.navigate(page);
+    }
+  };
+
+  const handleAddButton = () => {
+    const newButton = `Page ${pages.length + 1}`;
+    setPages([...pages, newButton]);
+  };
+
+
+    const addEvent = () => {
+      if (eventName.trim() !== '') {
+        setEvents(prevEvents => [...prevEvents, { id: Date.now(), name: eventName }]);
+        setEventName('');
+      }
+    };
+  
+    const removeEvent = (id) => {
+      setEvents(prevEvents => prevEvents.filter(event => event.id !== id));
+    };
+
     useEffect(() => {
+      
+      
       const unsubscribeAuth = firebase.auth().onAuthStateChanged((authUser) => {
         if (authUser) {
+          
+
           console.log("the user is logged in:", authUser.email);
           setUser(authUser);
           setLoggedIn(true);
@@ -54,34 +91,27 @@ function Main(props) {
           setUser(null);
           setisCreate(true)
         }
-      });
 
-      
-  
+      });
+    
+
       return () => unsubscribeAuth();
     }, []);
 
     const onPressLogin = () => {
         // כאן תוכל להוסיף לוגיקה להתחברות
-            
-
       };
 
       const setting_button = () => {
         // כאן תוכל להוסיף לוגיקה להתחברות
-            
-
       };
 
     return (
 
             <ScrollView contentContainerStyle={styles.scrollViewContainer}>
-    
             <View style={styles.innerContainer}>
               <StatusBar backgroundColor="#000" barStyle="light-content" />
-
               <View style={styles.toolbar_bag}>
-        
 
               <TouchableOpacity onPress={setting_button} style={[styles.toolbar_down, { marginHorizontal: 327 ,marginTop:55}]}>
                   <Image source={ require('../assets/search.png')}  style={[styles.img,{width: 35,height: 35,}]}/>
@@ -90,14 +120,11 @@ function Main(props) {
               <TouchableOpacity onPress={() => props.navigation.navigate('Setting')} style={[styles.toolbar_down, { marginHorizontal: 287,marginTop:-55 }]}>
                   <Image source={ require('../assets/user.png')}  style={[styles.img,{width: 30,height: 30,}]}/>
               </TouchableOpacity>             
-
-           
+     
               </View>
 
+              <Text style={styles.title}>EasyVent </Text>
 
-              <Text style={styles.title}>סמי </Text>
-
-              
               {!isLoggedIn && (
               <Text style={styles.title_2}>שלום אורח, ברוך הבא!</Text>
               )}
@@ -113,6 +140,25 @@ function Main(props) {
               </TouchableOpacity>
               )}
     
+            <View style={styles.container}>
+              {pages.map((page, index) => (
+                <TouchableOpacity
+                  key={index}
+                  onPress={() => handlePagePress(page)}
+                  style={[styles.item, index < pages.length - 1 && styles.itemWithBorder]}
+                >
+                  <View>
+                    <Text style={styles.text}>{page}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity onPress={handleAddButton} style={styles.addButton}>
+                <View>
+                  <Text style={styles.addButtonText}>Add Button</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
               <Text style={[styles.toolbar_down, { marginTop:550 }]}></Text>
     
                <View style={{ flexDirection: 'row',}}>
@@ -131,14 +177,10 @@ function Main(props) {
                 <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
                 <Image source={ require('../assets/icons8-whatsapp-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
                 </TouchableOpacity>
-    
-    
+       
               </View>
-     
-              
+             
               <Text style={styles.title_toolbar_yovel}> יובל ליאור פיתח אפליקציות | ylgroup</Text>
-    
-    
     
               </View>       
             </ScrollView>
@@ -176,7 +218,6 @@ function Main(props) {
         color: 'black',
         marginBottom: 10, // email password log in is down
       },
-    
      
       inputView: {
         width: '80%',
@@ -251,7 +292,6 @@ function Main(props) {
         marginBottom: -40, // email password log in is down
     
       },
-      
     
       toolbar_down: {
         width: 50,
@@ -274,7 +314,30 @@ function Main(props) {
         flexGrow: 1 // עשוי להיות חשוב לגליל בתוך ScrollView
       },
     
-      
+      eventItem: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        width: 180,
+        borderColor: '#ccc',
+        padding: 10,
+        borderBottomWidth: 2,
+
+        borderRadius: 25,
+        height: 40,
+        marginTop: 0,
+        marginBottom: 10,
+      },
+      item: {
+        backgroundColor: 'gray', // שינוי צבע הרקע לשחור
+        padding: 10,
+        margin: 5,
+        borderRadius: 25,
+      },
+      text: {
+        fontSize: 18,
+        color: 'white', // שינוי צבע הטקסט ללבן
+      },
+
     });
-    
     export default Main;

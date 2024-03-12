@@ -2,6 +2,16 @@
 
 import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, ScrollView } from 'react-native';
+import {FirebaseRecaptchaVerifierModal }from 'expo-firebase-recaptcha'; // Import the package
+import { firebaseConfig } from '../config';
+import { initializeApp } from 'firebase/app';
+import  firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
+import 'firebase/compat/firestore';
+import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import 'firebase/database'; // Import the Realtime Database module
+import { getDatabase, ref, set } from 'firebase/database';
+
 
 const CreateEvent = () => {
   const [eventName, setEventName] = useState('');
@@ -12,9 +22,41 @@ const CreateEvent = () => {
   const [eventLocation, setEventLocation] = useState('');
   const [eventDescription, setEventDescription] = useState('');
 
-  const handleCreateEvent = () => {
-    // Implement your logic to create the event with the provided details
-    // This is where you can use the state variables like eventName, eventCategory, etc.
+  const firebaseConfig = {
+    apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
+    authDomain: "final-project-d6ce7.firebaseapp.com",
+    projectId: "final-project-d6ce7",
+    storageBucket: "final-project-d6ce7.appspot.com",
+    messagingSenderId: "1056060530572",
+    appId: "1:1056060530572:web:d08d859ca2d25c46d340a9",
+    measurementId: "G-LD61QH3VVP"
+  };
+
+  if (!firebase.apps.length){
+        firebase.initializeApp(firebaseConfig);
+  }
+
+  const handleCreateEvent = () => {//create event
+    const database = getDatabase();
+    const databaseRef = ref(database, 'Events/' + firebase.auth().currentUser.uid + '/'+ eventName + '/');
+
+    const userData = {
+      eventName: eventName,
+      eventCategory: eventCategory,
+      eventTags: eventTags,
+      eventDate: eventDate,
+      eventTime: eventTime,
+      eventLocation: eventLocation,
+      eventDescription: eventDescription,
+    };
+
+    set(databaseRef, userData)
+      .then(() => {
+        console.log('Data written to the database successfully');
+      })
+      .catch((error) => {
+        console.error('Error writing data to the database:', error);
+      });
   };
 
   return (

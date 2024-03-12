@@ -25,6 +25,7 @@ const App = () => {
         <Stack.Screen name="LoginEmail" component={LoginEmail} />
         <Stack.Screen name="Setting" component={Setting} />
         <Stack.Screen name="Manager" component={Manager} />
+
         <Stack.Screen
           name="Home"
           component={Home}

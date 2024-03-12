@@ -41,7 +41,7 @@ function LoginEmail() {
 
     
       // You can navigate to your app's main screen upon successful login.
-      props.navigation.navigate('Home');
+      props.navigation.navigate('Main');
     } catch (error) {
       Alert.alert('Authentication Error', error.message);
     }

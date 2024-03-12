@@ -65,7 +65,7 @@ function Login(props) {
       .then((userCredential) => {
         setCode('');
         Alert.alert('Login successful');
-        props.navigation.navigate('Home');
+        props.navigation.navigate('Main');
         const phoneNumberSave = userCredential.user.phoneNumber;
         const databaseRef = ref(getDatabase(), 'users/' + userCredential.user.uid);
 
