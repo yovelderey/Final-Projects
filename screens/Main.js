@@ -7,11 +7,23 @@ import  firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { getDatabase, ref, set,onValue } from 'firebase/database';
+import { getDatabase, ref, set,get } from 'firebase/database';
 import 'firebase/database'; // Import the Realtime Database module
-import ListItem from './ListItem';
 import { useNavigation } from '@react-navigation/native';
 
+const getFirebaseListCount = () => {
+  // Implement logic to fetch the count of Firebase list items
+  // For example, you can use a similar approach as your previous code
+  const database = getDatabase();
+  const listRef = ref(database, 'Events/' + firebase.auth().currentUser.uid );
+  
+  return get(listRef).then((snapshot) => {
+    return snapshot.exists() ? Object.keys(snapshot.val()).length : 0;
+  }).catch((error) => {
+    console.error('Error getting Firebase list count:', error);
+    return 0;
+  });
+};
 
 function Main(props) {
 
@@ -37,17 +49,41 @@ function Main(props) {
           firebase.initializeApp(firebaseConfig);
     }
 
-  const navigation = useNavigation();
-  const [pages, setPages] = useState(['Page 1', 'Page 2', 'Page 3', 'Login']);
+  const database = getDatabase();
+  const databaseRef = ref(database, 'Events/' + firebase.auth().currentUser.uid );
+
+ get(databaseRef).then((snapshot) => {
+  if (snapshot.exists()) {
+    // The data exists, and you can access it using snapshot.val()
+    const data = snapshot.val();
+
+    // Assuming each child has a "name" field
+    const names = Object.keys(data).map(key => data[key].eventName);
+
+    console.log('Names:', names);
+  } else {
+    // The data doesn't exist at the specified location
+    console.log('No data found.');
+  }
+}).catch((error) => {
+  console.error('Error getting data:', error);
+});
+
+
+const navigation = useNavigation();
+const [pages, setPages] = useState(['Page 1', 'Page 2', 'Page 3', 'list']);
+const [firebaseListCount, setFirebaseListCount] = useState(0);
+
 
   const handlePagePress = (page) => {
-    if (page === 'Login') {
-      navigation.navigate('Login');
+    if (page === 'list') {
+      navigation.navigate('ListItem', { firebaseListCount });
     } else {
       // Handle other pages
       navigation.navigate(page);
     }
   };
+  console.log("==============",firebaseListCount);
 
   const handleAddButton = () => {
     const newButton = `Page ${pages.length + 1}`;
@@ -55,24 +91,18 @@ function Main(props) {
   };
 
 
-    const addEvent = () => {
-      if (eventName.trim() !== '') {
-        setEvents(prevEvents => [...prevEvents, { id: Date.now(), name: eventName }]);
-        setEventName('');
-      }
-    };
-  
-    const removeEvent = (id) => {
-      setEvents(prevEvents => prevEvents.filter(event => event.id !== id));
+    useEffect(() => {
+      // Fetch the number of Firebase list items when the component mounts
+      const fetchFirebaseListCount = async () => {
+      const count = await getFirebaseListCount();
+      setFirebaseListCount(count);
     };
 
-    useEffect(() => {
-      
+      fetchFirebaseListCount();
       
       const unsubscribeAuth = firebase.auth().onAuthStateChanged((authUser) => {
         if (authUser) {
           
-
           console.log("the user is logged in:", authUser.email);
           setUser(authUser);
           setLoggedIn(true);

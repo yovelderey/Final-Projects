@@ -1,31 +1,46 @@
-// ListItem.js
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+  import React from 'react';
+  import { View, TextInput, Button, StyleSheet } from 'react-native';
+  import { useNavigation } from '@react-navigation/native';
+  import { NavigationContainer } from '@react-navigation/native';
+  import { createNativeStackNavigator } from '@react-navigation/native-stack';
+  
+  function ListItem(props) {
+    const navigation = useNavigation();
+  
+    const handleRegister = () => {
+      // Add your registration logic here (e.g., sending data to a server).
+      // You can use the data entered in the TextInput fields.
+    };
+  
+    return (
+      <View style={styles.container}>
+        <TextInput
+          style={styles.input}
+          placeholder="the event screen"
+        />
 
-const ListItem = ({ item, navigation }) => {
-  const onPressItem = () => {
-    // Ensure 'navigation' exists before attempting to use it
-    if (navigation) {
-      // Navigate to the Details screen with the selected item
-      navigation.navigate('Details', { item });
-    }
-  };
-
-  return (
-    <TouchableOpacity onPress={onPressItem}>
-      <View style={styles.itemContainer}>
-        <Text>{item.title}</Text>
+        <Button title="back" onPress={() => props.navigation.navigate('Main')}/>
+  
       </View>
-    </TouchableOpacity>
-  );
-};
-
-const styles = StyleSheet.create({
-  itemContainer: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
-  },
-});
-
-export default ListItem;
+    );
+  }
+  
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    input: {
+      width: '80%',
+      height: 40,
+      borderColor: 'gray',
+      borderWidth: 1,
+      borderRadius: 5,
+      marginBottom: 10,
+      paddingLeft: 10,
+    },
+  });
+  
+  export default ListItem;
+  
