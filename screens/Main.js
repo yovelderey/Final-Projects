@@ -11,19 +11,6 @@ import { getDatabase, ref, set,get } from 'firebase/database';
 import 'firebase/database'; // Import the Realtime Database module
 import { useNavigation } from '@react-navigation/native';
 
-const getFirebaseListCount = () => {
-  // Implement logic to fetch the count of Firebase list items
-  // For example, you can use a similar approach as your previous code
-  const database = getDatabase();
-  const listRef = ref(database, 'Events/' + firebase.auth().currentUser.uid );
-  
-  return get(listRef).then((snapshot) => {
-    return snapshot.exists() ? Object.keys(snapshot.val()).length : 0;
-  }).catch((error) => {
-    console.error('Error getting Firebase list count:', error);
-    return 0;
-  });
-};
 
 function Main(props) {
 
@@ -50,28 +37,10 @@ function Main(props) {
     }
 
   const database = getDatabase();
-  const databaseRef = ref(database, 'Events/' + firebase.auth().currentUser.uid );
 
- get(databaseRef).then((snapshot) => {
-  if (snapshot.exists()) {
-    // The data exists, and you can access it using snapshot.val()
-    const data = snapshot.val();
-
-    // Assuming each child has a "name" field
-    const names = Object.keys(data).map(key => data[key].eventName);
-
-    console.log('Names:', names);
-  } else {
-    // The data doesn't exist at the specified location
-    console.log('No data found.');
-  }
-}).catch((error) => {
-  console.error('Error getting data:', error);
-});
-
-
+  
 const navigation = useNavigation();
-const [pages, setPages] = useState(['Page 1', 'Page 2', 'Page 3', 'list']);
+const [pages, setPages] = useState(['list', 'lבבבבבבist', 'list', 'list', 'list', 'list', 'list']);
 const [firebaseListCount, setFirebaseListCount] = useState(0);
 
 
@@ -102,24 +71,49 @@ const [firebaseListCount, setFirebaseListCount] = useState(0);
       
       const unsubscribeAuth = firebase.auth().onAuthStateChanged((authUser) => {
         if (authUser) {
-          
+          console.log("=========== 0");
+
           console.log("the user is logged in:", authUser.email);
+          console.log("===========  -- ",authUser);
+
           setUser(authUser);
+          console.log("=========== 1");
+
           setLoggedIn(true);
+          console.log("=========== 2");
+
         } else {
+          console.log("=========== 3");
+
           console.log("the user is not logged in");
           setUser(null);
+          console.log("=========== 4");
+
           setLoggedIn(false);
+          console.log("=========== 5");
+
         }
 
         if (authUser) { //button create event is not seen
+          console.log("=========== 6");
+
           console.log("the user is logged in:", authUser.email);
           setUser(authUser);
+          console.log("=========== 7");
+
           setisCreate(false)
+          console.log("=========== 8");
+
         } else {
+          console.log("=========== 9");
+
           console.log("the user is not logged in");
           setUser(null);
+          console.log("=========== 10");
+
           setisCreate(true)
+          console.log("=========== 11");
+
         }
 
       });
@@ -170,6 +164,12 @@ const [firebaseListCount, setFirebaseListCount] = useState(0);
               </TouchableOpacity>
               )}
     
+              <TouchableOpacity onPress={handleAddButton} style={styles.addButton}>
+                <View>
+                  <Text style={styles.addButtonText}>Add Button</Text>
+                </View>
+              </TouchableOpacity>
+
             <View style={styles.container}>
               {pages.map((page, index) => (
                 <TouchableOpacity
@@ -182,11 +182,8 @@ const [firebaseListCount, setFirebaseListCount] = useState(0);
                   </View>
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity onPress={handleAddButton} style={styles.addButton}>
-                <View>
-                  <Text style={styles.addButtonText}>Add Button</Text>
-                </View>
-              </TouchableOpacity>
+
+
             </View>
 
               <Text style={[styles.toolbar_down, { marginTop:550 }]}></Text>
@@ -371,3 +368,8 @@ const [firebaseListCount, setFirebaseListCount] = useState(0);
 
     });
     export default Main;
+
+
+
+
+
