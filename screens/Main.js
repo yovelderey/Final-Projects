@@ -7,12 +7,13 @@ import  firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { getDatabase, ref, set,get } from 'firebase/database';
+import { getDatabase, ref, remove,get } from 'firebase/database';
 import 'firebase/database'; // Import the Realtime Database module
 import { useNavigation } from '@react-navigation/native';
 
 
 function Main(props) {
+
 
     const [isLoggedIn, setLoggedIn] = useState(false);
     const [isCreate, setisCreate] = useState(false);
@@ -21,7 +22,6 @@ function Main(props) {
     const [events, setEvents] = useState([]);
     const [eventName, setEventName] = useState('');
     const [data, setData] = useState([]);
-    const database = getDatabase();
 
 
     const firebaseConfig = {
@@ -44,24 +44,41 @@ function Main(props) {
     console.log('Navigate to home screen');
     props.navigation.navigate('ListItem')
   };
-  const handlePressRefresh = () => {
-      props.navigation.navigate('Home')
 
-    fetchData(); // Refresh data
+  const handlePressRefresh = () => {
+    props.navigation.navigate('Home');
+    //fetchData(); // Refresh data
   };
+
+  const handleDeleteData = async (idToDelete) => {
+    try {
+      const database = getDatabase();
+      const databaseRef = ref(database, 'Events/'+ firebase.auth().currentUser.uid + '/' + idToDelete);
+      console.log('sdddsdsdssdsdsdsd ',databaseRef);
+
+      await remove(databaseRef);
+      console.log('Event deleted successfully');
+      // רענון המידע או כל פעולה נדרשת אחרת לעדכון המסך
+      setData(data.filter(event => event.id !== idToDelete)); // מעדכן את המצב בלי האירוע שנמחק
+    } catch (error) {
+      console.error('Error deleting event:', error);
+    }
+  };
+  
+
     useEffect(() => {
   
       const fetchData = async () => {
         try {
         //  const databaseRef = ref(database, 'Events/' + firebase.auth().currentUser.uid + '/'+ eventName + '/');
-
+          const database = getDatabase();
           const databaseRef = ref(database, 'Events/'+ firebase.auth().currentUser.uid + '/');
+
           const snapshot = await get(databaseRef);
           const fetchedData = snapshot.val();
           console.log('Fetched data:', fetchedData);
           if (fetchedData) {
             const dataArray = Object.keys(fetchedData).map(key => ({ id: key, ...fetchedData[key] }));
-            //console.log('data ========= ==== = = == =', data.map.length);
 
             setData(dataArray);
           }
@@ -71,6 +88,10 @@ function Main(props) {
       };
   
       fetchData();
+
+      const unsubscribe = props.navigation.addListener('focus', () => {
+        fetchData();
+      });
 
       const unsubscribeAuth = firebase.auth().onAuthStateChanged((authUser) => {
         if (authUser) {
@@ -95,7 +116,7 @@ function Main(props) {
       });
     
       return () => unsubscribeAuth();
-    }, []);
+    }, [props.navigation]);
 
     const onPressLogin = () => {
         // כאן תוכל להוסיף לוגיקה להתחברות
@@ -136,20 +157,25 @@ function Main(props) {
               {!isCreate && (
                <TouchableOpacity onPress={handlePressRefresh} style={styles.loginBtn}>
                 <Text style={styles.loginText}>צור אירוע חדש</Text>
-              </TouchableOpacity>
+              </TouchableOpacity>          
               )}
+              {!isCreate && (
               <View style={styles.container}>
-                    <Text style={styles.title}>Data List</Text>
-                    {data.length === 0 ? (
-                      <Text>No data available</Text>
-                    ) : (
-                      data.map(event => (
-                        <TouchableOpacity key={event.id} onPress={handlePressHome} style={styles.eventContainer}>
-                          <Text style={styles.eventTitle}>Event Name: {event.id}</Text>
+                  <Text style={styles.title}>Data List</Text>
+                  {data.length === 0 ? (
+                    <Text>No data available</Text>
+                  ) : (
+                    data.map(event => (
+                      <TouchableOpacity key={event.id} onPress={handlePressHome} style={styles.eventContainer}>
+                        <Text style={styles.eventTitle}>{event.id}</Text>
+                        <TouchableOpacity onPress={() => handleDeleteData(event.id)} style={styles.deleteButton}>
+                          <Text style={styles.deleteButtonText}>Delete</Text>
                         </TouchableOpacity>
-                      ))
-                    )}
-                  </View>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </View>
+                )}
               <Text style={[styles.toolbar_down, { marginTop:550 }]}></Text>
     
                <View style={{ flexDirection: 'row',}}>
@@ -326,6 +352,11 @@ function Main(props) {
       },
       eventDescription: {
         fontSize: 16,
+      },
+      deleteButtonText: {
+        color: 'red', // Change the color to your preference
+        fontSize: 16,   // Adjust the font size as needed
+        fontWeight: 'bold', // Add font weight if desired
       },
     });
     export default Main;

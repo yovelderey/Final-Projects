@@ -73,6 +73,7 @@ function Setting(props) {
           onPress: async () => {
             // Perform sign-out logic (clear tokens, remove data from storage, etc.)
             // ...
+            props.navigation.navigate('Main');
 
             // Call the signOut function from the authentication context
             try {

@@ -9,7 +9,7 @@ import  firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 
-function LoginEmail() {
+function LoginEmail(props) {
 
   const firebaseConfig = {
     apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",

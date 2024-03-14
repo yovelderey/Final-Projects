@@ -76,6 +76,33 @@ function Register(props) {
       set(databaseRef, userData)
         .then(() => {
           console.log('Data written to the database successfully');
+          props.navigation.navigate('Main');
+          //do here
+
+
+          const database = getDatabase();
+            const databaseRef = ref(database, 'Events/' + firebase.auth().currentUser.uid + '/'+ eventName + '/');
+        
+            const userData = {
+              eventName: 0,
+              eventCategory: 0,
+              eventTags: 0,
+              eventDate: 0,
+              eventTime: 0,
+              eventLocation: 0,
+              eventDescription: 0,
+            };
+        
+            set(databaseRef, userData)
+              .then(() => {
+                console.log('Data written to the database successfully');
+              })
+              .catch((error) => {
+                console.error('Error writing data to the database:', error);
+              });
+          
+
+
         })
         .catch((error) => {
           console.error('Error writing data to the database:', error);

@@ -11,9 +11,10 @@ import 'firebase/compat/firestore';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import 'firebase/database'; // Import the Realtime Database module
 import { getDatabase, ref, set } from 'firebase/database';
+import { useNavigation } from '@react-navigation/native';
 
 
-const CreateEvent = () => {
+const CreateEvent = (props) => {
   const [eventName, setEventName] = useState('');
   const [eventCategory, setEventCategory] = useState('');
   const [eventTags, setEventTags] = useState('');
@@ -21,6 +22,7 @@ const CreateEvent = () => {
   const [eventTime, setEventTime] = useState('');
   const [eventLocation, setEventLocation] = useState('');
   const [eventDescription, setEventDescription] = useState('');
+  const navigation = useNavigation();
 
   const firebaseConfig = {
     apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
@@ -53,6 +55,7 @@ const CreateEvent = () => {
     set(databaseRef, userData)
       .then(() => {
         console.log('Data written to the database successfully');
+        props.navigation.navigate('Main');
       })
       .catch((error) => {
         console.error('Error writing data to the database:', error);
