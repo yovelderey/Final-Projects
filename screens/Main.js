@@ -2,7 +2,7 @@
 import React, { useEffect,useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, Button,TextInput, TouchableOpacity, TouchableHighlight, StyleSheet, StatusBar,ScrollView ,Image} from 'react-native';
+import { View, Text, Button,TextInput, TouchableOpacity, FlatList, StyleSheet, StatusBar,ScrollView ,Image} from 'react-native';
 import  firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
@@ -20,6 +20,8 @@ function Main(props) {
     const Tab = createBottomTabNavigator();
     const [events, setEvents] = useState([]);
     const [eventName, setEventName] = useState('');
+    const [data, setData] = useState([]);
+    const database = getDatabase();
 
 
     const firebaseConfig = {
@@ -36,89 +38,62 @@ function Main(props) {
           firebase.initializeApp(firebaseConfig);
     }
 
-  const database = getDatabase();
-
   
-const navigation = useNavigation();
-const [pages, setPages] = useState(['list', 'lבבבבבבist', 'list', 'list', 'list', 'list', 'list']);
-const [firebaseListCount, setFirebaseListCount] = useState(0);
-
-
-  const handlePagePress = (page) => {
-    if (page === 'list') {
-      navigation.navigate('ListItem', { firebaseListCount });
-    } else {
-      // Handle other pages
-      navigation.navigate(page);
-    }
+  const handlePressHome = () => {
+    // Add navigation logic to navigate to home screen
+    console.log('Navigate to home screen');
+    props.navigation.navigate('ListItem')
   };
-  console.log("==============",firebaseListCount);
+  const handlePressRefresh = () => {
+      props.navigation.navigate('Home')
 
-  const handleAddButton = () => {
-    const newButton = `Page ${pages.length + 1}`;
-    setPages([...pages, newButton]);
+    fetchData(); // Refresh data
   };
-
-
     useEffect(() => {
-      // Fetch the number of Firebase list items when the component mounts
-      const fetchFirebaseListCount = async () => {
-      const count = await getFirebaseListCount();
-      setFirebaseListCount(count);
-    };
+  
+      const fetchData = async () => {
+        try {
+        //  const databaseRef = ref(database, 'Events/' + firebase.auth().currentUser.uid + '/'+ eventName + '/');
 
-      fetchFirebaseListCount();
-      
+          const databaseRef = ref(database, 'Events/'+ firebase.auth().currentUser.uid + '/');
+          const snapshot = await get(databaseRef);
+          const fetchedData = snapshot.val();
+          console.log('Fetched data:', fetchedData);
+          if (fetchedData) {
+            const dataArray = Object.keys(fetchedData).map(key => ({ id: key, ...fetchedData[key] }));
+            //console.log('data ========= ==== = = == =', data.map.length);
+
+            setData(dataArray);
+          }
+        } catch (error) {
+          console.error('Error fetching data:', error);
+        }
+      };
+  
+      fetchData();
+
       const unsubscribeAuth = firebase.auth().onAuthStateChanged((authUser) => {
         if (authUser) {
-          console.log("=========== 0");
-
           console.log("the user is logged in:", authUser.email);
-          console.log("===========  -- ",authUser);
-
           setUser(authUser);
-          console.log("=========== 1");
-
           setLoggedIn(true);
-          console.log("=========== 2");
-
         } else {
-          console.log("=========== 3");
-
           console.log("the user is not logged in");
           setUser(null);
-          console.log("=========== 4");
-
           setLoggedIn(false);
-          console.log("=========== 5");
-
         }
 
         if (authUser) { //button create event is not seen
-          console.log("=========== 6");
-
           console.log("the user is logged in:", authUser.email);
           setUser(authUser);
-          console.log("=========== 7");
-
           setisCreate(false)
-          console.log("=========== 8");
-
         } else {
-          console.log("=========== 9");
-
           console.log("the user is not logged in");
           setUser(null);
-          console.log("=========== 10");
-
           setisCreate(true)
-          console.log("=========== 11");
-
         }
-
       });
     
-
       return () => unsubscribeAuth();
     }, []);
 
@@ -159,33 +134,22 @@ const [firebaseListCount, setFirebaseListCount] = useState(0);
               </TouchableOpacity>
               )}
               {!isCreate && (
-               <TouchableOpacity onPress={() => props.navigation.navigate('Home')} style={styles.loginBtn}>
+               <TouchableOpacity onPress={handlePressRefresh} style={styles.loginBtn}>
                 <Text style={styles.loginText}>צור אירוע חדש</Text>
               </TouchableOpacity>
               )}
-    
-              <TouchableOpacity onPress={handleAddButton} style={styles.addButton}>
-                <View>
-                  <Text style={styles.addButtonText}>Add Button</Text>
-                </View>
-              </TouchableOpacity>
-
-            <View style={styles.container}>
-              {pages.map((page, index) => (
-                <TouchableOpacity
-                  key={index}
-                  onPress={() => handlePagePress(page)}
-                  style={[styles.item, index < pages.length - 1 && styles.itemWithBorder]}
-                >
-                  <View>
-                    <Text style={styles.text}>{page}</Text>
+              <View style={styles.container}>
+                    <Text style={styles.title}>Data List</Text>
+                    {data.length === 0 ? (
+                      <Text>No data available</Text>
+                    ) : (
+                      data.map(event => (
+                        <TouchableOpacity key={event.id} onPress={handlePressHome} style={styles.eventContainer}>
+                          <Text style={styles.eventTitle}>Event Name: {event.id}</Text>
+                        </TouchableOpacity>
+                      ))
+                    )}
                   </View>
-                </TouchableOpacity>
-              ))}
-
-
-            </View>
-
               <Text style={[styles.toolbar_down, { marginTop:550 }]}></Text>
     
                <View style={{ flexDirection: 'row',}}>
@@ -212,7 +176,6 @@ const [firebaseListCount, setFirebaseListCount] = useState(0);
               </View>       
             </ScrollView>
     
-           // </ImageBackground>
       );
     };
     
@@ -341,31 +304,29 @@ const [firebaseListCount, setFirebaseListCount] = useState(0);
         flexGrow: 1 // עשוי להיות חשוב לגליל בתוך ScrollView
       },
     
-      eventItem: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        width: 180,
-        borderColor: '#ccc',
-        padding: 10,
-        borderBottomWidth: 2,
-
-        borderRadius: 25,
-        height: 40,
-        marginTop: 0,
-        marginBottom: 10,
+      title: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        marginBottom: 20,
       },
-      item: {
-        backgroundColor: 'gray', // שינוי צבע הרקע לשחור
+      eventContainer: {
+        marginBottom: 20,
         padding: 10,
-        margin: 5,
-        borderRadius: 25,
+        borderRadius: 5,
+        backgroundColor: '#f0f0f0',
       },
-      text: {
+      eventTitle: {
         fontSize: 18,
-        color: 'white', // שינוי צבע הטקסט ללבן
+        fontWeight: 'bold',
+        marginBottom: 5,
       },
-
+      eventDate: {
+        fontSize: 16,
+        marginBottom: 5,
+      },
+      eventDescription: {
+        fontSize: 16,
+      },
     });
     export default Main;
 
