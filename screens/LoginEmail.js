@@ -80,8 +80,16 @@ function LoginEmail(props) {
             </TouchableOpacity>
           </View>
         </ImageBackground>
+        
 
-        <Button title="LOGIN" onPress={handleLogin} />
+        <TouchableOpacity onPress={() => navigation.navigate('RePassword')} >
+            <Image source={ require('../assets/Fp.png')}  style={[styles.img,{width: 220,height: 12, marginTop: -310,}]}/>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={handleLogin} >
+            <Image source={ require('../assets/Loginbutton.png')}  style={[styles.img,{width: 350,height: 40, marginTop: -280,}]}/>
+        </TouchableOpacity>
+
         <Button title="Back" onPress={() => navigation.goBack()} />
         <Button title="phone" onPress={() => navigation.navigate('Login')} />
         <Button
