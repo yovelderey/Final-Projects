@@ -1,22 +1,14 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import {FirebaseRecaptchaVerifierModal }from 'expo-firebase-recaptcha'; // Import the package
+import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import { firebaseConfig } from '../config';
-import { initializeApp } from 'firebase/app';
-import 'firebase/database'; // Import the Realtime Database module
 import { getDatabase, ref, set } from 'firebase/database';
-import  firebase from 'firebase/compat/app';
+import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
-import 'firebase/compat/firestore';
-import { getAuth } from 'firebase/auth';
 import { v4 as uuidv4 } from 'uuid';
-
-
+import CodeVerification from '../screens/CodeVerification';
 
 function Login(props) {
-
   const firebaseConfig = {
     apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
     authDomain: "final-project-d6ce7.firebaseapp.com",
@@ -27,8 +19,8 @@ function Login(props) {
     measurementId: "G-LD61QH3VVP"
   };
 
-  if (!firebase.apps.length){
-        firebase.initializeApp(firebaseConfig);
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
   }
   
   const database = getDatabase();
@@ -39,6 +31,7 @@ function Login(props) {
   const recaptchaVerifier = useRef(null); 
   const uniqueID = uuidv4();
   const [phoneNumberSave, setPhoneNumberSave] = useState(''); 
+  const [refreshCount, setRefreshCount] = useState(0);
 
   const sendVerification = () => {
     const phoneProvider = new firebase.auth.PhoneAuthProvider();
@@ -47,13 +40,15 @@ function Login(props) {
       .verifyPhoneNumber(phoneNumber, recaptchaVerifier.current)
       .then((verificationId) => {
         setVerificationId(verificationId);
-        setPhoneNumber('');
+        setPhoneNumber('')
         // No need to setPhoneNumberSave here, as it should be done in confirmCode
       })
       .catch((error) => {
         console.error('Error sending verification code:', error.message);
         Alert.alert('Error', 'Failed to send verification code. ' + error.message);
       });
+
+    props.navigation.navigate('CodeVerification', { verificationId });
   };
 
   const confirmCode = () => {
@@ -66,6 +61,7 @@ function Login(props) {
         setCode('');
         Alert.alert('Login successful');
         props.navigation.navigate('Main');
+        setRefreshCount(refreshCount + 1);
         const phoneNumberSave = userCredential.user.phoneNumber;
         const databaseRef = ref(getDatabase(), 'users/' + userCredential.user.uid);
 
@@ -87,11 +83,14 @@ function Login(props) {
         Alert.alert('Error', 'Failed to sign in with phone number. ' + error.message);
       });
   };
+  
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <FirebaseRecaptchaVerifierModal ref={recaptchaVerifier}
-        firebaseConfig={firebaseConfig}/>
+        <FirebaseRecaptchaVerifierModal ref={recaptchaVerifier} firebaseConfig={firebaseConfig} />
+
+        <CodeVerification verificationId={verificationId} />
+
 
         <Text style={styles.header}>Login with Phone Verification</Text>
         <TextInput
@@ -108,7 +107,7 @@ function Login(props) {
         <TextInput
           placeholder="Enter OTP"
           style={styles.input}
-          value={setCode}
+          value={code}
           onChangeText={(text) => setCode(text)}
         />
         <Button
@@ -116,11 +115,7 @@ function Login(props) {
           onPress={confirmCode}
           buttonStyle={styles.button}
         />
-         <Button
-          title="register with email"
-          onPress={() => props.navigation.navigate('Register')} 
-          buttonStyle={styles.button}
-        />
+
          <Button
           title="login with email"
           onPress={() => props.navigation.navigate('LoginEmail')} 
@@ -177,6 +172,7 @@ const styles = StyleSheet.create({
     marginTop: 30,
     borderRadius: 10,
   },
+
 });
 
 export default Login;

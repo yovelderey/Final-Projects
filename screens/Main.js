@@ -2,7 +2,7 @@
 import React, { useEffect,useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, Button,TextInput, TouchableOpacity, FlatList, StyleSheet, StatusBar,ScrollView ,Image} from 'react-native';
+import { View, Text, Button,ImageBackground, TouchableOpacity, FlatList, StyleSheet, StatusBar,ScrollView ,Image} from 'react-native';
 import  firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
@@ -54,11 +54,9 @@ function Main(props) {
     try {
       const database = getDatabase();
       const databaseRef = ref(database, 'Events/'+ firebase.auth().currentUser.uid + '/' + idToDelete);
-      console.log('sdddsdsdssdsdsdsd ',databaseRef);
 
       await remove(databaseRef);
       console.log('Event deleted successfully');
-      // רענון המידע או כל פעולה נדרשת אחרת לעדכון המסך
       setData(data.filter(event => event.id !== idToDelete)); // מעדכן את המצב בלי האירוע שנמחק
     } catch (error) {
       console.error('Error deleting event:', error);
@@ -70,13 +68,11 @@ function Main(props) {
   
       const fetchData = async () => {
         try {
-        //  const databaseRef = ref(database, 'Events/' + firebase.auth().currentUser.uid + '/'+ eventName + '/');
           const database = getDatabase();
           const databaseRef = ref(database, 'Events/'+ firebase.auth().currentUser.uid + '/');
 
           const snapshot = await get(databaseRef);
           const fetchedData = snapshot.val();
-          console.log('Fetched data:', fetchedData);
           if (fetchedData) {
             const dataArray = Object.keys(fetchedData).map(key => ({ id: key, ...fetchedData[key] }));
 
@@ -94,7 +90,10 @@ function Main(props) {
       });
 
       const unsubscribeAuth = firebase.auth().onAuthStateChanged((authUser) => {
-        if (authUser) {
+
+        const user = firebase.auth().currentUser;
+
+        if (user) {
           console.log("the user is logged in:", authUser.email);
           setUser(authUser);
           setLoggedIn(true);
@@ -104,7 +103,7 @@ function Main(props) {
           setLoggedIn(false);
         }
 
-        if (authUser) { //button create event is not seen
+        if (user) { //button create event is not seen
           console.log("the user is logged in:", authUser.email);
           setUser(authUser);
           setisCreate(false)
@@ -129,28 +128,28 @@ function Main(props) {
     return (
 
             <ScrollView contentContainerStyle={styles.scrollViewContainer}>
+            <ImageBackground 
+            source={require('../assets/Welcome.png')} // Adjust the path accordingly        
+            style={styles.background} >
+              
             <View style={styles.innerContainer}>
               <StatusBar backgroundColor="#000" barStyle="light-content" />
-              <View style={styles.toolbar_bag}>
+              <View style={styles.toolbar_bag}>          
+              {!isCreate && (
 
-              <TouchableOpacity onPress={setting_button} style={[styles.toolbar_down, { marginHorizontal: 327 ,marginTop:55}]}>
-                  <Image source={ require('../assets/search.png')}  style={[styles.img,{width: 35,height: 35,}]}/>
-              </TouchableOpacity>             
-
-              <TouchableOpacity onPress={() => props.navigation.navigate('Setting')} style={[styles.toolbar_down, { marginHorizontal: 287,marginTop:-55 }]}>
+              <TouchableOpacity onPress={() => props.navigation.navigate('Setting')} style={[styles.toolbar_down, { marginHorizontal: 319,marginTop:70 }]}>
                   <Image source={ require('../assets/user.png')}  style={[styles.img,{width: 30,height: 30,}]}/>
               </TouchableOpacity>             
-     
-              </View>
+              )}
+             </View>
 
-              <Text style={styles.title}>EasyVent </Text>
-
+              <Text style={[styles.title, { marginTop: 10 }]}>EasyVent</Text>
               {!isLoggedIn && (
               <Text style={styles.title_2}>שלום אורח, ברוך הבא!</Text>
               )}
     
               {!isLoggedIn && (
-               <TouchableOpacity onPress={() => props.navigation.navigate('Login')} style={styles.loginBtn}>
+               <TouchableOpacity onPress={() => props.navigation.navigate('LoginEmail')} style={styles.loginBtn}>
                 <Text style={styles.loginText}>לחץ להתחברות או הרשמה</Text>
               </TouchableOpacity>
               )}
@@ -161,9 +160,10 @@ function Main(props) {
               )}
               {!isCreate && (
               <View style={styles.container}>
-                  <Text style={styles.title}>Data List</Text>
+                  <Text style={[styles.titleEvent, { marginTop: 15 }]}>- My Events -</Text>
+
                   {data.length === 0 ? (
-                    <Text>No data available</Text>
+                    <Text>You have no events</Text>
                   ) : (
                     data.map(event => (
                       <TouchableOpacity key={event.id} onPress={handlePressHome} style={styles.eventContainer}>
@@ -178,6 +178,7 @@ function Main(props) {
                 )}
               <Text style={[styles.toolbar_down, { marginTop:550 }]}></Text>
     
+
                <View style={{ flexDirection: 'row',}}>
                 <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
                   <Image source={ require('../assets/icons8-facebook-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
@@ -194,12 +195,15 @@ function Main(props) {
                 <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
                 <Image source={ require('../assets/icons8-whatsapp-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
                 </TouchableOpacity>
-       
+
               </View>
-             
+ 
               <Text style={styles.title_toolbar_yovel}> יובל ליאור פיתח אפליקציות | ylgroup</Text>
     
-              </View>       
+              </View>   
+          
+            </ImageBackground>
+            
             </ScrollView>
     
       );
@@ -228,7 +232,7 @@ function Main(props) {
         color: 'black',
         marginBottom: 10, // email password log in is down
       },
-    
+
       title_2: {
         fontSize: 15,
         color: 'black',
@@ -331,9 +335,14 @@ function Main(props) {
       },
     
       title: {
-        fontSize: 24,
+        fontSize: 55,
         fontWeight: 'bold',
         marginBottom: 20,
+      },
+      titleEvent: {
+        fontSize: 30,
+        fontWeight: 'bold',
+        marginBottom: 25,
       },
       eventContainer: {
         marginBottom: 20,
@@ -342,7 +351,7 @@ function Main(props) {
         backgroundColor: '#f0f0f0',
       },
       eventTitle: {
-        fontSize: 18,
+        fontSize: 30,
         fontWeight: 'bold',
         marginBottom: 5,
       },
@@ -357,6 +366,11 @@ function Main(props) {
         color: 'red', // Change the color to your preference
         fontSize: 16,   // Adjust the font size as needed
         fontWeight: 'bold', // Add font weight if desired
+      },
+      background: {
+        flex: 1,
+        resizeMode: 'cover', // or 'stretch' or 'contain'
+        justifyContent: 'center',
       },
     });
     export default Main;

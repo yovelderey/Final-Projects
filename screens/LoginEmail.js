@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, TextInput, Button, StyleSheet, Text ,Alert} from 'react-native';
+import { View, TextInput, Button, StyleSheet, Text,TouchableOpacity, Image,ImageBackground,Alert} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {FirebaseRecaptchaVerifierModal }from 'expo-firebase-recaptcha'; // Import the package
 import { firebaseConfig } from '../config';
@@ -30,16 +30,15 @@ function LoginEmail(props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
-
-
-
-  
+  const [refreshCount, setRefreshCount] = useState(0);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
     try {
       await firebase.auth().signInWithEmailAndPassword(email, password);
 
-    
+      setRefreshCount(refreshCount + 1);
+
       // You can navigate to your app's main screen upon successful login.
       props.navigation.navigate('Main');
     } catch (error) {
@@ -47,26 +46,54 @@ function LoginEmail(props) {
     }
   };
 
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Login</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        keyboardType="email-address"
-        onChangeText={text => setEmail(text)}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        secureTextEntry={true}
-        onChangeText={text => setPassword(text)}
-      />
-      <Button title="LOGIN" onPress={handleLogin} />
-      <Button title="Back" onPress={() => navigation.goBack()} />
-    </View>
+    <ImageBackground 
+      source={require('../assets/Login.png')} // Adjust the path accordingly
+      style={styles.background}
+    >
+      <View style={styles.container}>
+        <ImageBackground 
+          source={require('../assets/Textinput.png')} // Adjust the path accordingly
+          style={styles.backgroundTextinput}
+        >
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            keyboardType="email-address"
+            onChangeText={text => setEmail(text)}
+          />
+          <View style={styles.passwordInput}>
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              secureTextEntry={!showPassword}
+              onChangeText={text => setPassword(text)}
+            />
+            <TouchableOpacity onPress={togglePasswordVisibility} style={styles.showPasswordButton}>
+              <Text style={styles.showPasswordButtonText}>{showPassword ? '' : ''}</Text>
+              <Image source={ require('../assets/Eye.png')}  style={[styles.img,{width: 20,height: 20,}]}/>
+
+            </TouchableOpacity>
+          </View>
+        </ImageBackground>
+
+        <Button title="LOGIN" onPress={handleLogin} />
+        <Button title="Back" onPress={() => navigation.goBack()} />
+        <Button title="phone" onPress={() => navigation.navigate('Login')} />
+        <Button
+          title="Register with email"
+          onPress={() => navigation.navigate('Register')} 
+          buttonStyle={styles.button}
+        />
+      </View>
+    </ImageBackground>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -79,18 +106,77 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 20,
   },
-  input: {
-    width: '80%',
-    height: 40,
-    borderColor: 'gray',
-    borderWidth: 1,
-    borderRadius: 5,
-    marginBottom: 10,
-    paddingLeft: 10,
-  },
+
   errorText: {
     color: 'red',
     marginBottom: 10,
+  },
+  background: {
+    flex: 1,
+    resizeMode: 'cover', // or 'stretch' or 'contain'
+    justifyContent: 'center',
+  },
+
+  backgroundTextinput: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 0,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 250,
+    marginBottom: 350,
+  },
+  input: {
+    width: '80%', // Adjust width as per your preference
+    height: 40,
+    width: 350,
+    borderColor: 'gray',
+    borderWidth: 1,
+    borderRadius: 5,
+    backgroundColor: 'white',
+    paddingHorizontal: 10,
+    marginBottom: 10,
+    marginTop: 0,
+
+  },
+  input2: {
+    width: '80%', // Adjust width as per your preference
+    height: 40,
+    width: 350,
+    borderColor: 'gray',
+    borderWidth: 1,
+    borderRadius: 5,
+    backgroundColor: 'white',
+    paddingHorizontal: 10,
+    marginBottom: 10,
+    marginTop: 0,
+
+  },
+  buttonStyle: {
+    width: '80%', // Adjust width as per your preference
+    height: 40,
+    width: 350,
+    borderColor: 'gray',
+    borderWidth: 1,
+    borderRadius: 5,
+    backgroundColor: 'white',
+    paddingHorizontal: 10,
+    marginBottom: 10,
+    marginTop: -100,
+
+  },
+    passwordInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  showPasswordButton: {
+    marginTop: -20,
+  },
+  
+  button: {
+    marginTop: 10,
   },
 });
 

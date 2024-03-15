@@ -149,7 +149,7 @@ function Register(props) {
       />  
       
       <Button title="Register" onPress={handleRegister} />
-      <Button title="back" onPress={() => props.navigation.navigate('Login')}/>
+      <Button title="back" onPress={() => props.navigation.navigate('LoginEmail')}/>
       <Button title="RePassword" onPress={() => props.navigation.navigate('RePassword')}/>
 
     </View>
