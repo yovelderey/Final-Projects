@@ -56,52 +56,57 @@ function LoginEmail(props) {
       style={styles.background}
     >
       <View style={styles.container}>
-        <ImageBackground 
-          source={require('../assets/Textinput.png')} // Adjust the path accordingly
-          style={styles.backgroundTextinput}
-        >
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            keyboardType="email-address"
-            onChangeText={text => setEmail(text)}
-          />
-          <View style={styles.passwordInput}>
+          <View style={styles.emailInput}>
             <TextInput
               style={styles.input}
-              placeholder="Password"
-              secureTextEntry={!showPassword}
-              onChangeText={text => setPassword(text)}
+              placeholder="Email"
+              keyboardType="email-address"
+              onChangeText={text => setEmail(text)}
             />
-            <TouchableOpacity onPress={togglePasswordVisibility} style={styles.showPasswordButton}>
-              <Text style={styles.showPasswordButtonText}>{showPassword ? '' : ''}</Text>
-              <Image source={ require('../assets/Eye.png')}  style={[styles.img,{width: 20,height: 20,}]}/>
+            </View>
+            <View style={styles.passwordInput}>
+              <TextInput
+                style={styles.input}
+                placeholder="Password"
+                secureTextEntry={!showPassword}
 
-            </TouchableOpacity>
-          </View>
-        </ImageBackground>
-        
+                onChangeText={text => setPassword(text)}
+              />
+            </View>
 
-        <TouchableOpacity onPress={() => navigation.navigate('RePassword')} >
-            <Image source={ require('../assets/Fp.png')}  style={[styles.img,{width: 220,height: 12, marginTop: -310,}]}/>
+        <TouchableOpacity 
+          onPress={togglePasswordVisibility} 
+            style={[styles.showPasswordButton, { position: 'absolute', top: '40%', left: '7%' }]}>
+            <Image source={require('../assets/Eye.png')} style={styles.eyeIcon} />
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={handleLogin} >
-            <Image source={ require('../assets/Loginbutton.png')}  style={[styles.img,{width: 350,height: 40, marginTop: -280,}]}/>
+        <TouchableOpacity onPress={() => navigation.navigate('RePassword')} style={styles.fpButton}>
+          <Image source={require('../assets/Fp.png')}  />
         </TouchableOpacity>
 
-        <Button title="Back" onPress={() => navigation.goBack()} />
-        <Button title="phone" onPress={() => navigation.navigate('Login')} />
-        <Button
-          title="Register with email"
-          onPress={() => navigation.navigate('Register')} 
-          buttonStyle={styles.button}
-        />
+        <TouchableOpacity onPress={handleLogin} style={styles.loginButton}>
+          <Image source={require('../assets/Loginbutton.png')} style={styles.image} />
+        </TouchableOpacity>
+
+        <Image source={require('../assets/divider.png')} style={styles.divider} />
+
+        <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.phoneButton}>
+          <Image source={require('../assets/buttonphone.png')}  />
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => navigation.navigate('Register')} style={styles.signupButton}>
+          <Image source={require('../assets/SignUp.png')}  />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('Main')}
+            style={[styles.showPasswordButton, { position: 'absolute', top: '91%', left: '4%' }]}>
+            <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
+        </TouchableOpacity>
       </View>
     </ImageBackground>
   );
 }
-
 
 const styles = StyleSheet.create({
   container: {
@@ -109,82 +114,90 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  header: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-
-  errorText: {
-    color: 'red',
-    marginBottom: 10,
-  },
   background: {
     flex: 1,
-    resizeMode: 'cover', // or 'stretch' or 'contain'
+    resizeMode: 'cover',
     justifyContent: 'center',
+    alignItems: 'center',
   },
-
   backgroundTextinput: {
-    flex: 1,
-    justifyContent: 'center',
+    width: '80%',
     alignItems: 'center',
-    width: 0,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 250,
-    marginBottom: 350,
+    marginBottom: 20,
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 16,
+    marginBottom: 5,
   },
   input: {
-    width: '80%', // Adjust width as per your preference
+    width: '100%',
     height: 40,
-    width: 350,
     borderColor: 'gray',
     borderWidth: 1,
     borderRadius: 5,
     backgroundColor: 'white',
     paddingHorizontal: 10,
-    marginBottom: 10,
-    marginTop: 0,
-
   },
-  input2: {
-    width: '80%', // Adjust width as per your preference
+  inputemail: {
+    width: '80%',
     height: 40,
-    width: 350,
     borderColor: 'gray',
     borderWidth: 1,
     borderRadius: 5,
     backgroundColor: 'white',
-    paddingHorizontal: 10,
-    marginBottom: 10,
-    marginTop: 0,
-
+    paddingHorizontal: 140,
   },
-  buttonStyle: {
-    width: '80%', // Adjust width as per your preference
-    height: 40,
-    width: 350,
-    borderColor: 'gray',
-    borderWidth: 1,
-    borderRadius: 5,
-    backgroundColor: 'white',
-    paddingHorizontal: 10,
-    marginBottom: 10,
-    marginTop: -100,
-
-  },
-    passwordInput: {
+  emailInput: {
+    width: '90%',
     flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 20,
   },
+  passwordInput: {
+    width: '90%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+
   showPasswordButton: {
-    marginTop: -20,
+    marginLeft: -20,
   },
-  
-  button: {
-    marginTop: 10,
+  eyeIcon: {
+    width: 20,
+    height: 20,
+
+  },
+  backIcon: {
+    width: 60,
+    height: 60,
+
+  },
+  fpButton: {
+    marginTop: 5,
+  },
+  loginButton: {
+    marginTop: 20,
+  },
+  phoneButton: {
+    marginTop: 20,
+  },
+  signupButton: {
+    marginTop: 20,
+  },
+
+
+  image: {
+    width: 350,
+    height: 40,
+  },
+  divider: {
+    width: 350,
+    height: 25,
+    marginTop: 40,
   },
 });
 
