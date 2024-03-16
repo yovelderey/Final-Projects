@@ -31,7 +31,7 @@ function RePassword(props) {
 
 
         <TouchableOpacity 
-          onPress={() => navigation.navigate('Main')}
+          onPress={() => navigation.navigate('LoginEmail')}
             style={[styles.showPasswordButton, { position: 'absolute', top: '91%', left: '4%' }]}>
             <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
         </TouchableOpacity>

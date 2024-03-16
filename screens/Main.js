@@ -2,7 +2,7 @@
 import React, { useEffect,useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, Button,ImageBackground, TouchableOpacity, FlatList, StyleSheet, StatusBar,ScrollView ,Image} from 'react-native';
+import { View, Text, Button,ImageBackground, TouchableOpacity, Alert, StyleSheet, StatusBar,ScrollView ,Image} from 'react-native';
 import  firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
@@ -22,6 +22,7 @@ function Main(props) {
     const [events, setEvents] = useState([]);
     const [eventName, setEventName] = useState('');
     const [data, setData] = useState([]);
+    const [showDialog, setShowDialog] = useState(false);
 
 
     const firebaseConfig = {
@@ -49,8 +50,23 @@ function Main(props) {
     props.navigation.navigate('Home');
     //fetchData(); // Refresh data
   };
+  const showAlert = (idToDelete) => {
+    Alert.alert(
+      'Delete',
+      'Are you sure you want to delete??',
+      [
+        { text: 'Delete', onPress: () => deletAlert(idToDelete) },
+        { text: 'Cancel', onPress: () => console.log('cacnel') }
+      ]
+    );
+  };
 
   const handleDeleteData = async (idToDelete) => {
+    showAlert(idToDelete);
+
+  };
+  
+  const deletAlert = async (idToDelete) => {
     try {
       const database = getDatabase();
       const databaseRef = ref(database, 'Events/'+ firebase.auth().currentUser.uid + '/' + idToDelete);
@@ -62,8 +78,6 @@ function Main(props) {
       console.error('Error deleting event:', error);
     }
   };
-  
-
     useEffect(() => {
   
       const fetchData = async () => {
@@ -169,7 +183,7 @@ function Main(props) {
                       <TouchableOpacity key={event.id} onPress={handlePressHome} style={styles.eventContainer}>
                         <Text style={styles.eventTitle}>{event.id}</Text>
                         <TouchableOpacity onPress={() => handleDeleteData(event.id)} style={styles.deleteButton}>
-                          <Text style={styles.deleteButtonText}>Delete</Text>
+                          <Text style={styles.deleteText}>Delete</Text>
                         </TouchableOpacity>
                       </TouchableOpacity>
                     ))
@@ -262,49 +276,7 @@ function Main(props) {
       loginText: {
         color: 'white',
       },
-      catgory_1_btn: {
-        width: 350,
-        backgroundColor: '#000',
-        borderRadius: 25,
-        height: 300,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 60,
-        marginBottom: 10,
-      },
-    
-      catgory_2_btn: {
-        width: 350,
-        backgroundColor: '#000',
-        borderRadius: 25,
-        height: 300,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 60,
-        marginBottom: 10,
-      },
-    
-      catgory_3_btn: {
-        width: 350,
-        backgroundColor: '#000',
-        borderRadius: 25,
-        height: 300,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 60,
-        marginBottom: 10,
-      },
-    
-      catgory_4_btn: {
-        width: 350,
-        backgroundColor: '#000',
-        borderRadius: 25,
-        height: 300,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 60,
-        marginBottom: 80,
-      },
+     
     
       title_toolbar_down: {
         fontSize: 25,
@@ -346,14 +318,26 @@ function Main(props) {
       },
       eventContainer: {
         marginBottom: 20,
+        width: 350,
+        height: 65,
         padding: 10,
-        borderRadius: 5,
+        borderRadius: 10,
+        borderWidth: 1,
         backgroundColor: '#f0f0f0',
+        shadowOffset: {
+          width: 0,
+          height: 2,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        elevation: 5,
       },
       eventTitle: {
         fontSize: 30,
         fontWeight: 'bold',
         marginBottom: 5,
+        backgroundColor: '#f0f0f0',
+
       },
       eventDate: {
         fontSize: 16,
@@ -362,15 +346,24 @@ function Main(props) {
       eventDescription: {
         fontSize: 16,
       },
-      deleteButtonText: {
-        color: 'red', // Change the color to your preference
-        fontSize: 16,   // Adjust the font size as needed
-        fontWeight: 'bold', // Add font weight if desired
-      },
+
       background: {
         flex: 1,
         resizeMode: 'cover', // or 'stretch' or 'contain'
         justifyContent: 'center',
+      },
+      deleteButton: {
+        position: 'absolute',
+        top: 15,
+        right: 10,
+        backgroundColor: 'red',
+        paddingVertical: 8,
+        paddingHorizontal: 15,
+        borderRadius: 10,
+      },
+      deleteText: {
+        color: 'white',
+        fontWeight: 'bold',
       },
     });
     export default Main;
