@@ -12,7 +12,6 @@ import Setting from './screens/Setting';
 import Manager from './screens/Manager';
 import Home from './screens/Home';
 import ListItem from './screens/ListItem';
-import CodeVerification from './screens/CodeVerification';
 
 const App = () => {
   const Stack = createNativeStackNavigator();
@@ -28,28 +27,9 @@ const App = () => {
         <Stack.Screen name="Setting" component={Setting} />
         <Stack.Screen name="Manager" component={Manager} />
         <Stack.Screen name="ListItem" component={ListItem} />
-        <Stack.Screen name="CodeVerification" component={CodeVerification} />
+        <Stack.Screen name="Home" component={Home} />
+
         
-        <Stack.Screen
-          name="Home"
-          component={Home}
-          options={{
-            headerShown: true,
-            headerTitle: "Event Planning App",
-            headerTitleStyle: {
-              fontSize: 24,
-              fontWeight: 'bold',
-            },
-            headerRight: () => (
-              <TouchableOpacity
-                style={{ marginRight: 15 }}
-                onPress={() => navigation.navigate('CreateEvent')}
-              >
-                <Text style={{ color: '#fff', fontSize: 16 }}>Create Event</Text>
-              </TouchableOpacity>
-            ),
-          }}
-        />
       </Stack.Navigator>
     </NavigationContainer>
   );

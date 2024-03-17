@@ -1,12 +1,12 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
+import { View, Image, TextInput, Button, TouchableOpacity,StyleSheet,ImageBackground, Alert } from 'react-native';
 import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import { firebaseConfig } from '../config';
 import { getDatabase, ref, set } from 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import { v4 as uuidv4 } from 'uuid';
-import CodeVerification from '../screens/CodeVerification';
+import { useNavigation } from '@react-navigation/native';
 
 function Login(props) {
   const firebaseConfig = {
@@ -32,6 +32,7 @@ function Login(props) {
   const uniqueID = uuidv4();
   const [phoneNumberSave, setPhoneNumberSave] = useState(''); 
   const [refreshCount, setRefreshCount] = useState(0);
+  const navigation = useNavigation()
 
   const sendVerification = () => {
     const phoneProvider = new firebase.auth.PhoneAuthProvider();
@@ -41,6 +42,7 @@ function Login(props) {
       .then((verificationId) => {
         setVerificationId(verificationId);
         setPhoneNumber('')
+        showAlert();
         // No need to setPhoneNumberSave here, as it should be done in confirmCode
       })
       .catch((error) => {
@@ -48,7 +50,36 @@ function Login(props) {
         Alert.alert('Error', 'Failed to send verification code. ' + error.message);
       });
 
-    props.navigation.navigate('CodeVerification', { verificationId });
+  };
+
+
+  const showAlert = () => {
+    Alert.prompt(
+      'Enter Digit Code',
+      'A verification code will be sent to you at this moment.',
+      [
+        {
+          text: 'Cancel',
+          onPress: () => console.log('Cancel Pressed'),
+          style: 'cancel',
+        },
+        {
+          text: 'OK',
+          onPress: digit => {
+            if (digit.length <= 6) {
+              console.log('Entered Digit:', setCode(digit));
+              setCode(digit);
+              confirmCode();
+            } else {
+              console.log('Digit length exceeds 6 digits');
+            }
+          },
+        },
+      ],
+      'plain-text',
+      '',
+      'numeric'
+    );
   };
 
   const confirmCode = () => {
@@ -85,86 +116,63 @@ function Login(props) {
   };
   
   return (
+    <ImageBackground 
+    source={require('../assets/phonecrreate.png')} // Adjust the path accordingly
+    style={styles.background}
+  >
     <View style={styles.container}>
-      <View style={styles.card}>
         <FirebaseRecaptchaVerifierModal ref={recaptchaVerifier} firebaseConfig={firebaseConfig} />
 
-        <CodeVerification verificationId={verificationId} />
 
-
-        <Text style={styles.header}>Login with Phone Verification</Text>
         <TextInput
-          placeholder="Phone Number"
+        
+          placeholder="+972XXXXXXXXX"
           style={styles.input}
           value={phoneNumber}
           onChangeText={(text) => setPhoneNumber(text)}
-        />
-        <Button
-          title="Send OTP"
-          onPress={sendVerification}
-          buttonStyle={styles.button}
-        />
-        <TextInput
-          placeholder="Enter OTP"
-          style={styles.input}
-          value={code}
-          onChangeText={(text) => setCode(text)}
-        />
-        <Button
-          title="Verify OTP"
-          onPress={confirmCode}
-          buttonStyle={styles.button}
+          
         />
 
-         <Button
-          title="login with email"
-          onPress={() => props.navigation.navigate('LoginEmail')} 
-          buttonStyle={styles.button}
-        />
+        <TouchableOpacity onPress={sendVerification} style={styles.phoneButton}>
+          <Image source={require('../assets/button.png')}  />
+        </TouchableOpacity>
 
-        <Button
-          title="back"
-          onPress={() => props.navigation.navigate('Main')} 
-          buttonStyle={styles.back}
-        />
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('LoginEmail')}
+            style={[styles.showPasswordButton, { position: 'absolute', top: '91%', left: '4%' }]}>
+            <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
+        </TouchableOpacity>
+        
       </View>
-    </View>
+      </ImageBackground>
+
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    width: '90%',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
+    
   },
-  card: {
-    width: '80%',
-    borderRadius: 10,
-    backgroundColor: 'white',
-    padding: 20,
-    shadowColor: 'rgba(0, 0, 0, 0.2)',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.8,
-    shadowRadius: 2,
-    elevation: 2,
-  },
+
   header: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 20,
   },
   input: {
-    marginBottom: 10,
-    padding: 10,
+    width: 350,
+    height: 40,
     backgroundColor: 'white',
+    marginTop: -150,
+    borderColor: 'gray',
+    borderWidth: 1,
     borderRadius: 5,
-  },
-  button: {
-    backgroundColor: 'blue',
-    marginTop: 10,
-    borderRadius: 5,
+    marginBottom: 10,
+    paddingLeft: 10,
   },
 
   back: {
@@ -172,7 +180,20 @@ const styles = StyleSheet.create({
     marginTop: 30,
     borderRadius: 10,
   },
+  phoneButton: {
+    marginTop: 240,
+  },
+  background: {
+    flex: 1,
+    resizeMode: 'cover',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backIcon: {
+    width: 60,
+    height: 60,
 
+  },
 });
 
 export default Login;

@@ -1,5 +1,5 @@
   import React from 'react';
-  import { View, TextInput, Button, StyleSheet } from 'react-native';
+  import { View, ImageBackground, Button, StyleSheet } from 'react-native';
   import { useNavigation } from '@react-navigation/native';
   import { NavigationContainer } from '@react-navigation/native';
   import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -13,15 +13,17 @@
     };
   
     return (
+      <ImageBackground 
+      source={require('../assets/imagedash.png')} // Adjust the path accordingly
+      style={styles.background} >
+
       <View style={styles.container}>
-        <TextInput
-          style={styles.input}
-          placeholder="the event screen"
-        />
 
         <Button title="back" onPress={() => props.navigation.navigate('Main')}/>
   
       </View>
+      </ImageBackground>
+
     );
   }
   
@@ -39,6 +41,12 @@
       borderRadius: 5,
       marginBottom: 10,
       paddingLeft: 10,
+    },
+    background: {
+      flex: 1,
+      resizeMode: 'cover',
+      justifyContent: 'center',
+      alignItems: 'center',
     },
   });
   

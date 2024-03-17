@@ -122,11 +122,9 @@ function Register(props) {
   return (
     <ImageBackground 
     source={require('../assets/bacregg.png')} // Adjust the path accordingly
-    style={styles.background}
-    >
+    style={styles.background} >
+
     <View style={styles.container}>
-
-
 
       <View style={styles.container}>
 

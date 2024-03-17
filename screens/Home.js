@@ -1,7 +1,6 @@
-// CreateEvent.js
 
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, ScrollView } from 'react-native';
+import { TouchableOpacity, Text, TextInput, ImageBackground,Image, StyleSheet, ScrollView } from 'react-native';
 import {FirebaseRecaptchaVerifierModal }from 'expo-firebase-recaptcha'; // Import the package
 import { firebaseConfig } from '../config';
 import { initializeApp } from 'firebase/app';
@@ -14,7 +13,7 @@ import { getDatabase, ref, set } from 'firebase/database';
 import { useNavigation } from '@react-navigation/native';
 
 
-const CreateEvent = (props) => {
+const Home = (props) => {
   const [eventName, setEventName] = useState('');
   const [eventCategory, setEventCategory] = useState('');
   const [eventTags, setEventTags] = useState('');
@@ -63,8 +62,13 @@ const CreateEvent = (props) => {
   };
 
   return (
+    <ImageBackground 
+    source={require('../assets/backgruondcreate.png')} // Adjust the path accordingly
+    style={styles.background} >
+
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Create New Event</Text>
+      <Text style={[styles.title, { marginTop: -130 }]}>Create New Event </Text>
+
 
       <TextInput
         style={styles.input}
@@ -117,8 +121,21 @@ const CreateEvent = (props) => {
         onChangeText={(text) => setEventDescription(text)}
       />
 
-      <Button title="Create Event" onPress={handleCreateEvent} />
+
+      <TouchableOpacity onPress={handleCreateEvent} style={styles.phoneButton}>
+          <Image source={require('../assets/CreateEventB.png')}  />
+        </TouchableOpacity>
+
+
+      <TouchableOpacity 
+         onPress={() => props.navigation.navigate('Main')}
+            style={[styles.showPasswordButton, { position: 'absolute', top: '91%', left: '8%' }]}>
+            <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
+        </TouchableOpacity>
+
     </ScrollView>
+
+    </ImageBackground>
   );
 };
 
@@ -138,10 +155,24 @@ const styles = StyleSheet.create({
     height: 40,
     borderColor: 'gray',
     borderWidth: 1,
-    marginBottom: 15,
+    marginBottom: 25,
     padding: 10,
     width: '100%',
   },
+  backIcon: {
+    width: 60,
+    height: 60,
+
+  },
+  background: {
+    flex: 1,
+    resizeMode: 'cover',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  phoneButton: {
+    marginTop: 40,
+  },
 });
 
-export default CreateEvent;
+export default Home;
