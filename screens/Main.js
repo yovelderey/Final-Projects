@@ -39,9 +39,9 @@ function Main(props) {
           firebase.initializeApp(firebaseConfig);
     }
 
-  
+
   const handlePressHome = () => {
-    // Add navigation logic to navigate to home screen
+  
     console.log('Navigate to home screen');
     props.navigation.navigate('ListItem')
   };
@@ -91,7 +91,9 @@ function Main(props) {
             const dataArray = Object.keys(fetchedData).map(key => ({ id: key, ...fetchedData[key] }));
 
             setData(dataArray);
+
           }
+
         } catch (error) {
           console.error('Error fetching data:', error);
         }
@@ -130,6 +132,9 @@ function Main(props) {
     
       return () => unsubscribeAuth();
     }, [props.navigation]);
+
+
+
 
     const onPressLogin = () => {
         // כאן תוכל להוסיף לוגיקה להתחברות
@@ -182,12 +187,15 @@ function Main(props) {
                     data.map(event => (
                       <TouchableOpacity key={event.id} onPress={handlePressHome} style={styles.eventContainer}>
                         <Text style={styles.eventTitle}>{event.id}</Text>
+
                         <TouchableOpacity onPress={() => handleDeleteData(event.id)} style={styles.deleteButton}>
                           <Text style={styles.deleteText}>Delete</Text>
+
                         </TouchableOpacity>
                       </TouchableOpacity>
                     ))
                   )}
+
                 </View>
                 )}
               <Text style={[styles.toolbar_down, { marginTop:550 }]}></Text>

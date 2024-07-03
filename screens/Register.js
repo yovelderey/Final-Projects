@@ -128,12 +128,7 @@ function Register(props) {
 
       <View style={styles.container}>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          keyboardType="email-address"
-          
-        />
+
 
 
       <TextInput

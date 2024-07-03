@@ -40,6 +40,7 @@ function Login(props) {
     phoneProvider
       .verifyPhoneNumber(phoneNumber, recaptchaVerifier.current)
       .then((verificationId) => {
+        
         setVerificationId(verificationId);
         setPhoneNumber('')
         showAlert();
@@ -65,15 +66,20 @@ function Login(props) {
         },
         {
           text: 'OK',
-          onPress: digit => {
+          onPress: (text) => {
+            const digit = text.trim(); // Access the entered text and remove any leading/trailing spaces
             if (digit.length <= 6) {
-              console.log('Entered Digit:', setCode(digit));
+              console.log('Entered Digit:', digit);
               setCode(digit);
-              confirmCode();
+              confirmCode(verificationId); // Pass verificationId to confirmCode
+              console.log('verificationId verificationId verificationId', verificationId);
+              console.log('digit digit digit', digit);
+
             } else {
               console.log('Digit length exceeds 6 digits');
             }
           },
+          
         },
       ],
       'plain-text',
@@ -82,25 +88,24 @@ function Login(props) {
     );
   };
 
-  const confirmCode = () => {
+  const confirmCode = (verificationId) => {
     const credential = firebase.auth.PhoneAuthProvider.credential(verificationId, code);
-
+  
     firebase
       .auth()
       .signInWithCredential(credential)
       .then((userCredential) => {
         setCode('');
         Alert.alert('Login successful');
-        props.navigation.navigate('Main');
-        setRefreshCount(refreshCount + 1);
+        navigation.navigate('Main');
         const phoneNumberSave = userCredential.user.phoneNumber;
-        const databaseRef = ref(getDatabase(), 'users/' + userCredential.user.uid);
-
+        const databaseRef = ref(database, 'users/' + userCredential.user.uid);
+  
         const data = {
           phone: phoneNumberSave,
           // Add additional data as needed
         };
-
+  
         set(databaseRef, data)
           .then(() => {
             console.log('Data written to the database successfully');
@@ -111,9 +116,15 @@ function Login(props) {
       })
       .catch((error) => {
         console.error('Error signing in with phone number:', error.message);
-        Alert.alert('Error', 'Failed to sign in with phone number. ' + error.message);
+        if (error.code === 'auth/code-expired') {
+          Alert.alert('Error', 'The SMS code has expired. Please re-send the verification code to try again.');
+          sendVerification(); // Prompt the user to resend the verification code
+        } else {
+          Alert.alert('Error', 'Failed to sign in with phone number. ' + error.message);
+        }
       });
   };
+  
   
   return (
     <ImageBackground 
