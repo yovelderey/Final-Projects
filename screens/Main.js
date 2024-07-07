@@ -40,10 +40,10 @@ function Main(props) {
     }
 
 
-  const handlePressHome = () => {
+  const handlePressHome = async (id) => {
   
-    console.log('Navigate to home screen');
-    props.navigation.navigate('ListItem')
+    //console.log('Navigate to home screen',id);
+    props.navigation.navigate('ListItem', { id });
   };
 
   const handlePressRefresh = () => {
@@ -185,13 +185,13 @@ function Main(props) {
                     <Text>You have no events</Text>
                   ) : (
                     data.map(event => (
-                      <TouchableOpacity key={event.id} onPress={handlePressHome} style={styles.eventContainer}>
+                      <TouchableOpacity key={event.id} onPress={() => handlePressHome(event.id)} style={styles.eventContainer}>
                         <Text style={styles.eventTitle}>{event.id}</Text>
 
                         <TouchableOpacity onPress={() => handleDeleteData(event.id)} style={styles.deleteButton}>
                           <Text style={styles.deleteText}>Delete</Text>
-
                         </TouchableOpacity>
+
                       </TouchableOpacity>
                     ))
                   )}

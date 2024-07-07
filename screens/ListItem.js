@@ -29,25 +29,21 @@ import React, { useEffect, useState } from 'react';
   const [displayText, setDisplayText] = useState('Click me');
   const database = getDatabase();
   const user = firebase.auth().currentUser;
+  const id = props.route.params.id; // Accessing the passed id
+  const [eventDetails, setEventDetails] = useState({});
+  const [selectedImage, setSelectedImage] = useState(null);
 
 
   useEffect(() => {
     const fetchData = async () => {
       if (user) {
         try {
-          const databaseRef = ref(database, 'Events/' + firebase.auth().currentUser.uid + '/');
+          const databaseRef = ref(database, `Events/${user.uid}/${id}/`);
           const snapshot = await get(databaseRef);
           const fetchedData = snapshot.val();
 
           if (fetchedData) {
-            const dataArray = Object.keys(fetchedData).map(key => ({ id: key, ...fetchedData[key] }));
-            // Perform any operations with dataArray
-            console.log("Fetched data length: ", dataArray);
-          }
-
-          // Using await instead of then
-          if (snapshot.exists()) {
-            setDisplayText(databaseRef.key);
+            setEventDetails(fetchedData); // Set the fetched event details
           }
         } catch (error) {
           console.error("Error fetching data: ", error);
@@ -56,56 +52,100 @@ import React, { useEffect, useState } from 'react';
     };
 
     fetchData();
-  }, [user]);
+  }, [user, id]);
   
-    return (
+  const selectImage = () => {
+    launchImageLibrary({}, response => {
+      if (response.didCancel) {
+        console.log('User cancelled image picker');
+      } else if (response.error) {
+        console.error('ImagePicker Error: ', response.error);
+      } else {
+        setSelectedImage(response.assets[0].uri);
+      }
+    });
+  };
 
-
-  
-      <View style={styles.container}>
-
-      <Text style={styles.text}>{displayText}</Text>
-
-      <Button title="back" onPress={() => props.navigation.navigate('Main')}/>
-      
+  return (
+    <View style={styles.container}>
+      {Object.keys(eventDetails).length > 0 ? (
+        <>
+          <Text style={styles.title}>{eventDetails.eventName}</Text>
+          {selectedImage ? (
+            <Image source={{ uri: selectedImage }} style={styles.imageBackground} />
+          ) : (
+            <TouchableOpacity onPress={selectImage} style={styles.imagePlaceholder}>
+              <Text style={styles.text}>Select an Image</Text>
+            </TouchableOpacity>
+          )}
+          <View style={styles.buttonContainer}>
+            {Array.from({ length: 6 }).map((_, index) => (
+              <TouchableOpacity key={index} style={styles.button}>
+                <Text style={styles.buttonText}>Button {index + 1}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
+      ) : (
+        <Text style={styles.text}>Loading...</Text>
+      )}
+      <Button title="Back" onPress={() => props.navigation.navigate('Main')} />
     </View>
+  );
+}
+  
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'flex-start', // Align items at the top
+    alignItems: 'center',
+    paddingTop: 50, // Add padding to the top
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  text: {
+    fontSize: 18,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  imageBackground: {
+    width: '100%',
+    height: '25%', // Adjusted height for a quarter of the screen
+    marginBottom: 20,
+  },
+  imagePlaceholder: {
+    width: '100%',
+    height: '25%',
+    backgroundColor: '#d3d3d3',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  buttonContainer: {
+    width: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-around',
+    position: 'absolute',
+    bottom: 50, // Adjusted to place buttons at the bottom of the screen
+  },
+  button: {
+    width: '30%',
+    height: 50,
+    backgroundColor: '#4CAF50',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+  },
+});
 
-    );
-  }
-  
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    input: {
-      width: '80%',
-      height: 40,
-      borderColor: 'gray',
-      borderWidth: 1,
-      borderRadius: 5,
-      marginBottom: 10,
-      paddingLeft: 10,
-    },
-    background: {
-      flex: 1,
-      resizeMode: 'cover',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    label: {
-      fontSize: 18,
-      marginBottom: 8,
-    },
-    input: {
-      width: '100%', // Make the input take full width
-      height: 40,
-      borderColor: 'gray',
-      borderWidth: 1,
-      paddingHorizontal: 8,
-    },
-  });
-  
   export default ListItem;
   
