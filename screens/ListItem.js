@@ -141,6 +141,12 @@ import React, { useEffect, useState } from 'react';
           <Text style={styles.textprice}>500₪ / 1000₪</Text>
         </View>
 
+        <View style={styles.rectangle}>
+        <Text style={styles.text}>Text 1</Text>
+        <Text style={styles.text}>Text 2</Text>
+        <Text style={styles.text}>Text 3</Text>
+      </View>
+
         <View style={styles.buttonContainer}>
         <TouchableOpacity onPress={handleButton1Press} style={styles.button}>
           <Text style={styles.buttonText}>Button 1</Text>
@@ -161,25 +167,21 @@ import React, { useEffect, useState } from 'react';
           <Text style={styles.buttonText}>Button 6</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity onPress={() => {}} style={styles.largeButton}>
-      <Text style={styles.largeButtonText}>עוד 200 ימים</Text>
-    </TouchableOpacity>
       </View>
 
-      <View style={styles.rectangle}>
-          <Text style={styles.text}>Text 1</Text>
-          <Text style={styles.text}>Text 2</Text>
-          <Text style={styles.text}>Text 3</Text>
-      </View>
+      <TouchableOpacity onPress={() => {}} style={styles.largeButton}>
+            <Text style={styles.largeButtonText}>עוד 200 ימים</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity 
+
+        <TouchableOpacity 
          onPress={() => props.navigation.navigate('Main')}
-            style={[styles.showPasswordButton, { position: 'absolute', top: '91%', left: '8%' }]}>
+            style={[styles.showPasswordButton, { position: 'absolute', top: '10%', left: '8%' }]}>
             <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
         </TouchableOpacity>
 
-    </View>
-            <View style={{ flexDirection: 'row',}}>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center',    marginBottom: -150,}}>
+
                 <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
                   <Image source={ require('../assets/icons8-facebook-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
                 </TouchableOpacity>
@@ -198,9 +200,11 @@ import React, { useEffect, useState } from 'react';
 
              </View>
  
-              <Text style={styles.title_toolbar_yovel}> יובל ליאור פיתח אפליקציות | ylgroup</Text>
-    
 
+        </View>
+        <View style={{  justifyContent: 'center', alignItems: 'center',  marginBottom: -130 }}>
+                    <Text style={styles.title_toolbar_yovel}> חפשו אותנו ברשתות החברתיות</Text>
+                </View>
   </ScrollView>
 
   );
@@ -247,7 +251,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     paddingHorizontal: 10,  // הוספת שוליים פנימיים לקונטיינר של הכפתורים
-    marginBottom: 20,
+    marginBottom: -210,
   },
   button: {
     width: '45%',
@@ -257,6 +261,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
     marginHorizontal: 5,  // הוספת שוליים אופקיים לכפתורים
+  },
+
+  rectangle: {
+    width: 200,
+    height: 100,
+    backgroundColor: 'skyblue',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 30,
+
+  },
+  text: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+    marginHorizontal: 5, // מוסיף מרווח בין הטקסטים
   },
   buttonText: {
     color: 'white',
@@ -284,12 +305,20 @@ const styles = StyleSheet.create({
     height: 60,
 
   },
+  title_toolbar_yovel: {
+    fontSize: 15,
+    color: 'black',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 5, // email password log in is down
 
+  },
   largeButtonContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     width: '80%',
+
   },
       
   scrollViewContainer: {
@@ -297,12 +326,13 @@ const styles = StyleSheet.create({
   },
   largeButton: {
     width: '90%',
-    height: 60,
+    height: 50,
     backgroundColor: '#FF6347',
     justifyContent: 'center',
     alignItems: 'center',
     marginVertical: 20,
     alignSelf: 'center',
+
   },
   largeButtonText: {
     color: 'white',
