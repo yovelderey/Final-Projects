@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-  import { View, ImageBackground, Button,Text, TouchableOpacity,Image,ScrollView, StyleSheet } from 'react-native';
+  import { View, ImageBackground,Text, TouchableOpacity,Image,ScrollView, StyleSheet } from 'react-native';
   import { useNavigation } from '@react-navigation/native';
   import { NavigationContainer } from '@react-navigation/native';
   import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -93,6 +93,9 @@ import React, { useEffect, useState } from 'react';
   const handleButton1Press = () => {
     console.log('Button 1 pressed');
     // Add your code here for Button 1
+    props.navigation.navigate('Budget', { id });
+
+
   };
 
   const handleButton2Press = () => {
@@ -123,89 +126,95 @@ import React, { useEffect, useState } from 'react';
   const onPressLogin = () => {
     // כאן תוכל להוסיף לוגיקה להתחברות
   };
-
   return (
-    <ScrollView contentContainerStyle={styles.scrollViewContainer}>
+  <ScrollView contentContainerStyle={styles.scrollViewContainer}>
 
-    <View style={styles.container}>
-          <Text style={styles.title}> {eventDetails.eventName}</Text>
-      {selectedImage ? (
-        <Image source={{ uri: selectedImage }} style={styles.imageBackground} />
-      ) : (
-        <TouchableOpacity onPress={selectImage} style={styles.imagePlaceholder}>
-          <Text style={styles.text}>Select an Image</Text>
-        </TouchableOpacity>
-      )}
-      <View style={styles.priceContainer}>
-          <Text style={styles.textprice}>0 / 255              </Text>
-          <Text style={styles.textprice}>500₪ / 1000₪</Text>
-        </View>
+     <View style={styles.container}>
 
-        <View style={styles.rectangle}>
-        <Text style={styles.text}>Text 1</Text>
-        <Text style={styles.text}>Text 2</Text>
-        <Text style={styles.text}>Text 3</Text>
-      </View>
+          <View style={styles.maintext}>
+            <Text style={styles.title}> {eventDetails.eventDate}</Text>
+            <Text style={styles.title}>● </Text>
+            <Text style={styles.title}> {eventDetails.eventName}</Text>
+            <Text style={styles.title}>● </Text>
+            <Text style={styles.title}> {eventDetails.eventLocation}</Text>
+          </View>
 
-        <View style={styles.buttonContainer}>
-        <TouchableOpacity onPress={handleButton1Press} style={styles.button}>
-          <Text style={styles.buttonText}>Button 1</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleButton2Press} style={styles.button}>
-          <Text style={styles.buttonText}>Button 2</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleButton3Press} style={styles.button}>
-          <Text style={styles.buttonText}>Button 3</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleButton4Press} style={styles.button}>
-          <Text style={styles.buttonText}>Button 4</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleButton5Press} style={styles.button}>
-          <Text style={styles.buttonText}>Button 5</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleButton6Press} style={styles.button}>
-          <Text style={styles.buttonText}>Button 6</Text>
-        </TouchableOpacity>
-        
-      </View>
+        {selectedImage ? (
+          <Image source={{ uri: selectedImage }} style={styles.imageBackground} />
+        ) : (
+          <TouchableOpacity onPress={selectImage} style={styles.imagePlaceholder}>
+            <Image source={ require('../assets/mainimg.png')}  style={{width: '100%',height: 300,}}/>
 
-      <TouchableOpacity onPress={() => {}} style={styles.largeButton}>
-            <Text style={styles.largeButtonText}>עוד 200 ימים</Text>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        )}
+          <View style={styles.priceContainer}>
+            <Text style={styles.textprice}>0 / 255              </Text>
+            <Text style={styles.textprice}>500₪ / 1000₪</Text>
+          </View>
 
+          <View style={styles.rectangle}>
+            <Text style={styles.text}>Text 1</Text>
+            <Text style={styles.text}>Text 2</Text>
+            <Text style={styles.text}>Text 3</Text>
+          </View>
 
-        <TouchableOpacity 
-         onPress={() => props.navigation.navigate('Main')}
-            style={[styles.showPasswordButton, { position: 'absolute', top: '10%', left: '8%' }]}>
-            <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
-        </TouchableOpacity>
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity onPress={handleButton1Press} style={styles.button}>
+              <Text style={styles.buttonText}>תקציב</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleButton2Press} style={styles.button}>
+              <Text style={styles.buttonText}>Button 2</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleButton3Press} style={styles.button}>
+              <Text style={styles.buttonText}>Button 3</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleButton4Press} style={styles.button}>
+              <Text style={styles.buttonText}>Button 4</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleButton5Press} style={styles.button}>
+              <Text style={styles.buttonText}>Button 5</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleButton6Press} style={styles.button}>
+              <Text style={styles.buttonText}>Button 6</Text>
+            </TouchableOpacity>         
+         </View>
 
-            <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center',    marginBottom: -150,}}>
+          <TouchableOpacity onPress={() => {}} style={styles.largeButton}>
+              <Text style={styles.largeButtonText}>עוד 200 ימים</Text>
+          </TouchableOpacity>
 
-                <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
-                  <Image source={ require('../assets/icons8-facebook-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
-                </TouchableOpacity>
-    
-                <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
-                <Image source={ require('../assets/icons8-instagram-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
-                </TouchableOpacity>
-    
-                <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
-                <Image source={ require('../assets/icons8-tiktok-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
-                </TouchableOpacity>
-    
-                <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
-                <Image source={ require('../assets/icons8-whatsapp-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
-                </TouchableOpacity>
+          <Text style={styles.text2}> חפשו אותנו ברשתות החברתיות</Text>
+               
+                 
 
-             </View>
- 
+          <TouchableOpacity 
+          onPress={() => props.navigation.navigate('Main')}
+              style={[styles.showPasswordButton, { position: 'absolute', top: '91%', left: '8%' }]}>
+              <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
+          </TouchableOpacity>
 
-        </View>
-        <View style={{  justifyContent: 'center', alignItems: 'center',  marginBottom: -130 }}>
-                    <Text style={styles.title_toolbar_yovel}> חפשו אותנו ברשתות החברתיות</Text>
-                </View>
-  </ScrollView>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center',    marginBottom: 250,}}>
+                  <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
+                    <Image source={ require('../assets/icons8-facebook-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
+                  </TouchableOpacity>
+      
+                  <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
+                  <Image source={ require('../assets/icons8-instagram-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
+                  </TouchableOpacity>
+      
+                  <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
+                  <Image source={ require('../assets/icons8-tiktok-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
+                  </TouchableOpacity>
+      
+                  <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
+                  <Image source={ require('../assets/icons8-whatsapp-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
+                  </TouchableOpacity>     
+                  
+                   
+                  
+          </View>
+  </View>
+</ScrollView>
 
   );
 }
@@ -218,8 +227,7 @@ const styles = StyleSheet.create({
     paddingTop: 50,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 21,
     marginBottom: 20,
     textAlign: 'center',
   },
@@ -239,11 +247,11 @@ const styles = StyleSheet.create({
   },
   imagePlaceholder: {
     width: '100%',
-    height: '25%',
-    backgroundColor: '#d3d3d3',
+    height: '20%',
+    backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 40,
   },
   buttonContainer: {
     width: '100%',
@@ -271,13 +279,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 30,
-
+  },
+  maintext: {
+    width: 200,
+    height: 70,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   text: {
     fontSize: 18,
     fontWeight: 'bold',
     color: 'white',
     marginHorizontal: 5, // מוסיף מרווח בין הטקסטים
+  },
+  text2: {
+    fontSize: 14,
+    color: 'black',
+    marginHorizontal: 5,
+    marginBottom: -45,
+
   },
   buttonText: {
     color: 'white',
@@ -321,9 +342,6 @@ const styles = StyleSheet.create({
 
   },
       
-  scrollViewContainer: {
-    flexGrow: 1 // עשוי להיות חשוב לגליל בתוך ScrollView
-  },
   largeButton: {
     width: '90%',
     height: 50,
@@ -332,6 +350,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 20,
     alignSelf: 'center',
+    marginBottom: 100, // email password log in is down
 
   },
   largeButtonText: {
@@ -353,6 +372,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 50,
     marginBottom: 5,
+  },
+  scrollViewContainer: {
+    flexGrow: 1 // עשוי להיות חשוב לגליל בתוך ScrollView
   },
 });
 
