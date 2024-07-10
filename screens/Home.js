@@ -19,6 +19,8 @@ const Home = (props) => {
   const [eventTags, setEventTags] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
+  const [Numberofguests, setNumberofguests] = useState('');
+  const [budget, setbudget] = useState('');
   const [eventLocation, setEventLocation] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const navigation = useNavigation();
@@ -47,6 +49,8 @@ const Home = (props) => {
       eventTags: eventTags,
       eventDate: eventDate,
       eventTime: eventTime,
+      budget: budget,
+      Numberofguests: Numberofguests,
       eventLocation: eventLocation,
       eventDescription: eventDescription,
     };
@@ -112,6 +116,20 @@ const Home = (props) => {
         onChangeText={(text) => setEventLocation(text)}
       />
 
+        <TextInput
+        style={styles.input}
+        placeholder="מספר מוזמנים"
+        value={Numberofguests}
+        onChangeText={(text) => setNumberofguests(text)}
+      />
+
+        <TextInput
+        style={styles.input}
+        placeholder="תקציב"
+        value={budget}
+        onChangeText={(text) => setbudget(text)}
+      />
+
       <TextInput
         style={styles.input}
         placeholder="Event Description"
@@ -149,7 +167,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: 40,
   },
   input: {
     height: 40,
@@ -171,7 +189,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   phoneButton: {
-    marginTop: 40,
+    marginTop: 20,
   },
 });
 

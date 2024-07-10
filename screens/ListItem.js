@@ -202,10 +202,22 @@ import React, { useEffect, useState } from 'react';
           </TouchableOpacity>
 
         )}
-          <View style={styles.priceContainer}>
-            <Text style={styles.textprice}>0 / 255              </Text>
-            <Text style={styles.textprice}>500₪ / 1000₪</Text>
+        <View style={styles.backgroundContainer}>
+        <View style={styles.row}>
+          <View style={styles.section}>
+            <Text style={styles.header}>מוזמנים</Text>
+            <View style={styles.priceContainer}>
+              <Text style={styles.textPrice}>0 / {eventDetails.Numberofguests}</Text>
+            </View>
           </View>
+          <View style={styles.section}>
+            <Text style={styles.header}>תקציב</Text>
+            <View style={styles.priceContainer}>
+              <Text style={styles.textPrice}>0₪ / {eventDetails.budget}₪</Text>
+            </View>
+          </View>
+        </View>
+      </View>
 
           <View style={styles.rectangle}>
 
@@ -299,6 +311,7 @@ const styles = StyleSheet.create({
     fontSize: 21,
     marginBottom: 20,
     textAlign: 'center',
+
   },
   text: {
     fontSize: 18,
@@ -310,9 +323,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center',
   },
-  textprice: {
+  textPrice: {
     fontSize: 16,
-    color: 'black',
+    color: '#000000',
   },
   imageBackground: {
     width: '100%',
@@ -331,7 +344,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 70,
   },
   buttonContainer: {
     width: '100%',
@@ -403,10 +416,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   priceContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#cccccc',
+    width: '100%',
     alignItems: 'center',
-    marginBottom: 20,
+
   },
   backIcon: {
     width: 60,
@@ -428,7 +445,18 @@ const styles = StyleSheet.create({
     width: '80%',
 
   },
-      
+  section: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 10,
+  },
+  header: {
+    fontSize: 18,
+    color: '#000000',
+    marginBottom: 5,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
   largeButton: {
     width: '90%',
     height: 50,
@@ -462,6 +490,18 @@ const styles = StyleSheet.create({
   },
   scrollViewContainer: {
     flexGrow: 1 // עשוי להיות חשוב לגליל בתוך ScrollView
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20, // Add padding to create space between the sections
+  },
+  backgroundContainer: {
+    backgroundColor: '#ff69b4', // Background color for the whole row
+    padding: 10,
+    borderRadius: 10,
+    width: '90%',
   },
 });
 
