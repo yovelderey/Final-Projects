@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-  import { View, ImageBackground,Text, TouchableOpacity,Image,ScrollView, StyleSheet } from 'react-native';
+  import { View, ImageBackground,Text, TouchableOpacity,Image,ScrollView, StyleSheet,Dimensions,Animated } from 'react-native';
   import { useNavigation } from '@react-navigation/native';
   import { NavigationContainer } from '@react-navigation/native';
   import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -10,6 +10,15 @@ import React, { useEffect, useState } from 'react';
   import 'firebase/compat/firestore';
   import * as ImagePicker from 'expo-image-picker';
   import * as FileSystem from 'expo-file-system';
+  import Carousel from 'react-native-snap-carousel';
+
+  const { width } = Dimensions.get('window');
+  const images = [
+    require('../assets/imagemainone.png'),
+    require('../assets/imgmaintwo.png'),
+    require('../assets/imagmaintree.png'),
+    require('../assets/imagemainfour.png'),
+  ];
 
   const firebaseConfig = {
     apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
@@ -34,7 +43,8 @@ import React, { useEffect, useState } from 'react';
   const id = props.route.params.id; // Accessing the passed id
   const [eventDetails, setEventDetails] = useState({});
   const [selectedImage, setSelectedImage] = useState(null);
-
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const animatedValue = useState(new Animated.Value(0))[0];
 
   useEffect(() => {
     const fetchData = async () => {
@@ -47,16 +57,54 @@ import React, { useEffect, useState } from 'react';
           if (fetchedData) {
             setEventDetails(fetchedData); // Set the fetched event details
           }
+
+          const intervalId = setInterval(() => {
+            setCurrentIndex((prevIndex) => (prevIndex + 1) % images.length);
+            animate();
+          }, 5000); // Change image every 5 seconds
+      
+          return () => clearInterval(intervalId);
+
         } catch (error) {
           console.error("Error fetching data: ", error);
         }
       }
     };
-
+    
     fetchData();
   }, [user, id]);
   
+  const animate = () => {
+    animatedValue.setValue(0);
+    Animated.timing(animatedValue, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+  };
 
+  const translateX = animatedValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [width, 0],
+  });
+
+  const rotate = animatedValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const scale = animatedValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.5, 1.5],
+  });
+
+  const animatedStyle = {
+    transform: [
+      { translateX },
+      { rotate },
+      { scale },
+    ],
+  };
 
   const selectImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -126,6 +174,9 @@ import React, { useEffect, useState } from 'react';
   const onPressLogin = () => {
     // כאן תוכל להוסיף לוגיקה להתחברות
   };
+
+  //            <Image source={ require('../assets/mainimg.png')}  style={{width: '100%',height: 300,}}/>
+
   return (
   <ScrollView contentContainerStyle={styles.scrollViewContainer}>
 
@@ -133,7 +184,7 @@ import React, { useEffect, useState } from 'react';
 
           <View style={styles.maintext}>
             <Text style={styles.title}> {eventDetails.eventDate}</Text>
-            <Text style={styles.title}>● </Text>
+            <Text style={styles.title}> ●  </Text>
             <Text style={styles.title}> {eventDetails.eventName}</Text>
             <Text style={styles.title}>● </Text>
             <Text style={styles.title}> {eventDetails.eventLocation}</Text>
@@ -142,10 +193,14 @@ import React, { useEffect, useState } from 'react';
         {selectedImage ? (
           <Image source={{ uri: selectedImage }} style={styles.imageBackground} />
         ) : (
-          <TouchableOpacity onPress={selectImage} style={styles.imagePlaceholder}>
-            <Image source={ require('../assets/mainimg.png')}  style={{width: '100%',height: 300,}}/>
 
+          <TouchableOpacity onPress={selectImage} style={styles.imagePlaceholder}>
+          <Animated.Image
+            source={images[currentIndex]}
+            style={[styles.imageBackgroundcarusel,{transform: [{ translateX: animatedValue }],},]}
+          />
           </TouchableOpacity>
+
         )}
           <View style={styles.priceContainer}>
             <Text style={styles.textprice}>0 / 255              </Text>
@@ -153,9 +208,25 @@ import React, { useEffect, useState } from 'react';
           </View>
 
           <View style={styles.rectangle}>
-            <Text style={styles.text}>Text 1</Text>
-            <Text style={styles.text}>Text 2</Text>
-            <Text style={styles.text}>Text 3</Text>
+
+                <ImageBackground
+                source={require('../assets/warning.png')} // תחליף את זה בנתיב של התמונה שלך
+                style={styles.background}
+              >
+
+              </ImageBackground>
+
+              <ImageBackground
+                source={require('../assets/warningy.png')} // תחליף את זה בנתיב של התמונה שלך
+                style={styles.background}
+              >
+              </ImageBackground>
+
+              <ImageBackground
+                source={require('../assets/checked.png')} // תחליף את זה בנתיב של התמונה שלך
+                style={styles.background}
+              >
+              </ImageBackground>
           </View>
 
           <View style={styles.buttonContainer}>
@@ -210,8 +281,6 @@ import React, { useEffect, useState } from 'react';
                   <Image source={ require('../assets/icons8-whatsapp-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
                   </TouchableOpacity>     
                   
-                   
-                  
           </View>
   </View>
 </ScrollView>
@@ -236,6 +305,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center',
   },
+  textdeshboard: {
+    fontSize: 15,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
   textprice: {
     fontSize: 16,
     color: 'black',
@@ -245,6 +319,12 @@ const styles = StyleSheet.create({
     height: '25%',
     marginBottom: 20,
   },
+  imageBackgroundcarusel: {
+    width: '100%',
+    height: '125%',
+    marginBottom: -15,
+  },
+  
   imagePlaceholder: {
     width: '100%',
     height: '20%',
@@ -270,11 +350,18 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginHorizontal: 5,  // הוספת שוליים אופקיים לכפתורים
   },
+  background: {
+    width: 50, // Adjust the width as needed
+    height: 50, // Adjust the height as needed
+    justifyContent: 'center', // Center text horizontally
+    alignItems: 'center', // Center text vertically
+    margin: 20, // Add some space between the images
 
+  },
   rectangle: {
     width: 200,
     height: 100,
-    backgroundColor: 'skyblue',
+
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
