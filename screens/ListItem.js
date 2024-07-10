@@ -219,48 +219,63 @@ import React, { useEffect, useState } from 'react';
         </View>
       </View>
 
-          <View style={styles.rectangle}>
+      <View style={styles.rectangle}>
+      <View style={styles.imageContainer}>
+        <ImageBackground
+          source={require('../assets/warning.png')}
+          style={styles.background}
+        />
+        <Text style={styles.imageText}>0</Text>
+      </View>
 
-                <ImageBackground
-                source={require('../assets/warning.png')} // תחליף את זה בנתיב של התמונה שלך
-                style={styles.background}
-              >
+      <View style={styles.imageContainer}>
+        <ImageBackground
+          source={require('../assets/warningy.png')}
+          style={styles.background}
+        />
+        <Text style={styles.imageText}>0</Text>
+      </View>
 
-              </ImageBackground>
+      <View style={styles.imageContainer}>
+        <ImageBackground
+          source={require('../assets/checked.png')}
+          style={styles.background}
+        />
+        <Text style={styles.imageText}>0</Text>
+      </View>
+    </View>
 
-              <ImageBackground
-                source={require('../assets/warningy.png')} // תחליף את זה בנתיב של התמונה שלך
-                style={styles.background}
-              >
-              </ImageBackground>
+    <View style={styles.buttonContainer}>
+      <TouchableOpacity onPress={handleButton1Press} style={styles.button}>
+        <Image source={require('../assets/budget.png')} style={styles.icon} />
+        <Text style={styles.buttonText}>תקציב</Text>
+      </TouchableOpacity>
 
-              <ImageBackground
-                source={require('../assets/checked.png')} // תחליף את זה בנתיב של התמונה שלך
-                style={styles.background}
-              >
-              </ImageBackground>
-          </View>
+      <TouchableOpacity onPress={handleButton2Press} style={styles.button}>
+        <Image source={require('../assets/people.png')} style={styles.icon} />
+        <Text style={styles.buttonText}>ניהול אורחים</Text>
+      </TouchableOpacity>
 
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity onPress={handleButton1Press} style={styles.button}>
-              <Text style={styles.buttonText}>תקציב</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleButton2Press} style={styles.button}>
-              <Text style={styles.buttonText}>Button 2</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleButton3Press} style={styles.button}>
-              <Text style={styles.buttonText}>Button 3</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleButton4Press} style={styles.button}>
-              <Text style={styles.buttonText}>Button 4</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleButton5Press} style={styles.button}>
-              <Text style={styles.buttonText}>Button 5</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleButton6Press} style={styles.button}>
-              <Text style={styles.buttonText}>Button 6</Text>
-            </TouchableOpacity>         
-         </View>
+      <TouchableOpacity onPress={handleButton3Press} style={styles.button}>
+        <Image source={require('../assets/completed.png')} style={styles.icon} />
+        <Text style={styles.buttonText}>משימות</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={handleButton4Press} style={styles.button}>
+        <Image source={require('../assets/table.png')} style={styles.icon} />
+        <Text style={styles.buttonText}>סידורי הושבה</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={handleButton5Press} style={styles.button}>
+        <Image source={require('../assets/share.png')} style={styles.icon} />
+        <Text style={styles.buttonText}>ניהול ספקים</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={handleButton6Press} style={styles.button}>
+        <Image source={require('../assets/checked.png')} style={styles.icon} />
+        <Text style={styles.buttonText}>אישורי הגעה</Text>
+      </TouchableOpacity>
+    </View>
 
           <TouchableOpacity onPress={() => {}} style={styles.largeButton}>
               <Text style={styles.largeButtonText}>עוד 200 ימים</Text>
@@ -272,7 +287,7 @@ import React, { useEffect, useState } from 'react';
 
           <TouchableOpacity 
           onPress={() => props.navigation.navigate('Main')}
-              style={[styles.showPasswordButton, { position: 'absolute', top: '91%', left: '8%' }]}>
+              style={[styles.showPasswordButton, { position: 'absolute', top: '94%', left: '3%' }]}>
               <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
           </TouchableOpacity>
 
@@ -337,7 +352,9 @@ const styles = StyleSheet.create({
     height: '125%',
     marginBottom: -15,
   },
-  
+  imageContainer: {
+    alignItems: 'center',
+  },
   imagePlaceholder: {
     width: '100%',
     height: '20%',
@@ -352,12 +369,11 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     paddingHorizontal: 10,  // הוספת שוליים פנימיים לקונטיינר של הכפתורים
-    marginBottom: -210,
+    marginBottom: -140,
   },
   button: {
     width: '45%',
     aspectRatio: 1,
-    backgroundColor: '#4CAF50',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
@@ -400,8 +416,14 @@ const styles = StyleSheet.create({
     marginBottom: -45,
 
   },
+  imageText: {
+    fontSize: 18,
+    color: '#000000',
+    fontWeight: 'bold',
+    marginTop: -10, // Adjust as needed
+  },
   buttonText: {
-    color: 'white',
+    color: 'black',
     fontSize: 16,
   },
   imageTextContainer: {
@@ -426,8 +448,8 @@ const styles = StyleSheet.create({
 
   },
   backIcon: {
-    width: 60,
-    height: 60,
+    width: 50,
+    height: 50,
 
   },
   title_toolbar_yovel: {
@@ -460,12 +482,14 @@ const styles = StyleSheet.create({
   largeButton: {
     width: '90%',
     height: 50,
-    backgroundColor: '#FF6347',
+    backgroundColor: '#ff69b4',
     justifyContent: 'center',
     alignItems: 'center',
     marginVertical: 20,
     alignSelf: 'center',
-    marginBottom: 100, // email password log in is down
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 50, // email password log in is down
 
   },
   largeButtonText: {
@@ -502,6 +526,13 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 10,
     width: '90%',
+  },
+  icon: {
+    width: 50,
+    height: 50,
+    marginTop: 5,
+    marginBottom: 10, // email password log in is down
+
   },
 });
 
