@@ -13,6 +13,9 @@ import Manager from './screens/Manager';
 import Home from './screens/Home';
 import ListItem from './screens/ListItem';
 import Budget from './screens/Budget';
+import Management from './screens/Management';
+
+
 
 const App = () => {
   const Stack = createNativeStackNavigator();
@@ -30,6 +33,8 @@ const App = () => {
         <Stack.Screen name="ListItem" component={ListItem} />
         <Stack.Screen name="Home" component={Home} />
         <Stack.Screen name="Budget" component={Budget} />
+        <Stack.Screen name="Management" component={Management} />
+
 
       </Stack.Navigator>
     </NavigationContainer>

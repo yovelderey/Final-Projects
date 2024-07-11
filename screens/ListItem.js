@@ -45,6 +45,9 @@ import React, { useEffect, useState } from 'react';
   const [selectedImage, setSelectedImage] = useState(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const animatedValue = useState(new Animated.Value(0))[0];
+  const [inputDate, setInputDate] = useState('');
+  const [daysLeft, setDaysLeft] = useState(null);
+
 
   useEffect(() => {
     const fetchData = async () => {
@@ -71,9 +74,18 @@ import React, { useEffect, useState } from 'react';
       }
     };
     
+
     fetchData();
   }, [user, id]);
-  
+
+  useEffect(() => {
+    if (eventDetails.eventDate) {
+      console.log("eventDetails.eventDate111  ", eventDetails.eventDate);
+
+      calculateDaysLeft();
+    }
+  }, [inputDate]);
+
   const animate = () => {
     animatedValue.setValue(0);
     Animated.timing(animatedValue, {
@@ -148,7 +160,7 @@ import React, { useEffect, useState } from 'react';
 
   const handleButton2Press = () => {
     console.log('Button 2 pressed');
-    // Add your code here for Button 2
+    props.navigation.navigate('Management', { id });
   };
 
   const handleButton3Press = () => {
@@ -175,7 +187,27 @@ import React, { useEffect, useState } from 'react';
     // כאן תוכל להוסיף לוגיקה להתחברות
   };
 
-  //            <Image source={ require('../assets/mainimg.png')}  style={{width: '100%',height: 300,}}/>
+  const calculateDaysLeft = () => {
+
+    const currentDate = new Date();
+    const targetDate = new Date(eventDetails.eventDate);
+    
+    // Calculate the difference in time
+    const timeDiff = targetDate.getTime() - currentDate.getTime();
+    // Calculate the difference in days
+    const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+    console.log("eventDetails.eventDate2222  ", eventDetails.eventDate);
+
+    if(daysDiff>0)
+      setDaysLeft(daysDiff);
+    else if(daysDiff == 0)
+      setDaysLeft("בשעה טובה!");
+    else
+      setDaysLeft("האירוע מאחורינו");
+    
+
+  };
 
   return (
   <ScrollView contentContainerStyle={styles.scrollViewContainer}>
@@ -277,8 +309,8 @@ import React, { useEffect, useState } from 'react';
       </TouchableOpacity>
     </View>
 
-          <TouchableOpacity onPress={() => {}} style={styles.largeButton}>
-              <Text style={styles.largeButtonText}>עוד 200 ימים</Text>
+          <TouchableOpacity  style={styles.largeButton}>
+              <Text style={styles.largeButtonText}>עוד {daysLeft} ימים</Text>
           </TouchableOpacity>
 
           <Text style={styles.text2}> חפשו אותנו ברשתות החברתיות</Text>
