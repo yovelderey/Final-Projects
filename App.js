@@ -14,7 +14,10 @@ import Home from './screens/Home';
 import ListItem from './screens/ListItem';
 import Budget from './screens/Budget';
 import Management from './screens/Management';
-
+import Task from './screens/Task';
+import SeatedAtTable from './screens/SeatedAtTable';
+import RSVPs from './screens/RSVPs';
+import Providers from './screens/Providers';
 
 
 const App = () => {
@@ -34,8 +37,12 @@ const App = () => {
         <Stack.Screen name="Home" component={Home} />
         <Stack.Screen name="Budget" component={Budget} />
         <Stack.Screen name="Management" component={Management} />
+        <Stack.Screen name="Task" component={Task} />
+        <Stack.Screen name="SeatedAtTable" component={SeatedAtTable} />
+        <Stack.Screen name="RSVPs" component={RSVPs} />
+        <Stack.Screen name="Providers" component={Providers} />
 
-
+        
       </Stack.Navigator>
     </NavigationContainer>
   );

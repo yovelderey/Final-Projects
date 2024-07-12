@@ -55,11 +55,12 @@ const Budget = (props) => {
       {renderCheckBox(index)}
       {item.slice(1).map((cell, colIndex) => (
         <TextInput
-          key={colIndex}
-          style={styles.cell}
-          value={cell}
-          onChangeText={(text) => handleInputChange(text, index, colIndex + 1)}
-        />
+  key={`${index}-${colIndex}`}
+  style={styles.cell}
+  value={cell}
+  onChangeText={(text) => handleInputChange(text, index, colIndex + 1)}
+  keyboardType={colIndex === 4 ? 'numeric' : 'default'} // הוספת keyboardType לתא האחרון בכל שורה
+/>
       ))}
       <TouchableOpacity
         style={styles.customAction}
