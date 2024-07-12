@@ -15,20 +15,36 @@ const Budget = (props) => {
 
   const [tableData, setTableData] = useState(initialData);
   const [checked, setChecked] = useState(Array(10).fill(false));
+  const [sumNumericColumn, setSumNumericColumn] = useState(Array(10).fill(0)); // סכום המספרים בעמודה האחרונה
 
+  
   const handleInputChange = (text, rowIndex, colIndex) => {
     const newData = [...tableData];
     newData[rowIndex][colIndex] = text;
     setTableData(newData);
   };
-
   const handleCheckBoxChange = (rowIndex) => {
     const newChecked = [...checked];
     newChecked[rowIndex] = !newChecked[rowIndex];
     setChecked(newChecked);
-    Alert.alert('Button Pressed', `Button at index ${rowIndex} pressed`);
-
+  
+    // אם הסימון נבחר בעמודה האחרונה
+    if (newChecked[rowIndex]) {
+      let sum = 0;
+      tableData[rowIndex].forEach((cell, colIndex) => {
+        if (colIndex === 1) { // אם זהו העמודה האחרונה
+          const numericValue = parseFloat(cell.replace(/[^0-9.-]/g, ''));
+          if (!isNaN(numericValue)) {
+            sum += numericValue;
+          }
+        }
+      });
+      const newSumNumericColumn = [...sumNumericColumn];
+      newSumNumericColumn[rowIndex] = sum;
+      setSumNumericColumn(newSumNumericColumn);
+    }
   };
+  
 
   const handleCustomAction = (index) => {
     console.log(`Custom action button at index ${index} pressed`);
@@ -53,12 +69,22 @@ const Budget = (props) => {
       {renderCheckBox(index)}
       {item.slice(1).map((cell, colIndex) => (
         <TextInput
-  key={`${index}-${colIndex}`}
-  style={styles.cell}
-  value={cell}
-  onChangeText={(text) => handleInputChange(text, index, colIndex + 1)}
-  keyboardType={colIndex === 4 ? 'numeric' : 'default'} // הוספת keyboardType לתא האחרון בכל שורה
-/>
+          key={`${index}-${colIndex}`}
+          style={styles.cell}
+          value={cell}
+          onChangeText={(text) => {
+            // אם העמודה היא העמודה האחרונה (colIndex === 4)
+            if (colIndex === 4) {
+              // בדוק אם הטקסט הוא מספר תקין
+              const numericValue = text.replace(/[^0-9]/g, ''); // סנן רק מספרים
+              handleInputChange(numericValue, index, colIndex + 1);
+            } else {
+              // אחרת, תקבל את הטקסט כפי שהוא
+              handleInputChange(text, index, colIndex + 1);
+            }
+          }}
+          keyboardType={colIndex === 4 ? 'numeric' : 'default'} // הגדר keyboardType לתא האחרון בכל שורה
+        />
       ))}
       <TouchableOpacity
         style={styles.customAction}
@@ -71,12 +97,15 @@ const Budget = (props) => {
       </TouchableOpacity>
     </View>
   );
+  
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>ניהול תקציב</Text>
       <Text style={styles.title2}>ניתן לסמן עד עשרה פריטים, כל עמודה מהוה הוספת ערך חדש לסכום הכללי</Text>
-
+      <Text style={styles.sumText}>
+        סכום המספרים בעמודה האחרונה: {sumNumericColumn.reduce((acc, cur) => acc + cur, 0)}
+      </Text>
       <View style={styles.tableContainer}>
         <FlatList
           data={tableData}
@@ -85,6 +114,7 @@ const Budget = (props) => {
           contentContainerStyle={styles.table}
         />
       </View>
+
 
       <TouchableOpacity 
         onPress={() => props.navigation.navigate('ListItem', { id })}

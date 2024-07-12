@@ -61,79 +61,83 @@ function Main(props) {
     );
   };
 
-  const handleDeleteData = async (idToDelete) => {
-    showAlert(idToDelete);
 
-  };
+  useEffect(() => {
+    const fetchData = async () => {
+        try {
+            const user = firebase.auth().currentUser;
+            if (user) {
+                const database = getDatabase();
+                const databaseRef = ref(database, 'Events/' + user.uid + '/');
+                const snapshot = await get(databaseRef);
+                const fetchedData = snapshot.val();
+                if (fetchedData) {
+                    const dataArray = Object.keys(fetchedData).map(key => ({ id: key, ...fetchedData[key] }));
+                    setData(dataArray);
+                }
+            } else {
+                console.log('No user is currently authenticated.');
+            }
+        } catch (error) {
+            console.log('Error fetching data:', error);
+        }
+    };
+
+    fetchData();
+
+    const unsubscribe = props.navigation.addListener('focus', () => {
+        fetchData();
+    });
+
+    const unsubscribeAuth = firebase.auth().onAuthStateChanged((authUser) => {
+        if (authUser) {
+            console.log("The user is logged in:", authUser.email);
+            setUser(authUser);
+            setLoggedIn(true);
+            setisCreate(false);
+        } else {
+            console.log("The user is not logged in");
+            setUser(null);
+            setLoggedIn(false);
+            setisCreate(true);
+        }
+    });
+
+    return () => {
+        unsubscribe();
+        unsubscribeAuth();
+    };
+}, [props.navigation]);
+
+  
+  const handleDeleteData = async (idToDelete) => {
+    const user = firebase.auth().currentUser;
+    if (user) {
+        showAlert(idToDelete);
+    } else {
+        console.error('No user is currently authenticated.');
+    }
+};
+
   
   const deletAlert = async (idToDelete) => {
     try {
-      const database = getDatabase();
-      const databaseRef = ref(database, 'Events/'+ firebase.auth().currentUser.uid + '/' + idToDelete);
-
-      await remove(databaseRef);
-      console.log('Event deleted successfully');
-      setData(data.filter(event => event.id !== idToDelete)); // מעדכן את המצב בלי האירוע שנמחק
-    } catch (error) {
-      console.error('Error deleting event:', error);
-    }
-  };
-    useEffect(() => {
-  
-      const fetchData = async () => {
-        try {
-          const database = getDatabase();
-          const databaseRef = ref(database, 'Events/'+ firebase.auth().currentUser.uid + '/');
-
-          const snapshot = await get(databaseRef);
-          const fetchedData = snapshot.val();
-          if (fetchedData) {
-            const dataArray = Object.keys(fetchedData).map(key => ({ id: key, ...fetchedData[key] }));
-
-            setData(dataArray);
-
-          }
-
-        } catch (error) {
-          console.error('Error fetching data:', error);
-        }
-      };
-  
-      fetchData();
-
-      const unsubscribe = props.navigation.addListener('focus', () => {
-        fetchData();
-      });
-
-      const unsubscribeAuth = firebase.auth().onAuthStateChanged((authUser) => {
-
         const user = firebase.auth().currentUser;
-
         if (user) {
-          console.log("the user is logged in:", authUser.email);
-          setUser(authUser);
-          setLoggedIn(true);
+            const database = getDatabase();
+            const databaseRef = ref(database, 'Events/' + user.uid + '/' + idToDelete);
+            await remove(databaseRef);
+            console.log('Event deleted successfully');
+            setData(data.filter(event => event.id !== idToDelete));
         } else {
-          console.log("the user is not logged in");
-          setUser(null);
-          setLoggedIn(false);
+            console.error('No user is currently authenticated.');
         }
+    } catch (error) {
+        console.error('Error deleting event:', error);
+    }
+};
 
-        if (user) { //button create event is not seen
-          console.log("the user is logged in:", authUser.email);
-          setUser(authUser);
-          setisCreate(false)
-        } else {
-          console.log("the user is not logged in");
-          setUser(null);
-          setisCreate(true)
-        }
-      });
-    
-      return () => unsubscribeAuth();
-    }, [props.navigation]);
-
-
+  
 
 
     const onPressLogin = () => {
