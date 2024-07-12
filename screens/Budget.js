@@ -1,10 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState ,useEffect} from 'react';
 import { View, Text, Image, FlatList, TextInput, StyleSheet , TouchableOpacity,ScrollView,Alert } from 'react-native';
 import { firebaseConfig } from '../config';
-import { getDatabase, ref, set } from 'firebase/database';
+import { getDatabase, ref, set,get } from 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import { useNavigation } from '@react-navigation/native';
+
 
 const Budget = (props) => {
   const id = props.route.params.id; // Accessing the passed id
@@ -16,6 +17,8 @@ const Budget = (props) => {
   const [tableData, setTableData] = useState(initialData);
   const [checked, setChecked] = useState(Array(10).fill(false));
   const [sumNumericColumn, setSumNumericColumn] = useState(Array(10).fill(0)); // סכום המספרים בעמודה האחרונה
+  const database = getDatabase();
+  const databaseRef = ref(database, 'Events/' + firebase.auth().currentUser.uid );
 
   
   const handleInputChange = (text, rowIndex, colIndex) => {
@@ -46,6 +49,8 @@ const Budget = (props) => {
   };
   
 
+  
+
   const handleCustomAction = (index) => {
     console.log(`Custom action button at index ${index} pressed`);
     Alert.alert('Button Pressed', `Button at index ${index} pressed`);
@@ -63,6 +68,38 @@ const Budget = (props) => {
       </TouchableOpacity>
     );
   };
+
+
+  const fetchDataFromFirebase = () => {
+    const databaseRef = ref(database, 'budgetItems');
+    get(databaseRef)
+      .then((snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+          // Convert the data back to the format used in the table
+          const formattedData = data.map(item => [
+            item.checked,
+            item.price,
+            item.content,
+            item.date,
+            item.name
+          ]);
+          setTableData(formattedData);
+  
+          const checkedData = formattedData.map(row => row[0]);
+          setChecked(checkedData);
+        } else {
+          Alert.alert('אין נתונים', 'לא נמצאו נתונים בבסיס הנתונים של Firebase.');
+        }
+      })
+      .catch(error => {
+        Alert.alert('שגיאה בקריאה', `אירעה שגיאה בעת קריאת הנתונים: ${error.message}`);
+      });
+  };
+  
+  useEffect(() => {
+    fetchDataFromFirebase();
+  }, []);
 
   const renderItem = ({ item, index }) => (
     <View style={styles.row}>
@@ -98,6 +135,27 @@ const Budget = (props) => {
     </View>
   );
   
+  const handleSaveToFirebase = () => {
+    // Prepare data to be saved
+    const dataToSave = tableData.map(row => ({
+      checked: row[0],
+      price: row[1],
+      content: row[2],
+      date: row[3],
+      name: row[4]
+    }));
+    console.log(`row 1 is : `,tableData[1]);
+
+    // Save data to Firebase
+    const databaseRef = ref(database, 'budgetItems');
+    set(databaseRef, dataToSave)
+      .then(() => {
+        Alert.alert('נשמר בהצלחה!', 'הנתונים נשמרו בבסיס הנתונים של Firebase.');
+      })
+      .catch(error => {
+        Alert.alert('שגיאה בשמירה', `אירעה שגיאה בעת שמירת הנתונים: ${error.message}`);
+      });
+  };
 
   return (
     <View style={styles.container}>
@@ -106,6 +164,14 @@ const Budget = (props) => {
       <Text style={styles.sumText}>
         סכום המספרים בעמודה האחרונה: {sumNumericColumn.reduce((acc, cur) => acc + cur, 0)}
       </Text>
+      <TouchableOpacity
+        style={styles.customAction}
+        onPress={() => handleSaveToFirebase()}
+      >
+          <Text style={styles.title}>שמור</Text>
+      </TouchableOpacity>
+
+
       <View style={styles.tableContainer}>
         <FlatList
           data={tableData}
@@ -113,9 +179,12 @@ const Budget = (props) => {
           keyExtractor={(item, index) => index.toString()}
           contentContainerStyle={styles.table}
         />
+    
       </View>
 
 
+
+      
       <TouchableOpacity 
         onPress={() => props.navigation.navigate('ListItem', { id })}
         style={[styles.showPasswordButton, { position: 'absolute', top: '94%', left: '3%' }]}
@@ -181,6 +250,11 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
 
+  },
+ 
+  customActionText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });
 
