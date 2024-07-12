@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, TextInput, FlatList, Button, StyleSheet , TouchableOpacity,ScrollView } from 'react-native';
+import { View, Text, TextInput, Image, Button, StyleSheet , TouchableOpacity,ScrollView } from 'react-native';
 import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import { firebaseConfig } from '../config';
 import { getDatabase, ref, set } from 'firebase/database';
@@ -35,6 +35,13 @@ import { useNavigation } from '@react-navigation/native';
               onChangeText={setInputDate}
               value={inputDate}
             />
+                        <TouchableOpacity 
+              onPress={() => props.navigation.navigate('ListItem', { id })}
+              style={[styles.showPasswordButton, { position: 'absolute', top: '94%', left: '3%' }]}
+            >
+              <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
+            </TouchableOpacity>
+
             <Button title="Calculate Days Left" onPress={calculateDaysLeft} />
             {daysLeft !== null && (
               <Text style={styles.result}>

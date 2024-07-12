@@ -79,12 +79,14 @@ import React, { useEffect, useState } from 'react';
   }, [user, id]);
 
   useEffect(() => {
+    console.log("eventDetails.eventDate55555  ", eventDetails.eventDate);
+
     if (eventDetails.eventDate) {
       console.log("eventDetails.eventDate111  ", eventDetails.eventDate);
 
       calculateDaysLeft();
     }
-  }, [inputDate]);
+  }, [eventDetails.eventDate]);
 
   const animate = () => {
     animatedValue.setValue(0);
@@ -200,7 +202,7 @@ import React, { useEffect, useState } from 'react';
     console.log("eventDetails.eventDate2222  ", eventDetails.eventDate);
 
     if(daysDiff>0)
-      setDaysLeft(daysDiff);
+      setDaysLeft("עוד "+ daysDiff + " ימים");
     else if(daysDiff == 0)
       setDaysLeft("בשעה טובה!");
     else
@@ -310,7 +312,7 @@ import React, { useEffect, useState } from 'react';
     </View>
 
           <TouchableOpacity  style={styles.largeButton}>
-              <Text style={styles.largeButtonText}>עוד {daysLeft} ימים</Text>
+              <Text style={styles.largeButtonText}> {daysLeft} </Text>
           </TouchableOpacity>
 
           <Text style={styles.text2}> חפשו אותנו ברשתות החברתיות</Text>
