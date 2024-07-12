@@ -10,7 +10,6 @@ import React, { useEffect, useState } from 'react';
   import 'firebase/compat/firestore';
   import * as ImagePicker from 'expo-image-picker';
   import * as FileSystem from 'expo-file-system';
-  import Carousel from 'react-native-snap-carousel';
 
   const { width } = Dimensions.get('window');
   const images = [

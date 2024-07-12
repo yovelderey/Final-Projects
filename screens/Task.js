@@ -1,11 +1,9 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, Image, FlatList, TextInput, StyleSheet , TouchableOpacity,ScrollView,Alert } from 'react-native';
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import { firebaseConfig } from '../config';
 import { getDatabase, ref, set } from 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
-import { v4 as uuidv4 } from 'uuid';
 import { useNavigation } from '@react-navigation/native';
 
 const Task = (props) => {

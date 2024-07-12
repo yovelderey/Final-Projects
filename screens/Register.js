@@ -2,7 +2,6 @@
 import React, { useRef, useState } from 'react';
 import { View, TextInput, Alert, StyleSheet,Image,ImageBackground,TouchableOpacity,Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import {FirebaseRecaptchaVerifierModal }from 'expo-firebase-recaptcha'; // Import the package
 import { firebaseConfig } from '../config';
 import { initializeApp } from 'firebase/app';
 import  firebase from 'firebase/compat/app';
@@ -11,7 +10,6 @@ import 'firebase/compat/firestore';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import 'firebase/database'; // Import the Realtime Database module
 import { getDatabase, ref, set } from 'firebase/database';
-import { v4 as uuidv4 } from 'uuid';
 
 
 
@@ -44,10 +42,8 @@ function Register(props) {
   const navigation = useNavigation()
 // Get the currently authenticated user's UID
   //const user = auth.currentUser;
-  //const uid = user.uid;
   const uniqueID = uuidv4();
 
-// Save user data in the Realtime Database with the UID as the key
   const databaseRef = ref(database, 'users/' + uniqueID);
 
     const showAlert = () => {

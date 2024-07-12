@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { View, TextInput, Button, StyleSheet, Text,TouchableOpacity, Image,ImageBackground,Alert} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import {FirebaseRecaptchaVerifierModal }from 'expo-firebase-recaptcha'; // Import the package
 import { firebaseConfig } from '../config';
 import { initializeApp } from 'firebase/app';
 

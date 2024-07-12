@@ -1,11 +1,9 @@
 import React, { useRef, useState } from 'react';
 import { View, Image, TextInput, Button, TouchableOpacity,StyleSheet,ImageBackground, Alert } from 'react-native';
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 import { firebaseConfig } from '../config';
 import { getDatabase, ref, set } from 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
-import { v4 as uuidv4 } from 'uuid';
 import { useNavigation } from '@react-navigation/native';
 
 function Login(props) {
@@ -29,7 +27,6 @@ function Login(props) {
   const [code, setCode] = useState('');
   const [verificationId, setVerificationId] = useState(null);
   const recaptchaVerifier = useRef(null); 
-  const uniqueID = uuidv4();
   const [phoneNumberSave, setPhoneNumberSave] = useState(''); 
   const [refreshCount, setRefreshCount] = useState(0);
   const navigation = useNavigation()
@@ -132,7 +129,6 @@ function Login(props) {
     style={styles.background}
   >
     <View style={styles.container}>
-        <FirebaseRecaptchaVerifierModal ref={recaptchaVerifier} firebaseConfig={firebaseConfig} />
 
 
         <TextInput
