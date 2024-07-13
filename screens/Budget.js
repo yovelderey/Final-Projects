@@ -20,6 +20,8 @@ const Budget = (props) => {
   const database = getDatabase();
   const databaseRef = ref(database, 'Events/' + firebase.auth().currentUser.uid );
   const user = firebase.auth().currentUser;
+  const [spend, setSpend] = useState('');
+  const [eventDetails, setEventDetails] = useState({});
 
   
   const handleInputChange = (text, rowIndex, colIndex) => {
@@ -75,7 +77,6 @@ const Budget = (props) => {
 
   const fetchDataFromFirebase = () => {
     const databaseRef = ref(database, `Events/${user.uid}/${id}/budgetItems`);
-    //const databaseRef = ref(database, 'budgetItems');
     if(user)
     {
       get(databaseRef)
@@ -101,12 +102,36 @@ const Budget = (props) => {
         .catch(error => {
           Alert.alert('שגיאה בקריאה', `אירעה שגיאה בעת קריאת הנתונים: ${error.message}`);
         });
+
+
+
     }
   };
   
   useEffect(() => {
     fetchDataFromFirebase();
-  }, []);
+    
+    const fetchData = async () => {
+      if (user) {
+        try {
+          const databaseRef = ref(database, `Events/${user.uid}/${id}/spend`);
+          const snapshot = await get(databaseRef);
+          const fetchedData = snapshot.val();
+
+          if (fetchedData) {
+            setEventDetails(fetchedData); // Set the fetched event details
+          }
+
+
+        } catch (error) {
+          console.error("Error fetching data: ", error);
+        }
+      }
+    };
+  
+    fetchData();
+
+  }, [user, id]);
 
   const renderItem = ({ item, index }) => (
     <View style={styles.row}>
@@ -152,11 +177,15 @@ const Budget = (props) => {
       name: row[4]
     }));
 
+    const userData = {
+      spend: sumNumericColumn.reduce((acc, cur) => acc + cur, 0),
+
+    };
+
     // Save data to Firebase
     if (user) {
 
       const databaseRef = ref(database, `Events/${user.uid}/${id}/budgetItems`);
-      //const databaseRef = ref(database, 'budgetItems');
       set(databaseRef, dataToSave)
         .then(() => {
           Alert.alert('נשמר בהצלחה!', 'הנתונים נשמרו בבסיס הנתונים של Firebase.');
@@ -164,6 +193,15 @@ const Budget = (props) => {
         .catch(error => {
           Alert.alert('שגיאה בשמירה', `אירעה שגיאה בעת שמירת הנתונים: ${error.message}`);
         });
+
+        const databaseRef2 = ref(database, `Events/${user.uid}/${id}/spend`);
+        set(databaseRef2, userData)
+          .then(() => {
+            Alert.alert('spend save');
+          })
+          .catch(error => {
+            Alert.alert('שגיאה בשמירה', `spend not save: ${error.message}`);
+          });
     }
   };
 
@@ -172,7 +210,7 @@ const Budget = (props) => {
       <Text style={styles.title}>ניהול תקציב</Text>
       <Text style={styles.title2}>ניתן לסמן עד עשרה פריטים, כל עמודה מהוה הוספת ערך חדש לסכום הכללי</Text>
       <Text style={styles.sumText}>
-        סכום המספרים בעמודה האחרונה: {sumNumericColumn.reduce((acc, cur) => acc + cur, 0)}
+        סכום המספרים בעמודה האחרונה: {eventDetails.spend}
       </Text>
       <TouchableOpacity
         style={styles.customAction}

@@ -22,6 +22,8 @@ const Home = (props) => {
   const [budget, setbudget] = useState('');
   const [eventLocation, setEventLocation] = useState('');
   const [eventDescription, setEventDescription] = useState('');
+  const [spend, setSpend] = useState('');
+
   const navigation = useNavigation();
 
   const firebaseConfig = {
@@ -52,6 +54,8 @@ const Home = (props) => {
       Numberofguests: Numberofguests,
       eventLocation: eventLocation,
       eventDescription: eventDescription,
+      spend: spend,
+
     };
 
     set(databaseRef, userData)
