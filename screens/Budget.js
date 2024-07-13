@@ -1,11 +1,12 @@
 import React, { useRef, useState ,useEffect} from 'react';
-import { View, Text, Image, FlatList, TextInput, StyleSheet , TouchableOpacity,ScrollView,Alert } from 'react-native';
+import { View, Text, Image, FlatList, TextInput, StyleSheet ,StatusBar, TouchableOpacity,ScrollView,Alert } from 'react-native';
 import { firebaseConfig } from '../config';
 import { getDatabase, ref, set,get,child } from 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import { useNavigation } from '@react-navigation/native';
 import { remove } from 'firebase/database';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 
 const Budget = (props) => {
@@ -24,6 +25,7 @@ const Budget = (props) => {
   const [spend, setSpend] = useState('');
   const [eventDetails, setEventDetails] = useState({});
   const [deleteIndex, setDeleteIndex] = useState(''); // State to hold the index to be deleted
+  const insets = useSafeAreaInsets();
 
 
 
@@ -287,49 +289,35 @@ const Budget = (props) => {
   
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>ניהול תקציב</Text>
-      
-      <Text style={styles.title2}>ניתן לסמן עד עשרה פריטים, כל עמודה מהוה הוספת ערך חדש לסכום הכללי</Text>
-      <Text style={styles.sumText}>
-        סכום המספרים בעמודה האחרונה: {eventDetails.spend}
-      </Text>
-      <Text style={styles.sumText}>
-        סכום בדיקה {sumNumericColumn.reduce((acc, cur) => acc + cur, 0)}
-      </Text>
 
+      <StatusBar backgroundColor="#FFC0CB" barStyle="dark-content" />
+      <View style={[styles.topBar, { paddingTop: insets.top }]}>
+        <Text style={styles.title}>ניהול תקציב</Text>
+      </View>
+
+      <View style={styles.moreContainer}>
       <TouchableOpacity
-      onPress={handleAddRow}
-      style={[styles.addButton]}
-    >
-      <Text style={styles.addButtonText}>הוסף שורה חדשה</Text>
-    </TouchableOpacity>
+          style={styles.showPasswordButton}
+          onPress={handleDeleteBudgetItems}>
+          <Image source={require('../assets/delete.png')} style={styles.icon} />
+        </TouchableOpacity>
 
-    <TouchableOpacity
-      onPress={handleRemoveLastRow}
-      style={styles.removeButton}
-    >
-      <Text style={styles.removeButtonText}>הסר שורה אחרונה</Text>
-    </TouchableOpacity>
+        <View style={styles.leftIcons}>
+          <TouchableOpacity
+            onPress={handleAddRow}
+            style={styles.removeButton}>
+            <Image source={require('../assets/plus.png')} style={styles.icon2} />
+          </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.customAction}
-        onPress={() => handleSaveToFirebase()}
-      >
-          <Text style={styles.title}>שמור</Text>
-      </TouchableOpacity>
-          <View style={styles.deleteContainer}>
-            <TextInput
-              style={styles.input}
-
-              onChangeText={setDeleteIndex}
-              keyboardType="numeric"
-            />
-            <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteBudgetItems}>
-              <Text style={styles.deleteButtonText}>Delete</Text>
-            </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleRemoveLastRow}
+            style={styles.removeButton}>
+            <Image source={require('../assets/minus-sign.png')} style={styles.icon2} />
+          </TouchableOpacity>
+        </View>
+    </View>
 
 
-          </View>
       <View style={styles.tableContainer}>
         <FlatList
           data={tableData}
@@ -340,9 +328,21 @@ const Budget = (props) => {
     
       </View>
 
+      <Text style={styles.sumText}>
+        סכום   האחרונה: {eventDetails.spend}
+      </Text>
+
+      <Text style={styles.sumText}>
+        סכום בדיקה {sumNumericColumn.reduce((acc, cur) => acc + cur, 0)}
+      </Text>
 
 
-      
+    <TouchableOpacity
+        style={styles.largeButton}
+        onPress={() => handleSaveToFirebase()} >
+          <Text style={styles.title}>שמור נתונים</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity 
         onPress={() => props.navigation.navigate('ListItem', { id })}
         style={[styles.showPasswordButton, { position: 'absolute', top: '94%', left: '3%' }]}
@@ -358,11 +358,51 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#fff',
   },
   table: {
     borderWidth: 1,
     borderColor: '#000',
     width: '100%',
+
+  },
+  moreContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 15,
+    marginTop: 40,
+
+  },
+  leftIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    
+  },
+  addButton: {
+    marginRight: 20, // מרווח גדול יותר בין האייקונים
+  },
+  removeButton: {
+    marginRight: 10, // מרווח גדול יותר בין האייקונים
+  },
+
+  showPasswordButton: {
+    marginRight: 295,
+  },
+  icon: {
+    width: 24,
+    height: 24,
+  },
+  icon2: {
+    width: 18,
+    height: 18,
+  },
+  tableContainer: {
+    borderColor: '#000',
+    width: '98%',
+    marginTop: 0,
+    height: 500, // גובה קבוע לפריים
 
   },
   text: {
@@ -444,6 +484,41 @@ const styles = StyleSheet.create({
   addButtonText: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+  icon: {
+    width: 30,
+    height: 30,
+
+
+  },
+  topBar: {
+    backgroundColor: '#ff69b4',
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+  },
+  title: {
+    fontSize: 20,
+    color: '#000',
+  },
+
+
+  largeButton: {
+    width: '90%',
+    height: 50,
+    backgroundColor: '#ff69b4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 20,
+    alignSelf: 'center',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 50, // email password log in is down
+
+  },
+  scrollViewContainer: {
+    flexGrow: 1 // עשוי להיות חשוב לגליל בתוך ScrollView
   },
 });
 
