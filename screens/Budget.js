@@ -19,6 +19,7 @@ const Budget = (props) => {
   const [sumNumericColumn, setSumNumericColumn] = useState(Array(10).fill(0)); // סכום המספרים בעמודה האחרונה
   const database = getDatabase();
   const databaseRef = ref(database, 'Events/' + firebase.auth().currentUser.uid );
+  const user = firebase.auth().currentUser;
 
   
   const handleInputChange = (text, rowIndex, colIndex) => {
@@ -31,22 +32,24 @@ const Budget = (props) => {
     newChecked[rowIndex] = !newChecked[rowIndex];
     setChecked(newChecked);
   
-    // אם הסימון נבחר בעמודה האחרונה
+    const newTableData = [...tableData];
+    newTableData[rowIndex][0] = newChecked[rowIndex]; // עדכון הערך בטבלה
+    setTableData(newTableData);
+  
+  
+    // חישוב הסכום אם השורה מסומנת
     if (newChecked[rowIndex]) {
       let sum = 0;
-      tableData[rowIndex].forEach((cell, colIndex) => {
-        if (colIndex === 1) { // אם זהו העמודה האחרונה
-          const numericValue = parseFloat(cell.replace(/[^0-9.-]/g, ''));
-          if (!isNaN(numericValue)) {
-            sum += numericValue;
-          }
-        }
-      });
+      const numericValue = parseFloat(newTableData[rowIndex][1].replace(/[^0-9.-]/g, ''));
+      if (!isNaN(numericValue)) {
+        sum += numericValue;
+      }
       const newSumNumericColumn = [...sumNumericColumn];
       newSumNumericColumn[rowIndex] = sum;
       setSumNumericColumn(newSumNumericColumn);
     }
   };
+  
   
 
   
@@ -71,30 +74,34 @@ const Budget = (props) => {
 
 
   const fetchDataFromFirebase = () => {
-    const databaseRef = ref(database, 'budgetItems');
-    get(databaseRef)
-      .then((snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.val();
-          // Convert the data back to the format used in the table
-          const formattedData = data.map(item => [
-            item.checked,
-            item.price,
-            item.content,
-            item.date,
-            item.name
-          ]);
-          setTableData(formattedData);
-  
-          const checkedData = formattedData.map(row => row[0]);
-          setChecked(checkedData);
-        } else {
-          Alert.alert('אין נתונים', 'לא נמצאו נתונים בבסיס הנתונים של Firebase.');
-        }
-      })
-      .catch(error => {
-        Alert.alert('שגיאה בקריאה', `אירעה שגיאה בעת קריאת הנתונים: ${error.message}`);
-      });
+    const databaseRef = ref(database, `Events/${user.uid}/${id}/budgetItems`);
+    //const databaseRef = ref(database, 'budgetItems');
+    if(user)
+    {
+      get(databaseRef)
+        .then((snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.val();
+            // Convert the data back to the format used in the table
+            const formattedData = data.map(item => [
+              item.checked,
+              item.price,
+              item.content,
+              item.date,
+              item.name
+            ]);
+            setTableData(formattedData);
+    
+            const checkedData = formattedData.map(row => row[0]);
+            setChecked(checkedData);
+          } else {
+            Alert.alert('אין נתונים', 'לא נמצאו נתונים בבסיס הנתונים של Firebase.');
+          }
+        })
+        .catch(error => {
+          Alert.alert('שגיאה בקריאה', `אירעה שגיאה בעת קריאת הנתונים: ${error.message}`);
+        });
+    }
   };
   
   useEffect(() => {
@@ -144,17 +151,20 @@ const Budget = (props) => {
       date: row[3],
       name: row[4]
     }));
-    console.log(`row 1 is : `,tableData[1]);
 
     // Save data to Firebase
-    const databaseRef = ref(database, 'budgetItems');
-    set(databaseRef, dataToSave)
-      .then(() => {
-        Alert.alert('נשמר בהצלחה!', 'הנתונים נשמרו בבסיס הנתונים של Firebase.');
-      })
-      .catch(error => {
-        Alert.alert('שגיאה בשמירה', `אירעה שגיאה בעת שמירת הנתונים: ${error.message}`);
-      });
+    if (user) {
+
+      const databaseRef = ref(database, `Events/${user.uid}/${id}/budgetItems`);
+      //const databaseRef = ref(database, 'budgetItems');
+      set(databaseRef, dataToSave)
+        .then(() => {
+          Alert.alert('נשמר בהצלחה!', 'הנתונים נשמרו בבסיס הנתונים של Firebase.');
+        })
+        .catch(error => {
+          Alert.alert('שגיאה בשמירה', `אירעה שגיאה בעת שמירת הנתונים: ${error.message}`);
+        });
+    }
   };
 
   return (
