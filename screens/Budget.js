@@ -1,10 +1,11 @@
 import React, { useRef, useState ,useEffect} from 'react';
 import { View, Text, Image, FlatList, TextInput, StyleSheet , TouchableOpacity,ScrollView,Alert } from 'react-native';
 import { firebaseConfig } from '../config';
-import { getDatabase, ref, set,get } from 'firebase/database';
+import { getDatabase, ref, set,get,child } from 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import { useNavigation } from '@react-navigation/native';
+import { remove } from 'firebase/database';
 
 
 const Budget = (props) => {
@@ -22,13 +23,17 @@ const Budget = (props) => {
   const user = firebase.auth().currentUser;
   const [spend, setSpend] = useState('');
   const [eventDetails, setEventDetails] = useState({});
+  const [deleteIndex, setDeleteIndex] = useState(''); // State to hold the index to be deleted
 
-  
+
+
   const handleInputChange = (text, rowIndex, colIndex) => {
     const newData = [...tableData];
     newData[rowIndex][colIndex] = text;
     setTableData(newData);
   };
+
+  
   const handleCheckBoxChange = (rowIndex) => {
     const newChecked = [...checked];
     newChecked[rowIndex] = !newChecked[rowIndex];
@@ -37,28 +42,50 @@ const Budget = (props) => {
     const newTableData = [...tableData];
     newTableData[rowIndex][0] = newChecked[rowIndex]; // עדכון הערך בטבלה
     setTableData(newTableData);
-  
-  
-    // חישוב הסכום אם השורה מסומנת
+
+    // Update sumNumericColumn based on the checkbox change
     if (newChecked[rowIndex]) {
       let sum = 0;
-      const numericValue = parseFloat(newTableData[rowIndex][1].replace(/[^0-9.-]/g, ''));
-      if (!isNaN(numericValue)) {
-        sum += numericValue;
-      }
+      tableData[rowIndex].forEach((cell, colIndex) => {
+        if (colIndex === 1) { // Assuming the price column is at index 1
+          const numericValue = parseFloat(cell.replace(/[^0-9.-]/g, ''));
+          if (!isNaN(numericValue)) {
+            sum += numericValue;
+          }
+        }
+      });
       const newSumNumericColumn = [...sumNumericColumn];
       newSumNumericColumn[rowIndex] = sum;
       setSumNumericColumn(newSumNumericColumn);
+    } else {
+      const newSumNumericColumn = [...sumNumericColumn];
+      newSumNumericColumn[rowIndex] = 0; // Set to 0 when checkbox is unchecked
+      setSumNumericColumn(newSumNumericColumn);
     }
   };
-  
-  
 
   
+  const handleDeleteBudgetItems = () => {
+    const databaseRef = ref(database, `Events/${user.uid}/${id}/budgetItems`);
+    const databaseRef2 = ref(database, `Events/${user.uid}/${id}/spend`);
+
+    remove(databaseRef)
+      .then(() => {
+        Alert.alert('Deleted Successfully!', 'The budget items have been deleted from Firebase.');
+      })
+      .catch(error => {
+        Alert.alert('Delete Error', `An error occurred while deleting the budget items: ${error.message}`);
+      });
+
+      remove(databaseRef2)
+      .then(() => {
+      })
+      .catch(error => {
+      });
+  };
 
   const handleCustomAction = (index) => {
     console.log(`Custom action button at index ${index} pressed`);
-    Alert.alert('Button Pressed', `Button at index ${index} pressed`);
   };
 
   const renderCheckBox = (index) => {
@@ -96,7 +123,6 @@ const Budget = (props) => {
             const checkedData = formattedData.map(row => row[0]);
             setChecked(checkedData);
           } else {
-            Alert.alert('אין נתונים', 'לא נמצאו נתונים בבסיס הנתונים של Firebase.');
           }
         })
         .catch(error => {
@@ -136,6 +162,7 @@ const Budget = (props) => {
   const renderItem = ({ item, index }) => (
     <View style={styles.row}>
       {renderCheckBox(index)}
+
       {item.slice(1).map((cell, colIndex) => (
         <TextInput
           key={`${index}-${colIndex}`}
@@ -154,6 +181,7 @@ const Budget = (props) => {
           }}
           keyboardType={colIndex === 4 ? 'numeric' : 'default'} // הגדר keyboardType לתא האחרון בכל שורה
         />
+        
       ))}
       <TouchableOpacity
         style={styles.customAction}
@@ -167,6 +195,63 @@ const Budget = (props) => {
     </View>
   );
   
+  const handleRemoveLastRow = () => {
+    if (tableData.length === 0) {
+      Alert.alert('שגיאה', 'אין שורות להסרה.');
+      return;
+    }
+  
+    // הסרת השורה האחרונה מהטבלה
+    const newTableData = tableData.slice(0, -1);
+    setTableData(newTableData);
+  
+    // עדכון ה-checked לאחר הסרת השורה האחרונה
+    const newChecked = checked.slice(0, -1);
+    setChecked(newChecked);
+  
+    // שמירה בבסיס הנתונים
+    const databaseRef = ref(database, `Events/${user.uid}/${id}/budgetItems`);
+    set(databaseRef, newTableData.map(row => ({
+      checked: row[0],
+      price: row[1],
+      content: row[2],
+      date: row[3],
+      name: row[4]
+    })))
+    .then(() => {
+    })
+    .catch(error => {
+    });
+  };
+  
+  
+
+  const handleAddRow = () => {
+    // יצירת שורה חדשה עם ערכי ברירת מחדל
+    const newRow = [false, '', '', '', ''];
+    const newTableData = [...tableData, newRow];
+    setTableData(newTableData);
+  
+    // עדכון ה-checked עבור השורה החדשה
+    const newChecked = [...checked, false];
+    setChecked(newChecked);
+  
+    // שמירה בבסיס הנתונים
+    const databaseRef = ref(database, `Events/${user.uid}/${id}/budgetItems`);
+    set(databaseRef, newTableData.map(row => ({
+      checked: row[0],
+      price: row[1],
+      content: row[2],
+      date: row[3],
+      name: row[4]
+    })))
+    .then(() => {
+    })
+    .catch(error => {
+    });
+  };
+  
+
   const handleSaveToFirebase = () => {
     // Prepare data to be saved
     const dataToSave = tableData.map(row => ({
@@ -197,29 +282,59 @@ const Budget = (props) => {
         const databaseRef2 = ref(database, `Events/${user.uid}/${id}/spend`);
         set(databaseRef2, userData)
           .then(() => {
-            Alert.alert('spend save');
           })
           .catch(error => {
-            Alert.alert('שגיאה בשמירה', `spend not save: ${error.message}`);
           });
     }
   };
 
+
+  
   return (
     <View style={styles.container}>
       <Text style={styles.title}>ניהול תקציב</Text>
+      
       <Text style={styles.title2}>ניתן לסמן עד עשרה פריטים, כל עמודה מהוה הוספת ערך חדש לסכום הכללי</Text>
       <Text style={styles.sumText}>
         סכום המספרים בעמודה האחרונה: {eventDetails.spend}
       </Text>
+      <Text style={styles.sumText}>
+        סכום בדיקה {sumNumericColumn.reduce((acc, cur) => acc + cur, 0)}
+      </Text>
+
+      <TouchableOpacity
+      onPress={handleAddRow}
+      style={[styles.addButton]}
+    >
+      <Text style={styles.addButtonText}>הוסף שורה חדשה</Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity
+      onPress={handleRemoveLastRow}
+      style={styles.removeButton}
+    >
+      <Text style={styles.removeButtonText}>הסר שורה אחרונה</Text>
+    </TouchableOpacity>
+
       <TouchableOpacity
         style={styles.customAction}
         onPress={() => handleSaveToFirebase()}
       >
           <Text style={styles.title}>שמור</Text>
       </TouchableOpacity>
+          <View style={styles.deleteContainer}>
+            <TextInput
+              style={styles.input}
+
+              onChangeText={setDeleteIndex}
+              keyboardType="numeric"
+            />
+            <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteBudgetItems}>
+              <Text style={styles.deleteButtonText}>Delete</Text>
+            </TouchableOpacity>
 
 
+          </View>
       <View style={styles.tableContainer}>
         <FlatList
           data={tableData}
@@ -299,8 +414,39 @@ const styles = StyleSheet.create({
     height: 50,
 
   },
- 
+
   customActionText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  deleteButton: {
+    backgroundColor: 'red',
+    padding: 10,
+    margin: 5,
+    borderRadius: 5,
+  },
+  deleteButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  refreshButton: {
+    backgroundColor: 'blue',
+    padding: 10,
+    borderRadius: 5,
+    marginTop: 20,
+  },
+  refreshButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+    addButton: {
+    backgroundColor: '#2196F3',
+    padding: 10,
+    borderRadius: 5,
+
+  },
+  addButtonText: {
     color: '#fff',
     fontWeight: 'bold',
   },
