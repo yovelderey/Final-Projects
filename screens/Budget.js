@@ -262,11 +262,6 @@ const Budget = (props) => {
       name: row[4]
     }));
 
-    const userData = {
-      spend: sumNumericColumn.reduce((acc, cur) => acc + cur, 0),
-
-    };
-
     // Save data to Firebase
     if (user) {
 
@@ -280,7 +275,7 @@ const Budget = (props) => {
         });
 
         const databaseRef2 = ref(database, `Events/${user.uid}/${id}/spend`);
-        set(databaseRef2, userData)
+        set(databaseRef2, sumNumericColumn.reduce((acc, cur) => acc + cur, 0))
           .then(() => {
           })
           .catch(error => {

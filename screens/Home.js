@@ -54,7 +54,7 @@ const Home = (props) => {
       Numberofguests: Numberofguests,
       eventLocation: eventLocation,
       eventDescription: eventDescription,
-      spend: spend,
+      spend: ""
 
     };
 

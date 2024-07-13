@@ -210,6 +210,8 @@ import React, { useEffect, useState } from 'react';
 
   };
 
+  //console.log("eventDetails.ddd  ", eventDetails.eventDate);
+
   return (
   <ScrollView contentContainerStyle={styles.scrollViewContainer}>
 
@@ -246,7 +248,7 @@ import React, { useEffect, useState } from 'react';
           <View style={styles.section}>
             <Text style={styles.header}>תקציב</Text>
             <View style={styles.priceContainer}>
-              <Text style={styles.textPrice}>0₪ / {eventDetails.budget}₪</Text>
+              <Text style={styles.textPrice}>{eventDetails.spend}₪ / {eventDetails.budget}₪</Text>
             </View>
           </View>
         </View>
