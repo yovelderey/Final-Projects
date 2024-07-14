@@ -324,9 +324,13 @@ const Budget = (props) => {
           data={tableData}
           renderItem={renderItem}
           keyExtractor={(item, index) => index.toString()}
-          contentContainerStyle={styles.table}
-        />
-    
+          contentContainerStyle={styles.table}/> 
+      </View>
+
+      <View style={styles.roundedBackground2}>
+        <Text style={styles.sumText2}>
+          מסומן: {sumNumericColumn.reduce((acc, cur) => acc + cur, 0)}
+        </Text>
       </View>
 
       <View style={styles.roundedBackground}>
@@ -336,11 +340,6 @@ const Budget = (props) => {
         </Text>
       </View>
 
-      <Text style={styles.sumText}>
-        סכום בדיקה {sumNumericColumn.reduce((acc, cur) => acc + cur, 0)}
-      </Text>
-
-
     <TouchableOpacity
         style={styles.largeButton}
         onPress={() => handleSaveToFirebase()} >
@@ -349,7 +348,7 @@ const Budget = (props) => {
 
       <TouchableOpacity 
         onPress={() => props.navigation.navigate('ListItem', { id })}
-        style={[styles.showPasswordButton, { position: 'absolute', top: '94%', left: '3%' }]}
+        style={[styles.showPasswordButton, { position: 'absolute', top: '92%', left: '4%' }]}
       >
         <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
       </TouchableOpacity>
@@ -481,7 +480,7 @@ const styles = StyleSheet.create({
   },
   currencySymbol: {
     fontSize: 24, // Smaller font size for the currency symbol
-    color: '#fff', // White color for the currency symbol
+    color: '#ff69b4', // White color for the currency symbol
     fontWeight: 'bold',
   },
     addButton: {
@@ -514,8 +513,8 @@ const styles = StyleSheet.create({
 
 
   largeButton: {
-    width: '90%',
-    height: 50,
+    width: '40%',
+    height: 40,
     backgroundColor: '#ff69b4',
     justifyContent: 'center',
     alignItems: 'center',
@@ -523,24 +522,39 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     padding: 10,
     borderRadius: 10,
-    marginBottom: 50, // email password log in is down
+    marginTop: 25,
 
   },
-  scrollViewContainer: {
-    flexGrow: 1 // עשוי להיות חשוב לגליל בתוך ScrollView
-  },
+
+
   roundedBackground: {
-    backgroundColor: '#ff69b4',
     borderRadius: 150, // Adjust this to make the background round
     paddingVertical: 50, // Adjust the vertical padding
-    paddingHorizontal: 50, // Adjust the horizontal padding
+    paddingHorizontal: 30, // Adjust the horizontal padding
     alignItems: 'center', // Center the text within the background
     justifyContent: 'center',
+    marginTop: 40,
+    borderWidth: 5, // Width of the border
+    borderColor: '#ff69b4', // Color of the border
+    borderStyle: 'solid', // Solid border style
   },
   sumText: {
-    fontSize: 60, // Adjust the font size as needed
+    fontSize: 40, // Adjust the font size as needed
     fontWeight: 'bold', // Make the text bold
-    color: '#fff', // Set the text color to white for better contrast
+    color: '#ff69b4', // Set the text color to white for better contrast
+  },
+
+  roundedBackground2: {
+    alignItems: 'center', // Center the text within the background
+    justifyContent: 'center',
+    marginTop: 5,
+    marginRight: 210, // מרווח גדול יותר בין האייקונים
+
+  },
+
+  sumText2: {
+    fontSize: 20, // Adjust the font size as needed
+    color: 'black', // Set the text color to white for better contrast
   },
 });
 
