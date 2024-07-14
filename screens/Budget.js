@@ -85,6 +85,7 @@ const Budget = (props) => {
       .catch(error => {
       });
   };
+  
 
   const handleCustomAction = (index) => {
     console.log(`Custom action button at index ${index} pressed`);
@@ -149,7 +150,6 @@ const Budget = (props) => {
           if (fetchedData) {
             setEventDetails(fetchedData); // Set the fetched event details
           }
-
 
         } catch (error) {
           console.error("Error fetching data: ", error);
@@ -288,6 +288,7 @@ const Budget = (props) => {
 
   
   return (
+    
     <View style={styles.container}>
 
       <StatusBar backgroundColor="#FFC0CB" barStyle="dark-content" />
@@ -328,9 +329,12 @@ const Budget = (props) => {
     
       </View>
 
-      <Text style={styles.sumText}>
-        סכום   האחרונה: {eventDetails.spend}
-      </Text>
+      <View style={styles.roundedBackground}>
+        <Text style={styles.sumText}>
+          <Text style={styles.currencySymbol}>₪</Text>
+          <Text style={styles.valueText}>{eventDetails > 0 ? eventDetails : 0}</Text>
+        </Text>
+      </View>
 
       <Text style={styles.sumText}>
         סכום בדיקה {sumNumericColumn.reduce((acc, cur) => acc + cur, 0)}
@@ -402,7 +406,7 @@ const styles = StyleSheet.create({
     borderColor: '#000',
     width: '98%',
     marginTop: 0,
-    height: 500, // גובה קבוע לפריים
+    height: 350, // גובה קבוע לפריים
 
   },
   text: {
@@ -475,6 +479,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
   },
+  currencySymbol: {
+    fontSize: 24, // Smaller font size for the currency symbol
+    color: '#fff', // White color for the currency symbol
+    fontWeight: 'bold',
+  },
     addButton: {
     backgroundColor: '#2196F3',
     padding: 10,
@@ -519,6 +528,19 @@ const styles = StyleSheet.create({
   },
   scrollViewContainer: {
     flexGrow: 1 // עשוי להיות חשוב לגליל בתוך ScrollView
+  },
+  roundedBackground: {
+    backgroundColor: '#ff69b4',
+    borderRadius: 150, // Adjust this to make the background round
+    paddingVertical: 50, // Adjust the vertical padding
+    paddingHorizontal: 50, // Adjust the horizontal padding
+    alignItems: 'center', // Center the text within the background
+    justifyContent: 'center',
+  },
+  sumText: {
+    fontSize: 60, // Adjust the font size as needed
+    fontWeight: 'bold', // Make the text bold
+    color: '#fff', // Set the text color to white for better contrast
   },
 });
 

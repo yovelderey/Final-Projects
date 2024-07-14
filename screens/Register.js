@@ -10,6 +10,7 @@ import 'firebase/compat/firestore';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import 'firebase/database'; // Import the Realtime Database module
 import { getDatabase, ref, set } from 'firebase/database';
+import uuid from 'react-native-uuid';
 
 
 
@@ -42,9 +43,9 @@ function Register(props) {
   const navigation = useNavigation()
 // Get the currently authenticated user's UID
   //const user = auth.currentUser;
-  const uniqueID = uuidv4();
+  //const uniqueID = uuidv4();
 
-  const databaseRef = ref(database, 'users/' + uniqueID);
+  //const databaseRef = ref(database, 'users/' + uniqueID);
 
     const showAlert = () => {
       Alert.alert('Terms of Service By using this application, you agree to be bound by the following terms of service. Please read these terms carefully before using the application. 1. Agreement 1.1. By using the application, you agree to the following terms of service in full and without reservation. 1.2. If you do not agree to these terms of service, please refrain from using the application. 2. Usage and Registration 2.1. Usage of the application is permitted only to users who are of legal age and who accept these terms of service. 2.2. Additional services in the application may require registration and submission of personal information. 3. Privacy 3.1. We are committed to maintaining the privacy of users and not disclosing personal information to third parties without prior authorization. 3.2. User privacy may be disclosed as necessary to comply with legal obligations, protect the rights of the company, or ensure public safety. 4. Liability ', "", [{ text: 'Agree' }]);
@@ -81,26 +82,8 @@ function Register(props) {
 
 
           const database = getDatabase();
-            const databaseRef = ref(database, 'Events/' + firebase.auth().currentUser.uid + '/'+ eventName + '/');
-        
-            const userData = {
-              eventName: 0,
-              eventCategory: 0,
-              eventTags: 0,
-              eventDate: 0,
-              eventTime: 0,
-              eventLocation: 0,
-              eventDescription: 0,
-            };
-        
-            set(databaseRef, userData)
-              .then(() => {
-                console.log('Data written to the database successfully');
-              })
-              .catch((error) => {
-                console.error('Error writing data to the database:', error);
-              });
-          
+            //const databaseRef = ref(database, 'Events/' + firebase.auth().currentUser.uid + '/'+ eventName + '/');
+         
 
 
         })
