@@ -166,7 +166,7 @@ import React, { useEffect, useState } from 'react';
 
   const handleButton3Press = () => {
     console.log('Button 3 pressed');
-    // Add your code here for Button 3
+    props.navigation.navigate('Task', { id });
   };
 
   const handleButton4Press = () => {

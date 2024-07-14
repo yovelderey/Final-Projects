@@ -334,16 +334,16 @@ const Budget = (props) => {
       </View>
 
       <View style={styles.roundedBackground}>
-        <Text style={styles.sumText}>
+ </View>
+      <Text style={styles.sumText}>
           <Text style={styles.currencySymbol}>₪</Text>
           <Text style={styles.valueText}>{eventDetails > 0 ? eventDetails : 0}</Text>
         </Text>
-      </View>
 
     <TouchableOpacity
         style={styles.largeButton}
         onPress={() => handleSaveToFirebase()} >
-          <Text style={styles.title}>שמור נתונים</Text>
+          <Text style={styles.title3}>שמור נתונים</Text>
       </TouchableOpacity>
 
       <TouchableOpacity 
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 15,
-    marginTop: 40,
+    marginTop: 20,
 
   },
   leftIcons: {
@@ -438,11 +438,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     margin: 8,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 30,
-  },
+
   title2: {
     fontSize: 12,
     marginBottom: 200,
@@ -507,10 +503,16 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   title: {
+    fontSize: 24,
+    color: '#000',
+    marginTop: 15,
+
+  },
+  title3: {
     fontSize: 20,
     color: '#000',
-  },
 
+  },
 
   largeButton: {
     width: '40%',
@@ -522,15 +524,15 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     padding: 10,
     borderRadius: 10,
-    marginTop: 25,
+    marginTop: 75,
 
   },
 
 
   roundedBackground: {
     borderRadius: 150, // Adjust this to make the background round
-    paddingVertical: 50, // Adjust the vertical padding
-    paddingHorizontal: 30, // Adjust the horizontal padding
+    paddingVertical: 70, // Adjust the vertical padding
+    paddingHorizontal: 70, // Adjust the horizontal padding
     alignItems: 'center', // Center the text within the background
     justifyContent: 'center',
     marginTop: 40,
@@ -542,8 +544,16 @@ const styles = StyleSheet.create({
     fontSize: 40, // Adjust the font size as needed
     fontWeight: 'bold', // Make the text bold
     color: '#ff69b4', // Set the text color to white for better contrast
+    marginTop: -95,
+
   },
 
+  currencySymbol: {
+    fontSize: 24, // Smaller font size for the currency symbol
+    color: '#ff69b4', // White color for the currency symbol
+    fontWeight: 'bold',
+  },
+  
   roundedBackground2: {
     alignItems: 'center', // Center the text within the background
     justifyContent: 'center',
