@@ -152,36 +152,36 @@ import React, { useEffect, useState } from 'react';
   };
   
   const handleButton1Press = () => {
-    console.log('Button 1 pressed');
-    // Add your code here for Button 1
+    // Add your code here for Button 1 תקציב
     props.navigation.navigate('Budget', { id });
-
-
   };
 
   const handleButton2Press = () => {
-    console.log('Button 2 pressed');
+        // Add your code here for Button 1 ניהול אורחים
+
     props.navigation.navigate('Management', { id });
   };
 
   const handleButton3Press = () => {
-    console.log('Button 3 pressed');
+        // Add your code here for Button 1 משימות
+
     props.navigation.navigate('Task', { id });
   };
 
   const handleButton4Press = () => {
-    console.log('Button 4 pressed');
+    props.navigation.navigate('SeatedAtTable', { id });
+
     // Add your code here for Button 4
   };
 
   const handleButton5Press = () => {
-    console.log('Button 5 pressed');
-    // Add your code here for Button 5
+    props.navigation.navigate('Providers', { id });
+    // Add your code here for Button 5 ספקים
   };
 
   const handleButton6Press = () => {
-    console.log('Button 6 pressed');
-    // Add your code here for Button 6
+    props.navigation.navigate('RSVPs', { id });
+    // Add your code here for Button 6 מגיעים או לא
   };
 
   const onPressLogin = () => {
