@@ -1,14 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, Alert, TextInput, Modal, Button } from 'react-native';
-import Contacts from 'react-native-contacts';
-import { PermissionsAndroid, Platform } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, Alert, TextInput, Modal, Button, PermissionsAndroid, Platform } from 'react-native';
+import { initializeApp } from 'firebase/app';
+import { getDatabase, ref, push, remove, set } from 'firebase/database';
+import { getAuth, onAuthStateChanged } from 'firebase/auth'; // Import auth methods
+import { onValue } from 'firebase/database';
+
+
+import 'firebase/database'; // Import the Realtime Database module
+import  firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
+import 'firebase/compat/firestore';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
+  authDomain: "final-project-d6ce7.firebaseapp.com",
+  projectId: "final-project-d6ce7",
+  storageBucket: "final-project-d6ce7.appspot.com",
+  messagingSenderId: "1056060530572",
+  appId: "1:1056060530572:web:d08d859ca2d25c46d340a9",
+  measurementId: "G-LD61QH3VVP"
+};
+
+if (!firebase.apps.length){
+      firebase.initializeApp(firebaseConfig);
+}
+
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app);
+const auth = getAuth(app); // Get the auth instance
 
 const Management = (props) => {
   const [contacts, setContacts] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
+  const [user, setUser] = useState(null); // State to hold user info
   const id = props.route.params.id; // Accessing the passed id
+
 
   useEffect(() => {
     const requestPermissions = async () => {
@@ -17,70 +45,76 @@ const Management = (props) => {
           PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
           {
             title: 'Contacts Permission',
-            message: 'This app would like to view your contacts.',
-            buttonPositive: 'Please accept'
+            message: 'This app needs access to your contacts.',
+            buttonPositive: 'OK',
+            buttonNegative: 'Cancel',
           }
         );
-        if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-          loadContacts();
-        } else {
-          Alert.alert('Permission Denied', 'Cannot access contacts without permission');
-        }
-      } else {
-        loadContacts();
       }
+
+      onAuthStateChanged(auth, async (currentUser) => {
+        if (currentUser) {
+          setUser(currentUser);
+          const databaseRef = ref(database, `Events/${currentUser.uid}/${id}/contacts`);
+          onValue(databaseRef, (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+              const contactsArray = Object.values(data);
+              setContacts(contactsArray);
+            } else {
+              setContacts([]);
+            }
+          });
+        } else {
+          setUser(null);
+          setContacts([]);
+        }
+      });
     };
 
     requestPermissions();
   }, []);
 
-  const loadContacts = () => {
-    Contacts.getAll()
-      .then((contacts) => {
-        setContacts(contacts);
-      })
-      .catch((e) => {
-        console.log(e);
-        Alert.alert('Error', 'Failed to load contacts');
-      });
-  };
-
   const addContact = () => {
+    const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts`);
+
     if (newContactName.trim() && newContactPhone.trim()) {
       const newContact = {
+        recordID: String(new Date().getTime()),
         displayName: newContactName,
         phoneNumbers: [{ label: 'mobile', number: newContactPhone }],
       };
-      Contacts.addContact(newContact)
-        .then(() => {
-          setContacts([...contacts, newContact]);
-          setModalVisible(false);
-          setNewContactName('');
-          setNewContactPhone('');
-          Alert.alert('Contact Added', 'Contact has been added successfully');
-        })
-        .catch((e) => {
-          console.log(e);
-          Alert.alert('Error', 'Failed to add contact');
-        });
+      push(databaseRef, newContact); // שימור האיש קשר במסד הנתונים כאיבר חדש
+      setContacts([...contacts, newContact]);
+      setModalVisible(false);
+      setNewContactName('');
+      setNewContactPhone('');
+      Alert.alert('Contact Added', 'Contact has been added successfully');
     } else {
       Alert.alert('Error', 'Please fill in both fields');
     }
   };
+//      console.log('contactId  ', contacts);
 
-  const deleteContact = (contactId) => {
-    Contacts.deleteContact({ recordID: contactId })
-      .then(() => {
+  const deleteContact = async (contactId) => {
+    if (user) {
+
+      const contactRef = ref(database, `Events/${user.uid}/${id}/contacts/${contactId}`);
+      try {
+        await remove(contactRef);
         setContacts((prevContacts) => prevContacts.filter((contact) => contact.recordID !== contactId));
         Alert.alert('Contact Deleted', 'Contact has been deleted successfully');
-      })
-      .catch((e) => {
-        console.log(e);
-        Alert.alert('Error', 'Failed to delete contact');
-      });
+      } catch (error) {
+        console.error('Error deleting contact from Firebase:', error);
+        Alert.alert('Error', 'Failed to delete contact. Please try again.');
+      }
+    } else {
+      Alert.alert('Error', 'User not authenticated. Please log in.');
+    }
   };
+  
 
-  const renderItem = ({ item }) => (
+  const renderItem = ({ item, index }) => (
     <View style={styles.itemContainer}>
       <View>
         <Text style={styles.itemText}>{item.displayName}</Text>
@@ -95,12 +129,15 @@ const Management = (props) => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>ניהול אנשי קשר</Text>
-      <FlatList
-        data={contacts}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.recordID}
-        style={styles.list}
-      />
+      <View style={styles.tableContainer}>
+        <FlatList
+          data={contacts}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.recordID}
+          style={styles.list}
+        />
+      </View>
+      <Text style={styles.contactCount}>כמות אנשי קשר: {contacts.length}</Text>
       <TouchableOpacity
         onPress={() => setModalVisible(true)}
         style={[styles.addButton, { position: 'absolute', top: '91%', left: '4%' }]}
@@ -144,24 +181,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
+    backgroundColor: '#f5f5f5',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 20,
   },
+  tableContainer: {
+    flex: 1,
+    width: '100%',
+    maxHeight: '50%',
+  },
   list: {
     width: '100%',
+    backgroundColor: 'white',
+    borderRadius: 10,
+    overflow: 'hidden',
+    padding: 10,
+    boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)',
   },
   itemContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
     paddingVertical: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#ccc',
-    width: '100%',
   },
   itemText: {
     fontSize: 18,
@@ -188,11 +234,17 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
   },
+  contactCount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 10,
+  },
   modalContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
+    backgroundColor: '#fff',
   },
   modalTitle: {
     fontSize: 24,
