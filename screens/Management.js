@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, Alert, TextInput, Modal, Button, PermissionsAndroid, StatusBar,Platform } from 'react-native';
+import { View, Text, FlatList,ImageBackground, StyleSheet, TouchableOpacity, Image, Alert, TextInput, Modal, Button, PermissionsAndroid, StatusBar,Platform } from 'react-native';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, push, remove, set } from 'firebase/database';
 import { getAuth, onAuthStateChanged } from 'firebase/auth'; // Import auth methods
@@ -166,32 +166,46 @@ const Management = (props) => {
         </TouchableOpacity>
         <Text style={styles.contactCount}>כמות אנשי קשר: {contacts.length}</Text>
   
+
+
         <Modal visible={modalVisible} animationType="slide">
-  <View style={styles.modalContainer}>
-    <Text style={styles.modalTitle}>הוסף איש קשר חדש</Text>
-    <TextInput
-      style={styles.input}
-      placeholder="שם"
-      value={newContactName}
-      onChangeText={setNewContactName}
-    />
-    <TextInput
-      style={styles.input}
-      placeholder="מספר טלפון"
-      value={newContactPhone}
-      onChangeText={setNewContactPhone}
-      keyboardType="phone-pad"
-    />
-    <View style={styles.buttonContainer}>
-      <TouchableOpacity style={styles.modalButton} onPress={addContact}>
-        <Text style={styles.modalButtonText}>הוסף</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setModalVisible(false)}>
-        <Text style={styles.modalButtonText}>ביטול</Text>
-      </TouchableOpacity>
-    </View>
-  </View>
-</Modal>
+        <Image source={require('../assets/Signbac.png')} style={styles.backIcon2} />
+
+          <View style={styles.modalContainer}>
+
+
+            <View style={styles.buttonContainer3}>
+            <Text style={styles.modalTitle}>הוסף איש קשר חדש</Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="שם"
+              value={newContactName}
+              onChangeText={setNewContactName}
+            />
+            </View>
+
+            <View style={styles.buttonContainer2}>
+
+            <TextInput
+              style={styles.input2}
+              placeholder="מספר טלפון"
+              value={newContactPhone}
+              onChangeText={setNewContactPhone}
+              keyboardType="phone-pad"
+            />
+              </View>
+
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity style={styles.modalButton} onPress={addContact}>
+                <Text style={styles.modalButtonText}>הוסף</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setModalVisible(false)}>
+                <Text style={styles.modalButtonText}>ביטול</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
               <TouchableOpacity 
         onPress={() => props.navigation.navigate('ListItem', { id })}
@@ -269,7 +283,6 @@ const Management = (props) => {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
     },
     modalTitle: {
       fontSize: 24,
@@ -278,21 +291,23 @@ const Management = (props) => {
       color: '#333',
     },
 
-    input: {
-      width: '100%',
-      padding: 10,
-      borderWidth: 1,
-      borderColor: '#ccc',
-      borderRadius: 5,
-      marginBottom: 20,
-    },
+
     input: {
       width: '80%',
+      height: 40, // גובה המרווח בין השורות
       padding: 10,
       borderWidth: 1,
-      borderColor: '#ccc',
       borderRadius: 5,
-      marginBottom: 20,
+      marginBottom: 800,
+      backgroundColor: '#fff',
+    },
+    input2: {
+      width: '80%',
+      height: 40, // גובה המרווח בין השורות
+      padding: 10,
+      borderWidth: 1,
+      borderRadius: 5,
+      marginBottom: 400,
       backgroundColor: '#fff',
     },
     separator: {
@@ -306,6 +321,21 @@ const Management = (props) => {
     buttonContainer: {
       position: 'absolute',
       bottom: 20,
+      width: '100%',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    buttonContainer2: {
+      position: 'absolute',
+      bottom: 20,
+      width: '100%',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+
+    buttonContainer3: {
+      position: 'absolute',
+      bottom: -320,
       width: '100%',
       justifyContent: 'center',
       alignItems: 'center',
@@ -349,7 +379,11 @@ const Management = (props) => {
       height: 50,
   
     },
-
+    backIcon2: {
+      width: 400,
+      height: 850,
+  
+    },
     cancelButton: {
       backgroundColor: '#f44336',
     },
@@ -357,6 +391,7 @@ const Management = (props) => {
       color: 'white',
       fontWeight: 'bold',
     },
+    
   });
   
 export default Management;
