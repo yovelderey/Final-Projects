@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, Alert, TextInput, Modal, Button, PermissionsAndroid, Platform } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, Alert, TextInput, Modal, Button, PermissionsAndroid, StatusBar,Platform } from 'react-native';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, push, remove, set } from 'firebase/database';
 import { getAuth, onAuthStateChanged } from 'firebase/auth'; // Import auth methods
 import { onValue } from 'firebase/database';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 
 import 'firebase/database'; // Import the Realtime Database module
@@ -36,6 +37,7 @@ const Management = (props) => {
   const [newContactPhone, setNewContactPhone] = useState('');
   const [user, setUser] = useState(null); // State to hold user info
   const id = props.route.params.id; // Accessing the passed id
+  const insets = useSafeAreaInsets();
 
 
   useEffect(() => {
@@ -104,7 +106,6 @@ const Management = (props) => {
         
         await remove(contactRef);
         setContacts((prevContacts) => prevContacts.filter((contact) => contact.recordID !== contactId));
-        Alert.alert('Contact Deleted', 'Contact has been deleted successfully');
       } catch (error) {
         console.error('Error deleting contact from Firebase:', error);
         Alert.alert('Error', 'Failed to delete contact. Please try again.');
@@ -115,152 +116,247 @@ const Management = (props) => {
   };
   
 
-  const renderItem = ({ item, index }) => (
-    <View style={styles.itemContainer}>
-      <View>
-        <Text style={styles.itemText}>{item.displayName}</Text>
-        <Text style={styles.itemText}>{item.phoneNumbers}</Text>
 
-      </View>
-      <TouchableOpacity onPress={() => deleteContact(item.recordID)}>
-        <Image source={require('../assets/delete.png')} style={styles.deleteIcon} />
-      </TouchableOpacity>
+  const renderItem = ({ item, index }) => (
+    <View style={[styles.itemContainer, { backgroundColor: index % 2 === 0 ? '#f5f5f5' : '#ffffff' }]}>
+  <TouchableOpacity onPress={() => deleteContact(item.recordID)}>
+    <Image source={require('../assets/delete.png')} style={styles.deleteIcon} />
+  </TouchableOpacity>
+
+  <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between' }}>
+    <View>
     </View>
+    <View style={{ alignItems: 'flex-end' }}>
+      <Text style={styles.itemText}>{item.displayName}</Text>
+      <Text style={styles.itemText}>{item.phoneNumbers}</Text>
+    </View>
+  </View>
+</View>
+
   );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>ניהול אנשי קשר</Text>
+   
+      <View style={styles.container}>
+        <StatusBar backgroundColor="#FFC0CB" barStyle="dark-content" />
+        <View style={[styles.topBar, { paddingTop: insets.top }]}>
+          <Text style={styles.title}>ניהול אנשי קשר</Text>
+        </View>
+  
+        {contacts.length === 0 ? (
+          <View style={styles.noItemsContainer}>
+            <Text style={styles.noItemsText}>אין פריטים להצגה</Text>
+         </View>  
+           ) : (
       <View style={styles.tableContainer}>
         <FlatList
           data={contacts}
           renderItem={renderItem}
           keyExtractor={(item) => item.recordID}
           style={styles.list}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
       </View>
-      <Text style={styles.contactCount}>כמות אנשי קשר: {contacts.length}</Text>
-      <TouchableOpacity
-        onPress={() => setModalVisible(true)}
-        style={[styles.addButton, { position: 'absolute', top: '91%', left: '4%' }]}
-      >
-        <Text style={styles.addButtonText}>הוסף אנשי קשר</Text>
+    )}
+        <TouchableOpacity
+          onPress={() => setModalVisible(true)}
+          style={styles.addButton}
+        >
+          <Text style={styles.addButtonText}>הוסף אנשי קשר</Text>
+        </TouchableOpacity>
+        <Text style={styles.contactCount}>כמות אנשי קשר: {contacts.length}</Text>
+  
+        <Modal visible={modalVisible} animationType="slide">
+  <View style={styles.modalContainer}>
+    <Text style={styles.modalTitle}>הוסף איש קשר חדש</Text>
+    <TextInput
+      style={styles.input}
+      placeholder="שם"
+      value={newContactName}
+      onChangeText={setNewContactName}
+    />
+    <TextInput
+      style={styles.input}
+      placeholder="מספר טלפון"
+      value={newContactPhone}
+      onChangeText={setNewContactPhone}
+      keyboardType="phone-pad"
+    />
+    <View style={styles.buttonContainer}>
+      <TouchableOpacity style={styles.modalButton} onPress={addContact}>
+        <Text style={styles.modalButtonText}>הוסף</Text>
       </TouchableOpacity>
-      <TouchableOpacity
+      <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setModalVisible(false)}>
+        <Text style={styles.modalButtonText}>ביטול</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
+
+              <TouchableOpacity 
         onPress={() => props.navigation.navigate('ListItem', { id })}
-        style={[styles.backButton, { position: 'absolute', top: '91%', right: '4%' }]}
+        style={[styles.showPasswordButton, { position: 'absolute', top: '92%', left: '4%' }]}
       >
         <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
       </TouchableOpacity>
+      </View>
+    );
+  };
 
-      <Modal visible={modalVisible} animationType="slide">
-        <View style={styles.modalContainer}>
-          <Text style={styles.modalTitle}>הוסף איש קשר חדש</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="שם"
-            value={newContactName}
-            onChangeText={setNewContactName}
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="מספר טלפון"
-            value={newContactPhone}
-            onChangeText={setNewContactPhone}
-            keyboardType="phone-pad"
-          />
-          <Button title="הוסף" onPress={addContact} />
-          <Button title="ביטול" onPress={() => setModalVisible(false)} />
-        </View>
-      </Modal>
-    </View>
-  );
-};
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      backgroundColor: 'white',
+    },
+    topBar: {
+      width: '120%',
+      backgroundColor: '#ff69b4',
+      alignItems: 'center',
+      paddingVertical: 10,
+      position: 'absolute',
+       top: 0,
+    },
+    title: {
+      fontSize: 24,
+      fontWeight: 'bold',
+    },
+    tableContainer: {
+      flex: 1,
+      width: '100%',
+      maxHeight: '50%',
+      marginVertical: 20,
+    },
+    list: {
+      width: '100%',
+      backgroundColor: 'white',
+      borderRadius: 10,
+      overflow: 'hidden',
+      padding: 10,
+      boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)',
+    },
+    itemContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 10,
+      borderBottomWidth: 2,
+      borderBottomColor: '#ccc',
+      borderRadius: 5, // עיגול פינות ברדיוס 10 פיקסלים
+      
+    },
+    itemText: {
+      fontSize: 18,
+      
+    },
+    deleteIcon: {
+      width: 24,
+      height: 24,
+    },
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    backgroundColor: '#f5f5f5',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  tableContainer: {
-    flex: 1,
-    width: '100%',
-    maxHeight: '50%',
-  },
-  list: {
-    width: '100%',
-    backgroundColor: 'white',
-    borderRadius: 10,
-    overflow: 'hidden',
-    padding: 10,
-    boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)',
-  },
-  itemContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
-  },
-  itemText: {
-    fontSize: 18,
-  },
-  deleteIcon: {
-    width: 24,
-    height: 24,
-  },
-  addButton: {
-    padding: 10,
-    backgroundColor: '#4CAF50',
-    borderRadius: 5,
-  },
-  addButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  backButton: {
-    padding: 10,
-    backgroundColor: '#ddd',
-    borderRadius: 5,
-  },
-  backIcon: {
-    width: 24,
-    height: 24,
-  },
-  contactCount: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginTop: 10,
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    backgroundColor: '#fff',
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  input: {
-    width: '100%',
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 5,
-    marginBottom: 20,
-  },
-});
+    contactCount: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      borderRadius: 5,
+      position: 'absolute',
+      bottom: 150,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 10,
+    },
+    modalContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    modalTitle: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      marginBottom: 20,
+      color: '#333',
+    },
 
+    input: {
+      width: '100%',
+      padding: 10,
+      borderWidth: 1,
+      borderColor: '#ccc',
+      borderRadius: 5,
+      marginBottom: 20,
+    },
+    input: {
+      width: '80%',
+      padding: 10,
+      borderWidth: 1,
+      borderColor: '#ccc',
+      borderRadius: 5,
+      marginBottom: 20,
+      backgroundColor: '#fff',
+    },
+    separator: {
+      height: 10, // גובה המרווח בין השורות
+    },
+    noItemsContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    buttonContainer: {
+      position: 'absolute',
+      bottom: 20,
+      width: '100%',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalButton: {
+      backgroundColor: '#4CAF50',
+      padding: 10,
+      borderRadius: 5,
+      marginVertical: 10,
+      width: '80%',
+      alignItems: 'center',
+    },
+    noItemsText: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: '#555',
+      textAlign: 'center',
+      marginTop: '-50%', // יותר קרוב למעלה
+    },
+    addButton: {
+      padding: 10,
+      width: '90%',
+      height: 50,
+      backgroundColor: '#ff69b4',
+
+      borderRadius: 5,
+      position: 'absolute',
+      bottom: 100,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 10,
+
+    },
+    addButtonText: {
+      color: 'white',
+      fontWeight: 'bold',
+      
+    },
+    backIcon: {
+      width: 50,
+      height: 50,
+  
+    },
+
+    cancelButton: {
+      backgroundColor: '#f44336',
+    },
+    modalButtonText: {
+      color: 'white',
+      fontWeight: 'bold',
+    },
+  });
+  
 export default Management;
