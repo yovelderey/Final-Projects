@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const Budget = (props) => {
   const id = props.route.params.id; // Accessing the passed id
   const initialData = [
-    [true, 'מחיר', 'תוכן', 'תאריך', 'שם'],
+    [true, 'מחיר', 'מקדמה', 'תאריך', 'הוצאה'],
     ...Array.from({ length: 9 }, () => Array(5).fill(''))
   ];
 

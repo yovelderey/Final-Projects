@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const Task = (props) => {
   const id = props.route.params.id; // Accessing the passed id
   const initialData = [
-    [true, 'תוכן', 'תאריך', 'שם', 'מספר'],
+    [true, 'הערות', 'עד תאריך', 'משימה/פעולה', 'מספר'],
     ...Array.from({ length: 9 }, () => Array(5).fill(''))
   ];
 

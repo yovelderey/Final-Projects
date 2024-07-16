@@ -35,6 +35,7 @@
     "react-native": "^0.74.3",
     "react-native-calendar-strip": "^1.4.2",
     "react-native-calendars": "^1.1303.0",
+    "react-native-contacts": "^7.0.8",
     "react-native-gesture-handler": "~2.16.1",
     "react-native-image-picker": "^7.1.2",
     "react-native-modal": "^13.0.1",
