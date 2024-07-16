@@ -56,6 +56,7 @@ const Management = (props) => {
         if (currentUser) {
           setUser(currentUser);
           const databaseRef = ref(database, `Events/${currentUser.uid}/${id}/contacts`);
+          
           onValue(databaseRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
@@ -76,31 +77,31 @@ const Management = (props) => {
   }, []);
 
   const addContact = () => {
-    const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts`);
+    const recordidd = String(new Date().getTime());
+    const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordidd}`);
 
     if (newContactName.trim() && newContactPhone.trim()) {
       const newContact = {
-        recordID: String(new Date().getTime()),
+        recordID: recordidd,
         displayName: newContactName,
-        phoneNumbers: [{ label: 'mobile', number: newContactPhone }],
+        phoneNumbers: newContactPhone,
       };
-      push(databaseRef, newContact); // שימור האיש קשר במסד הנתונים כאיבר חדש
+      set(databaseRef, newContact); // שימור האיש קשר במסד הנתונים כאיבר חדש
       setContacts([...contacts, newContact]);
       setModalVisible(false);
       setNewContactName('');
       setNewContactPhone('');
-      Alert.alert('Contact Added', 'Contact has been added successfully');
     } else {
       Alert.alert('Error', 'Please fill in both fields');
     }
   };
-//      console.log('contactId  ', contacts);
 
   const deleteContact = async (contactId) => {
     if (user) {
 
       const contactRef = ref(database, `Events/${user.uid}/${id}/contacts/${contactId}`);
       try {
+        
         await remove(contactRef);
         setContacts((prevContacts) => prevContacts.filter((contact) => contact.recordID !== contactId));
         Alert.alert('Contact Deleted', 'Contact has been deleted successfully');
@@ -118,7 +119,8 @@ const Management = (props) => {
     <View style={styles.itemContainer}>
       <View>
         <Text style={styles.itemText}>{item.displayName}</Text>
-        <Text style={styles.itemText}>{item.phoneNumbers[0]?.number}</Text>
+        <Text style={styles.itemText}>{item.phoneNumbers}</Text>
+
       </View>
       <TouchableOpacity onPress={() => deleteContact(item.recordID)}>
         <Image source={require('../assets/delete.png')} style={styles.deleteIcon} />
