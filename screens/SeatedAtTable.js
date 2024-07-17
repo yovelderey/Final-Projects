@@ -1,122 +1,113 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Image, FlatList, TextInput, StyleSheet , TouchableOpacity,Dimensions,Animated } from 'react-native';
-import { firebaseConfig } from '../config';
-import { getDatabase, ref, set } from 'firebase/database';
+import { View, Text, Image, FlatList, TextInput, StyleSheet , TouchableOpacity, } from 'react-native';
+import { getDatabase, set } from 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
+import { getStorage,ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
+const firebaseConfig = {
+  apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
+  authDomain: "final-project-d6ce7.firebaseapp.com",
+  projectId: "final-project-d6ce7",
+  storageBucket: "final-project-d6ce7.appspot.com",
+  messagingSenderId: "1056060530572",
+  appId: "1:1056060530572:web:d08d859ca2d25c46d340a9",
+  measurementId: "G-LD61QH3VVP"
+};
 
-const { width } = Dimensions.get('window');
-const images = [
-  require('../assets/imagemainone.png'),
-  require('../assets/imgmaintwo.png'),
-  require('../assets/imagmaintree.png'),
-  require('../assets/imagemainfour.png'),
-];
-
+if (!firebase.apps.length){
+      firebase.initializeApp(firebaseConfig);
+}
 const SeatedAtTable = (props) => {
   const id = props.route.params.id; // Accessing the passed id
-  const animatedValue = useState(new Animated.Value(0))[0];
+  const userId = props.route.params.id; // Accessing the unique user ID
+
   const [selectedImage, setSelectedImage] = useState(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
-    const fetchData = async () => {
-        try {
-
-          const intervalId = setInterval(() => {
-            setCurrentIndex((prevIndex) => (prevIndex + 1) % images.length);
-            animate();
-          }, 5000); // Change image every 5 seconds
-      
-          return () => clearInterval(intervalId);
-
-        } catch (error) {
-          console.error("Error fetching data: ", error);
-        }
-      
-    };
-    
-
-    fetchData();
+    // Load user's image upon component mount
+    loadImage(userId);
   }, []);
 
   const selectImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      alert('Permission to access media library is required!');
+      Alert.alert('Permission required', 'Permission to access media library is required!');
       return;
     }
-  
-    const pickerResult = await ImagePicker.launchImageLibraryAsync({
+
+    const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 3],
       quality: 1,
     });
-  
-    if (!pickerResult.canceled && pickerResult.assets && pickerResult.assets.length > 0) {
-      try {
-        const selectedAsset = pickerResult.assets[0];
-        const fileName = selectedAsset.uri.split('/').pop();
-        const destinationUri = `${FileSystem.documentDirectory}${fileName}`;
-  
-        await FileSystem.copyAsync({
-          from: selectedAsset.uri,
-          to: destinationUri,
-        });
-  
-        setSelectedImage(destinationUri);
-      } catch (error) {
-        console.error("Error copying image: ", error);
+
+    if (!result.cancelled) {
+      const uri = result.assets[0]?.uri;
+      if (!uri) {
+        console.error('No URI returned from ImagePicker');
+        return;
       }
+      setSelectedImage(uri);
+      await saveImageToLocal(uri, userId); // Save the image locally with user's ID
     }
   };
 
-  const animate = () => {
-    animatedValue.setValue(0);
-    Animated.timing(animatedValue, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
+  const saveImageToLocal = async (uri, userId) => {
+    try {
+      const fileName = uri.split('/').pop();
+      const localUri = `${FileSystem.documentDirectory}${userId}/${fileName}`;
+      // Check if directory exists, if not create it
+      const dirInfo = await FileSystem.getInfoAsync(`${FileSystem.documentDirectory}${userId}`);
+      if (!dirInfo.exists) {
+        await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}${userId}`, { intermediates: true });
+      }
+      await FileSystem.copyAsync({
+        from: uri,
+        to: localUri,
+      });
+      console.log('Image saved to local storage at', localUri);
+    } catch (error) {
+      console.error('Error saving image to local storage: ', error);
+      throw error;
+    }
   };
 
-  const translateX = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [width, 0],
-  });
+  const loadImage = async (userId) => {
+    try {
+      const dirInfo = await FileSystem.getInfoAsync(`${FileSystem.documentDirectory}${userId}`);
+      if (dirInfo.exists) {
+        const files = await FileSystem.readDirectoryAsync(`${FileSystem.documentDirectory}${userId}`);
+        if (files.length > 0) {
+          const firstImageUri = `${FileSystem.documentDirectory}${userId}/${files[0]}`;
+          setSelectedImage(firstImageUri);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading image from local storage: ', error);
+    }
+  };
 
-  const rotate = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
-  const scale = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.5, 1.5],
-  });
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>סידורי הושבה</Text>
 
       {selectedImage ? (
-          <Image source={{ uri: selectedImage }} style={styles.imageBackground} />
-        ) : (
-
-          <TouchableOpacity onPress={selectImage} style={styles.imagePlaceholder}>
-          <Animated.Image
-            source={images[currentIndex]}
-            style={[styles.imageBackgroundcarusel,{transform: [{ translateX: animatedValue }],},]}
-          />
-          </TouchableOpacity>
-
-        )}
+        <TouchableOpacity onPress={selectImage} style={styles.imagePlaceholder}>
+          <Image source={{ uri: selectedImage }} style={styles.imageBackground2} />
+        </TouchableOpacity>
+              ) : (
+        <TouchableOpacity onPress={selectImage} style={styles.imagePlaceholder}>
+          <Image source={require('../assets/uploadimg.png')} style={styles.imageBackground} />
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity 
         onPress={() => props.navigation.navigate('ListItem', { id })}
@@ -153,14 +144,15 @@ const styles = StyleSheet.create({
   },
   imageBackground: {
     width: '100%',
-    height: '25%',
+    height: '100%',
     marginBottom: 20,
   },
-  imageBackgroundcarusel: {
+  imageBackground2: {
     width: '100%',
-    height: '125%',
-    marginBottom: -15,
+    height: '110%',
+    marginBottom: 20,
   },
+
   buttonText: {
     color: 'white',
     fontSize: 16,
@@ -168,12 +160,13 @@ const styles = StyleSheet.create({
   },
   imagePlaceholder: {
     width: '100%',
-    height: '20%',
+    height: '30%',
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 70,
   },
+
 });
 
 export default SeatedAtTable;
