@@ -160,20 +160,16 @@ const Management = (props) => {
     )}
         <TouchableOpacity
           onPress={() => setModalVisible(true)}
-          style={styles.addButton}
-        >
-          <Text style={styles.addButtonText}>הוסף אנשי קשר</Text>
+          style={styles.addButton} >
+          <Text style={styles.addButtonText}>הוסף אנשי קשר</Text>        
         </TouchableOpacity>
+
         <Text style={styles.contactCount}>כמות אנשי קשר: {contacts.length}</Text>
   
-
-
         <Modal visible={modalVisible} animationType="slide">
         <Image source={require('../assets/Signbac.png')} style={styles.backIcon2} />
 
           <View style={styles.modalContainer}>
-
-
             <View style={styles.buttonContainer3}>
             <Text style={styles.modalTitle}>הוסף איש קשר חדש</Text>
 
