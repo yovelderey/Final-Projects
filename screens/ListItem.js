@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
   import { useNavigation } from '@react-navigation/native';
   import { NavigationContainer } from '@react-navigation/native';
   import { createNativeStackNavigator } from '@react-navigation/native-stack';
-  import { getDatabase, ref, remove,get } from 'firebase/database';
+  import { getDatabase, ref, remove,get,onValue } from 'firebase/database';
   import 'firebase/database'; // Import the Realtime Database module
   import  firebase from 'firebase/compat/app';
   import 'firebase/compat/auth';
@@ -46,6 +46,7 @@ import React, { useEffect, useState } from 'react';
   const animatedValue = useState(new Animated.Value(0))[0];
   const [inputDate, setInputDate] = useState('');
   const [daysLeft, setDaysLeft] = useState(null);
+  const [eventDetailsspend, setEventDetailsspend] = useState({});
 
 
   useEffect(() => {
@@ -65,6 +66,8 @@ import React, { useEffect, useState } from 'react';
             animate();
           }, 5000); // Change image every 5 seconds
       
+
+          
           return () => clearInterval(intervalId);
 
         } catch (error) {
@@ -96,6 +99,27 @@ import React, { useEffect, useState } from 'react';
     }).start();
   };
 
+  useEffect(() => {
+
+    
+   
+      const eventRef = ref(database, `Events/${user.uid}/${id}/`);
+      
+      const handleValueChange = (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          setEventDetails(data);
+        }
+      };
+      
+      onValue(eventRef, handleValueChange);
+      
+      return () => {
+        eventRef.off('value', handleValueChange);
+      };
+    
+  }, [user, id]);
+  
   const translateX = animatedValue.interpolate({
     inputRange: [0, 1],
     outputRange: [width, 0],

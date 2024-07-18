@@ -26,6 +26,7 @@
     "@unimodules/core": "^7.1.2",
     "@unimodules/react-native-adapter": "^6.3.9",
     "expo": "^51.0.20",
+    "expo-contacts": "~13.0.4",
     "expo-file-system": "~17.0.1",
     "expo-firebase-recaptcha": "^1.4.4",
     "expo-image-picker": "~15.0.7",

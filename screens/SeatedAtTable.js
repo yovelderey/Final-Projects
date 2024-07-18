@@ -241,7 +241,7 @@ const SeatedAtTable = (props) => {
   
         <View style={styles.modalContainer}>
           <View style={styles.buttonContainer3}>
-            <Text style={styles.modalTitle}>הוסף איש קשר חדש</Text>
+            <Text style={styles.modalTitle}>הוסף שולחן חדש</Text>
   
             <TextInput
               style={styles.input}
@@ -257,7 +257,6 @@ const SeatedAtTable = (props) => {
               placeholder="שם אורח"
               value={newContactPhone}
               onChangeText={setNewContactPhone}
-              keyboardType="phone-pad"
             />
           </View>
   
