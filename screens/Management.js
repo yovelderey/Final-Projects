@@ -58,7 +58,8 @@ const Management = (props) => {
         if (currentUser) {
           setUser(currentUser);
           const databaseRef = ref(database, `Events/${currentUser.uid}/${id}/contacts`);
-          
+          console.log('databaseRefdatabaseRef1', databaseRef);
+
           onValue(databaseRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
@@ -79,6 +80,8 @@ const Management = (props) => {
   }, []);
 
   const addContact = () => {
+
+
     const recordidd = String(new Date().getTime());
     const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordidd}`);
 

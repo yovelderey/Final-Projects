@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, Image, FlatList, TextInput, StyleSheet , TouchableOpacity,ScrollView,Alert } from 'react-native';
+import { View, Text, Image, ImageBackground, TextInput, StyleSheet , TouchableOpacity,ScrollView,Alert } from 'react-native';
 import { firebaseConfig } from '../config';
 import { getDatabase, ref, set } from 'firebase/database';
 import firebase from 'firebase/compat/app';
@@ -10,17 +10,22 @@ const RSVPs = (props) => {
   const id = props.route.params.id; // Accessing the passed id
   
   return (
+    <ImageBackground 
+    source={require('../assets/magia.png')} // Adjust the path accordingly
+    style={styles.background}
+>
     <View style={styles.container}>
-      <Text style={styles.title}>מגיעים או לא</Text>
 
 
       <TouchableOpacity 
         onPress={() => props.navigation.navigate('ListItem', { id })}
-        style={[styles.showPasswordButton, { position: 'absolute', top: '94%', left: '3%' }]}
+        style={[styles.showPasswordButton, { position: 'absolute', top: '85%', left: '-5%' }]}
       >
         <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
       </TouchableOpacity>
     </View>
+  </ImageBackground>
+
   );
 };
 
@@ -45,6 +50,12 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
 
+  },
+  background: {
+    flex: 1,
+    resizeMode: 'cover',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

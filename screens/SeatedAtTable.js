@@ -1,18 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Image, Modal,FlatList, TextInput, StyleSheet,StatusBar , TouchableOpacity, } from 'react-native';
-import { getDatabase, set } from 'firebase/database';
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/auth';
+import { getDatabase, ref, push, remove, set } from 'firebase/database';
+
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
-import { getStorage,ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged } from 'firebase/auth'; // Import auth methods
+import { onValue } from 'firebase/database';
 
-
+import 'firebase/database'; // Import the Realtime Database module
+import  firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
+import 'firebase/compat/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
@@ -24,14 +25,17 @@ const firebaseConfig = {
   measurementId: "G-LD61QH3VVP"
 };
 
+if (!firebase.apps.length){
+  firebase.initializeApp(firebaseConfig);
+}
+
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
 const auth = getAuth(app); // Get the auth instance
 
-if (!firebase.apps.length){
-      firebase.initializeApp(firebaseConfig);
-}
+
 const SeatedAtTable = (props) => {
+
   const id = props.route.params.id; // Accessing the passed id
   const userId = props.route.params.id; // Accessing the unique user ID
   const insets = useSafeAreaInsets();
@@ -42,26 +46,17 @@ const SeatedAtTable = (props) => {
   const [user, setUser] = useState(null); // State to hold user info
   const [selectedImage, setSelectedImage] = useState(null);
 
-  useEffect(() => {
 
+  useEffect(() => {
     const requestPermissions = async () => {
-      if (Platform.OS === 'android') {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
-          {
-            title: 'Contacts Permission',
-            message: 'This app needs access to your contacts.',
-            buttonPositive: 'OK',
-            buttonNegative: 'Cancel',
-          }
-        );
-      }
+
 
       onAuthStateChanged(auth, async (currentUser) => {
         if (currentUser) {
           setUser(currentUser);
-          const databaseRef = ref(database, `Events/${currentUser.uid}/${id}/contacts`);
-          
+          const databaseRef = ref(database, `Events/${currentUser.uid}/${id}/tables`);
+          console.log('databaseRefdatabaseRef2', databaseRef);
+
           onValue(databaseRef, (snapshot) => {
             const data = snapshot.val();
             if (data) {
@@ -79,8 +74,8 @@ const SeatedAtTable = (props) => {
     };
 
     requestPermissions();
-
     loadImage(userId);
+
   }, []);
 
   const selectImage = async () => {
@@ -146,7 +141,7 @@ const SeatedAtTable = (props) => {
 
   const addContact = () => {
     const recordidd = String(new Date().getTime());
-    const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordidd}`);
+    const databaseRef = ref(database, `Events/${user.uid}/${id}/tables/${recordidd}`);
 
     if (newContactName.trim() && newContactPhone.trim()) {
       const newContact = {
@@ -189,6 +184,7 @@ const SeatedAtTable = (props) => {
     <Image source={require('../assets/delete.png')} style={styles.deleteIcon} />
   </TouchableOpacity>
 
+
   <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between' }}>
     <View>
     </View>
@@ -201,28 +197,27 @@ const SeatedAtTable = (props) => {
 
   );
 
-
   return (
     <View style={styles.container}>
-
-        <StatusBar backgroundColor="#FFC0CB" barStyle="dark-content" />
-        <View style={[styles.topBar, { paddingTop: insets.top }]}>
-          <Text style={styles.title}>ניהול אנשי קשר</Text>
-        </View>
-
+  
+      <StatusBar backgroundColor="#FFC0CB" barStyle="dark-content" />
+      <View style={[styles.topBar, { paddingTop: insets.top }]}>
+        <Text style={styles.title}>ניהול אנשי קשר</Text>
+      </View>
+  
       {selectedImage ? (
         <TouchableOpacity onPress={selectImage} style={styles.imagePlaceholder}>
           <Image source={{ uri: selectedImage }} style={styles.imageBackground2} />
         </TouchableOpacity>
-              ) : (
+      ) : (
         <TouchableOpacity onPress={selectImage} style={styles.imagePlaceholder}>
           <Image source={require('../assets/uploadimg.png')} style={styles.imageBackground} />
         </TouchableOpacity>
       )}
+      
       <Text style={styles.noItemsText}>לחץ על התמונה להעלות תרשים אולם</Text>
-      <Text style={styles.noItemsText2}>פורמט jpeg,png, jpg</Text>
-
-
+      <Text style={styles.noItemsText2}>פורמט jpeg, png, jpg</Text>
+  
       <View style={styles.tableContainer}>
         <FlatList
           data={contacts}
@@ -232,55 +227,54 @@ const SeatedAtTable = (props) => {
           ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
       </View>
-
-      <TouchableOpacity
-          onPress={() => setModalVisible(true)}
-          style={styles.addButton} >
-          <Text style={styles.addButtonText}>הוסף אנשי קשר</Text>        
-        </TouchableOpacity>
-
-        <Text style={styles.contactCount}>כמות אנשי קשר: {contacts.length}</Text>
   
-        <Modal visible={modalVisible} animationType="slide">
+      <TouchableOpacity
+        onPress={() => setModalVisible(true)}
+        style={styles.addButton} >
+        <Text style={styles.addButtonText}>הוסף שולחן</Text>        
+      </TouchableOpacity>
+  
+      <Text style={styles.contactCount}>מספר שולחנות: {contacts.length}</Text>
+    
+      <Modal visible={modalVisible} animationType="slide">
         <Image source={require('../assets/Signbac.png')} style={styles.backIcon2} />
-
-          <View style={styles.modalContainer}>
-            <View style={styles.buttonContainer3}>
+  
+        <View style={styles.modalContainer}>
+          <View style={styles.buttonContainer3}>
             <Text style={styles.modalTitle}>הוסף איש קשר חדש</Text>
-
+  
             <TextInput
               style={styles.input}
-              placeholder="שם"
+              placeholder=" שם שולחן"
               value={newContactName}
               onChangeText={setNewContactName}
             />
-            </View>
-
-            <View style={styles.buttonContainer2}>
-
+          </View>
+  
+          <View style={styles.buttonContainer2}>
             <TextInput
               style={styles.input2}
-              placeholder="מספר טלפון"
+              placeholder="שם אורח"
               value={newContactPhone}
               onChangeText={setNewContactPhone}
               keyboardType="phone-pad"
             />
-              </View>
-
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.modalButton} onPress={addContact}>
-                <Text style={styles.modalButtonText}>הוסף</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setModalVisible(false)}>
-                <Text style={styles.modalButtonText}>ביטול</Text>
-              </TouchableOpacity>
-            </View>
           </View>
-        </Modal>
-
+  
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity style={styles.modalButton} onPress={addContact}>
+              <Text style={styles.modalButtonText}>הוסף</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setModalVisible(false)}>
+              <Text style={styles.modalButtonText}>ביטול</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+  
       <TouchableOpacity 
         onPress={() => props.navigation.navigate('ListItem', { id })}
-        style={[styles.showPasswordButton, { position: 'absolute', top: '94%', left: '3%' }]}
+        style={[styles.showPasswordButton, { position: 'absolute', top: '93%', left: '5%' }]}
       >
         <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
       </TouchableOpacity>
@@ -288,40 +282,37 @@ const SeatedAtTable = (props) => {
   );
 };
 
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 50,
+    backgroundColor: '#ffffff', // רקע לבן לכל הקונטיינר
   },
   text: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 20,
-
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 30,
   },
   backIcon: {
-    width: 50,
-    height: 50,
-
+    width: 60,
+    height: 60,
   },
   imageBackground: {
     width: '100%',
-    height: '100%',
-    marginBottom: 20,
+    height: '90%',
+    marginBottom: -185,
   },
   imageBackground2: {
     width: '100%',
-    height: '110%',
-    marginBottom: -120,
+    height: '90%',
+    marginBottom: -175,
   },
-
   buttonText: {
     color: 'white',
     fontSize: 16,
@@ -330,29 +321,29 @@ const styles = StyleSheet.create({
   imagePlaceholder: {
     width: '100%',
     height: '30%',
-    backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 70,
+    marginBottom: 5,
   },
-
   noItemsText: {
     fontSize: 16,
     color: '#555',
     textAlign: 'center',
-    marginTop: '-15%', // יותר קרוב למעלה
+    marginTop: 80, // Adjust margin to position correctly
+  },
+  noItemsText2: {
+    fontSize: 16,
+    color: '#555',
+    textAlign: 'center',
+    marginTop: 5, // Adjust margin to position correctly
   },
   topBar: {
-    width: '120%',
+    width: '100%',
     backgroundColor: '#ff69b4',
     alignItems: 'center',
     paddingVertical: 10,
     position: 'absolute',
-     top: 0,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    top: 0,
   },
   tableContainer: {
     flex: 1,
@@ -374,24 +365,20 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: 2,
     borderBottomColor: '#ccc',
-    borderRadius: 5, // עיגול פינות ברדיוס 10 פיקסלים
-    
+    borderRadius: 5,
   },
   itemText: {
     fontSize: 18,
-    
   },
   deleteIcon: {
     width: 24,
     height: 24,
   },
-
   contactCount: {
     fontSize: 18,
     fontWeight: 'bold',
-    borderRadius: 5,
     position: 'absolute',
-    bottom: 150,
+    bottom: 120,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 10,
@@ -407,52 +394,44 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     color: '#333',
   },
-
-
   input: {
     width: '80%',
-    height: 40, // גובה המרווח בין השורות
+    height: 40,
     padding: 10,
     borderWidth: 1,
     borderRadius: 5,
-    marginBottom: 800,
+    marginBottom: 370,
     backgroundColor: '#fff',
   },
   input2: {
     width: '80%',
-    height: 40, // גובה המרווח בין השורות
+    height: 40,
     padding: 10,
     borderWidth: 1,
     borderRadius: 5,
-    marginBottom: 400,
+    marginBottom: 370,
     backgroundColor: '#fff',
   },
   separator: {
-    height: 10, // גובה המרווח בין השורות
-  },
-  noItemsContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    height: 10,
   },
   buttonContainer: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 40,
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
   buttonContainer2: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 80,
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
   },
-
   buttonContainer3: {
     position: 'absolute',
-    bottom: -320,
+    bottom: 140,
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
@@ -465,41 +444,28 @@ const styles = StyleSheet.create({
     width: '80%',
     alignItems: 'center',
   },
-  noItemsText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#555',
-    textAlign: 'center',
-    marginTop: '-50%', // יותר קרוב למעלה
-  },
   addButton: {
     padding: 10,
     width: '90%',
     height: 50,
     backgroundColor: '#ff69b4',
-
     borderRadius: 5,
     position: 'absolute',
-    bottom: 100,
+    bottom: 70,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 10,
-
   },
   addButtonText: {
     color: 'white',
     fontWeight: 'bold',
-    
   },
   backIcon: {
     width: 50,
     height: 50,
-
   },
   backIcon2: {
     width: 400,
     height: 850,
-
   },
   cancelButton: {
     backgroundColor: '#f44336',
@@ -508,7 +474,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
   },
-
 });
 
 export default SeatedAtTable;
