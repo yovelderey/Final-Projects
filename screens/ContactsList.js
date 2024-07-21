@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Image,StyleSheet } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Image, TextInput, StyleSheet } from 'react-native';
 
 const ContactsList = ({ route, navigation }) => {
   const { contacts, selectedContacts, onSelectContacts } = route.params;
   const [localSelectedContacts, setLocalSelectedContacts] = useState(selectedContacts);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleSelectContact = (contact) => {
     if (localSelectedContacts.some((c) => c.id === contact.id)) {
@@ -22,11 +23,21 @@ const ContactsList = ({ route, navigation }) => {
     navigation.goBack();
   };
 
+  const filteredContacts = contacts.filter((contact) => {
+    return contact.name.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Select Contacts:</Text>
+      <TextInput
+        style={styles.searchInput}
+        placeholder="חיפוש איש קשר..."
+        value={searchQuery}
+        onChangeText={(text) => setSearchQuery(text)}
+      />
+      <Text style={styles.title}>האנשי קשר שלי:</Text>
       <FlatList
-        data={contacts}
+        data={filteredContacts}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <TouchableOpacity
@@ -41,11 +52,11 @@ const ContactsList = ({ route, navigation }) => {
         )}
       />
       <TouchableOpacity style={styles.button} onPress={navigateBackWithSelection}>
-        <Text style={styles.buttonText}>Done</Text>
+        <Text style={styles.buttonText}>הוסף אנשי קשר</Text>
       </TouchableOpacity>
       <TouchableOpacity 
         onPress={navigateBack}
-        style={[styles.showPasswordButton, { position: 'absolute', top: '92%', left: '4%' }]}
+        style={[styles.showPasswordButton, { position: 'absolute', top: '90%', left: '1%' }]}
       >
         <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
       </TouchableOpacity>
@@ -59,6 +70,15 @@ const styles = StyleSheet.create({
     padding: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  searchInput: {
+    width: '100%',
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 5,
+    marginBottom: 10,
+    marginTop: 45, // הוסף שורה זו כדי להוריד את שדה החיפוש מעט למטה
   },
   title: {
     fontSize: 20,
@@ -86,16 +106,28 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   button: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#ff69b4',
     padding: 15,
     borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginTop: 20,
+    width: '90%',
+
   },
   buttonText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backIcon: {
+    width: 50,
+    height: 50,
+
   },
 });
+
 
 export default ContactsList;

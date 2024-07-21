@@ -43,6 +43,7 @@ const Management = (props) => {
   const insets = useSafeAreaInsets();
   const [selectedContacts, setSelectedContacts] = useState([]);
   const navigation = useNavigation();
+  const [searchQuery, setSearchQuery] = useState('');
 
 
   useEffect(() => {
@@ -63,7 +64,6 @@ const Management = (props) => {
         if (currentUser) {
           setUser(currentUser);
           const databaseRef = ref(database, `Events/${currentUser.uid}/${id}/contacts`);
-          console.log('databaseRefdatabaseRef1', databaseRef);
 
           onValue(databaseRef, (snapshot) => {
             const data = snapshot.val();
@@ -147,6 +147,7 @@ const Management = (props) => {
     setSelectedContacts(contacts);
 
     contacts.forEach((contact, index) => {
+      
       const recordid = String(new Date().getTime()) + index;
       const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordid}`);
 
@@ -160,9 +161,37 @@ const Management = (props) => {
   };
 
 
+  const deleteAllContacts = async () => {
+    if (user) {
+      const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts`);
+      try {
+        await remove(databaseRef);
+        setContacts([]);
+      } catch (error) {
+        console.error('Error deleting all contacts from Firebase:', error);
+        Alert.alert('Error', 'Failed to delete all contacts. Please try again.');
+      }
+    } else {
+      Alert.alert('Error', 'User not authenticated. Please log in.');
+    }
+  };
+  
+  const showAlert = () => {
+    Alert.alert(
+      'Delete',
+      'Are you sure you want to delete??',
+      [
+        { text: 'Delete', onPress: () => deleteAllContacts() },
+        { text: 'Cancel', onPress: () => console.log('cacnel') }
+      ]
+    );
+  };
 
-
-
+  const filteredContacts = contacts.filter(contact =>
+    contact.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    contact.phoneNumbers.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  
   const renderItem = ({ item, index }) => (
     <View style={[styles.itemContainer, { backgroundColor: index % 2 === 0 ? '#f5f5f5' : '#ffffff' }]}>
   <TouchableOpacity onPress={() => deleteContact(item.recordID)}>
@@ -188,6 +217,7 @@ const Management = (props) => {
         <View style={[styles.topBar, { paddingTop: insets.top }]}>
           <Text style={styles.title}>ניהול אנשי קשר</Text>
         </View>
+
   
         {contacts.length === 0 ? (
           <View style={styles.noItemsContainer}>
@@ -195,13 +225,24 @@ const Management = (props) => {
          </View>  
            ) : (
       <View style={styles.tableContainer}>
+      <TextInput
+            style={styles.searchInput}
+            placeholder="חפש מוזמנים"
+            value={searchQuery}
+            onChangeText={text => setSearchQuery(text)}
+          />
+        <TouchableOpacity style={styles.deleteAllButton} onPress={showAlert}>
+          <Text style={styles.deleteText}>מחק הכל</Text>
+        </TouchableOpacity>
+
         <FlatList
-          data={contacts}
+          data={filteredContacts}
           renderItem={renderItem}
           keyExtractor={(item) => item.recordID}
           style={styles.list}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
+
       </View>
     )}
         <TouchableOpacity
@@ -320,7 +361,7 @@ const Management = (props) => {
       fontWeight: 'bold',
       borderRadius: 5,
       position: 'absolute',
-      bottom: 150,
+      bottom: 130,
       justifyContent: 'center',
       alignItems: 'center',
       padding: 10,
@@ -386,6 +427,10 @@ const Management = (props) => {
       justifyContent: 'center',
       alignItems: 'center',
     },
+      icon: {
+    width: 24,
+    height: 24,
+  },
     modalButton: {
       backgroundColor: '#4CAF50',
       padding: 10,
@@ -409,12 +454,13 @@ const Management = (props) => {
 
       borderRadius: 5,
       position: 'absolute',
-      bottom: 100,
+      bottom: 80,
       justifyContent: 'center',
       alignItems: 'center',
       padding: 10,
 
     },
+
     addButtonText: {
       color: 'white',
       fontWeight: 'bold',
@@ -437,7 +483,34 @@ const Management = (props) => {
       color: 'white',
       fontWeight: 'bold',
     },
+    searchInput: {
+      width: '100%',
+      height: 40,
+      paddingHorizontal: 10,
+      borderWidth: 1,
+      borderRadius: 5,
+      borderColor: '#ccc',
+      marginBottom: 60,
+      marginTop: -50, // יותר קרוב למעלה
+
+    },
     
+
+    deleteAllButton: {
+      position: 'absolute',
+      top: 10,
+      right: 0,
+      width: '25%',
+      backgroundColor: 'red',
+      paddingVertical: 5,
+      paddingHorizontal: 15,
+      borderRadius: 10,
+      marginRight: 260,
+    },
+    deleteText: {
+      color: 'white',
+      fontWeight: 'bold',
+    },
   });
   
 export default Management;

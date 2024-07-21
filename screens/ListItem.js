@@ -100,9 +100,7 @@ import React, { useEffect, useState } from 'react';
   };
 
   useEffect(() => {
-
-    
-   
+    if (user) {
       const eventRef = ref(database, `Events/${user.uid}/${id}/`);
       
       const handleValueChange = (snapshot) => {
@@ -112,13 +110,16 @@ import React, { useEffect, useState } from 'react';
         }
       };
       
-      onValue(eventRef, handleValueChange);
+      // Attach listener
+      const unsubscribe = onValue(eventRef, handleValueChange);
       
+      // Cleanup function
       return () => {
-        eventRef.off('value', handleValueChange);
+        unsubscribe(); // Call unsubscribe to remove the listener
       };
-    
+    }
   }, [user, id]);
+  
   
   const translateX = animatedValue.interpolate({
     inputRange: [0, 1],
