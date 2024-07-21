@@ -23,9 +23,11 @@ const ContactsList = ({ route, navigation }) => {
     navigation.goBack();
   };
 
+
   const filteredContacts = contacts.filter((contact) => {
-    return contact.name.toLowerCase().includes(searchQuery.toLowerCase());
+    return contact.name && contact.name.toLowerCase().includes(searchQuery.toLowerCase());
   });
+  
 
   return (
     <View style={styles.container}>

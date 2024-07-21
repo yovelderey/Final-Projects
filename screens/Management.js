@@ -492,7 +492,6 @@ const Management = (props) => {
       borderColor: '#ccc',
       marginBottom: 60,
       marginTop: -50, // יותר קרוב למעלה
-
     },
     
 

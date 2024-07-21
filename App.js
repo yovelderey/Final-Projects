@@ -19,6 +19,8 @@ import SeatedAtTable from './screens/SeatedAtTable';
 import RSVPs from './screens/RSVPs';
 import Providers from './screens/Providers';
 import ContactsList from './screens/ContactsList';
+import Document from './screens/Document';
+import Gift from './screens/Gift';
 
 
 const App = () => {
@@ -43,9 +45,9 @@ const App = () => {
         <Stack.Screen name="RSVPs" component={RSVPs} />
         <Stack.Screen name="Providers" component={Providers} />
         <Stack.Screen name="ContactsList" component={ContactsList} />
+        <Stack.Screen name="Document" component={Document} />
+        <Stack.Screen name="Gift" component={Gift} />
 
-        
-        
       </Stack.Navigator>
     </NavigationContainer>
   );

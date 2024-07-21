@@ -209,6 +209,16 @@ import React, { useEffect, useState } from 'react';
     // Add your code here for Button 6 מגיעים או לא
   };
 
+  const handleButton7Press = () => {
+    props.navigation.navigate('Gift', { id });
+    // Add your code here for Button 7 מתנות
+  };
+
+  const handleButton8Press = () => {
+    props.navigation.navigate('Document', { id });
+    // Add your code here for Button 8 קבלות ומסמכים
+  };
+
   const onPressLogin = () => {
     // כאן תוכל להוסיף לוגיקה להתחברות
   };
@@ -334,6 +344,16 @@ import React, { useEffect, useState } from 'react';
       <TouchableOpacity onPress={handleButton6Press} style={styles.button}>
         <Image source={require('../assets/checked.png')} style={styles.icon} />
         <Text style={styles.buttonText}>אישורי הגעה</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={handleButton7Press} style={styles.button}>
+        <Image source={require('../assets/gift.png')} style={styles.icon} />
+        <Text style={styles.buttonText}>מתנות</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={handleButton8Press} style={styles.button}>
+        <Image source={require('../assets/folder.png')} style={styles.icon} />
+        <Text style={styles.buttonText}>קבלות ומסמכים</Text>
       </TouchableOpacity>
     </View>
 
