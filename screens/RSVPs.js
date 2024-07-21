@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Button, StyleSheet, TouchableOpacity, Image, FlatList, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import * as Contacts from 'expo-contacts';
 import { useNavigation } from '@react-navigation/native';
 
@@ -15,39 +15,43 @@ const RSVPs = (props) => {
       });
 
       if (data.length > 0) {
-        setSelectedContacts(data);
+        navigation.navigate('ContactsList', {
+          contacts: data,
+          selectedContacts,
+          onSelectContacts: handleSelectContacts,
+        });
       }
     } else {
-      Alert.alert('Permission to access contacts was denied');
+      alert('Permission to access contacts was denied');
     }
+  };
+
+  const handleSelectContacts = (contacts) => {
+    setSelectedContacts(contacts);
+    const contactDetails = contacts.map(contact => {
+      const phoneNumber = contact.phoneNumbers ? contact.phoneNumbers[0].number : 'No phone number';
+      return `${contact.name}: ${phoneNumber}`;
+    });
+    console.log("Selected Contacts:", contactDetails);
+  };
+
+  const navigateBack = () => {
+    navigation.goBack();
   };
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={selectedContacts}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.contactItem}>
-            <Text style={styles.contactName}>{item.name}</Text>
-            {item.phoneNumbers && (
-              <Text style={styles.contactNumber}>{item.phoneNumbers[0].number}</Text>
-            )}
-          </View>
-        )}
-      />
-      <TouchableOpacity
-        style={styles.button}
-        onPress={pickContacts}
-      >
-        <Text style={styles.buttonText}>Select Contacts</Text>
+      <TouchableOpacity style={styles.button} onPress={pickContacts}>
+        <Text style={styles.buttonText}>Open Contacts</Text>
       </TouchableOpacity>
-      <TouchableOpacity
-        onPress={() => navigation.navigate('ListItem', { id: props.route.params.id })}
-        style={styles.backButton}
-      >
+      <TouchableOpacity onPress={navigateBack} style={styles.backButton}>
         <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
       </TouchableOpacity>
+      <View style={styles.selectedContactsContainer}>
+        {selectedContacts.map((contact) => (
+          <Text key={contact.id} style={styles.selectedContactText}>{contact.name}</Text>
+        ))}
+      </View>
     </View>
   );
 };
@@ -59,28 +63,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
-  contactItem: {
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
-    width: '100%',
-  },
-  contactName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  contactNumber: {
-    fontSize: 16,
-    color: '#666',
-  },
   button: {
     backgroundColor: '#007bff',
     padding: 15,
     borderRadius: 10,
-    position: 'absolute',
-    bottom: 80,
-    width: '80%',
-    alignItems: 'center',
+    marginBottom: 20,
   },
   buttonText: {
     color: '#fff',
@@ -98,6 +85,14 @@ const styles = StyleSheet.create({
   backIcon: {
     width: 50,
     height: 50,
+  },
+  selectedContactsContainer: {
+    marginTop: 20,
+    width: '100%',
+  },
+  selectedContactText: {
+    fontSize: 18,
+    marginVertical: 5,
   },
 });
 

@@ -18,6 +18,7 @@ import Task from './screens/Task';
 import SeatedAtTable from './screens/SeatedAtTable';
 import RSVPs from './screens/RSVPs';
 import Providers from './screens/Providers';
+import ContactsList from './screens/ContactsList';
 
 
 const App = () => {
@@ -41,7 +42,9 @@ const App = () => {
         <Stack.Screen name="SeatedAtTable" component={SeatedAtTable} />
         <Stack.Screen name="RSVPs" component={RSVPs} />
         <Stack.Screen name="Providers" component={Providers} />
+        <Stack.Screen name="ContactsList" component={ContactsList} />
 
+        
         
       </Stack.Navigator>
     </NavigationContainer>

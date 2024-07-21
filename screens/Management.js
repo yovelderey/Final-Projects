@@ -5,6 +5,8 @@ import { getDatabase, ref, push, remove, set } from 'firebase/database';
 import { getAuth, onAuthStateChanged } from 'firebase/auth'; // Import auth methods
 import { onValue } from 'firebase/database';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Contacts from 'expo-contacts';
+import { useNavigation } from '@react-navigation/native';
 
 
 import 'firebase/database'; // Import the Realtime Database module
@@ -31,6 +33,7 @@ const database = getDatabase(app);
 const auth = getAuth(app); // Get the auth instance
 
 const Management = (props) => {
+
   const [contacts, setContacts] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [newContactName, setNewContactName] = useState('');
@@ -38,6 +41,8 @@ const Management = (props) => {
   const [user, setUser] = useState(null); // State to hold user info
   const id = props.route.params.id; // Accessing the passed id
   const insets = useSafeAreaInsets();
+  const [selectedContacts, setSelectedContacts] = useState([]);
+  const navigation = useNavigation();
 
 
   useEffect(() => {
@@ -119,6 +124,44 @@ const Management = (props) => {
   };
   
 
+  const pickContacts = async () => {
+    const { status } = await Contacts.requestPermissionsAsync();
+    if (status === 'granted') {
+      const { data } = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails],
+      });
+
+      if (data.length > 0) {
+        navigation.navigate('ContactsList', {
+          contacts: data,
+          selectedContacts,
+          onSelectContacts: handleSelectContacts,
+        });
+      }
+    } else {
+      alert('Permission to access contacts was denied');
+    }
+  };
+
+  const handleSelectContacts = (contacts) => {
+    setSelectedContacts(contacts);
+
+    contacts.forEach((contact, index) => {
+      const recordid = String(new Date().getTime()) + index;
+      const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordid}`);
+
+      const newContact = {
+        recordID: recordid,
+        displayName: contact.name,
+        phoneNumbers: contact.phoneNumbers ? contact.phoneNumbers[0].number : 'No phone number',
+      };
+      set(databaseRef, newContact); // שימור האיש קשר במסד הנתונים כאיבר חדש
+    });
+  };
+
+
+
+
 
   const renderItem = ({ item, index }) => (
     <View style={[styles.itemContainer, { backgroundColor: index % 2 === 0 ? '#f5f5f5' : '#ffffff' }]}>
@@ -167,6 +210,10 @@ const Management = (props) => {
           <Text style={styles.addButtonText}>הוסף אנשי קשר</Text>        
         </TouchableOpacity>
 
+        <TouchableOpacity style={styles.button} onPress={pickContacts}>
+        <Text style={styles.buttonText}>Open Contacts</Text>
+      </TouchableOpacity>
+
         <Text style={styles.contactCount}>כמות אנשי קשר: {contacts.length}</Text>
   
         <Modal visible={modalVisible} animationType="slide">
@@ -206,7 +253,7 @@ const Management = (props) => {
           </View>
         </Modal>
 
-              <TouchableOpacity 
+      <TouchableOpacity 
         onPress={() => props.navigation.navigate('ListItem', { id })}
         style={[styles.showPasswordButton, { position: 'absolute', top: '92%', left: '4%' }]}
       >
