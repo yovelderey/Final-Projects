@@ -13,7 +13,7 @@ const Providers = (props) => {
   const id = props.route.params.id; // Accessing the passed id
   const initialData = [
     [true, 'מחיר', 'תוכן', 'טלפון', 'שם'],
-    ...Array.from({ length: 12 }, () => Array(5).fill(''))
+    ...Array.from({ length: 4 }, () => Array(5).fill(''))
   ];
 
   const [tableData, setTableData] = useState(initialData);

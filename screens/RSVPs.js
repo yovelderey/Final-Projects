@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
-import { useNavigation } from '@react-navigation/native'; // לוודא שיש לך את הספריה הזו מותקנת
+import { useNavigation } from '@react-navigation/native'; // לוודא שהספריה מותקנת
 
 const RSVPs = () => {
-  const [response, setResponse] = useState(null);
-  const navigation = useNavigation(); // גישה לניווט
+  const [response, setResponse] = useState(null); // שמירת התשובה מהשרת
+  const navigation = useNavigation(); // גישה לניווט בין מסכים
 
+  // פונקציה לשליחת הודעה ולקבל תשובה מהשרת
   const sendMessageAndFetchResponse = async () => {
     try {
-      const phoneNumber = '+972542455869';
-      const message = 'האם אתה זמין?';
-      const apiUrl = `https://your-api-url.com/send-message`; // ודא שכתובת ה-URL נכונה
-  
-      // שליחה של ההודעה
+      const phoneNumber = '+972542455869'; // מספר הטלפון של הלקוח
+      const message = 'האם אתה זמין?'; // ההודעה שנשלחת
+      const apiUrl = 'https://your-api-url.com/send-message'; // כתובת ה-URL של ה-API
+
+      // שליחת ההודעה לשרת
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -23,37 +24,44 @@ const RSVPs = () => {
           message: message
         }),
       });
-  
-      // בדוק קוד סטטוס התגובה
+
+      // בדיקת קוד הסטטוס של התגובה
       if (response.ok) {
-        const text = await response.text();
-        console.log('Server response:', text);
-  
-        // אם התגובה היא JSON, ניתוח התשובה
-        try {
-          const result = JSON.parse(text);
-          if (result.success) {
-            setResponse(result.reply); // תשובה מהשירות שלך
-          } else {
-            Alert.alert('Error', 'Failed to send message.');
+        // קבלת סוג התוכן של התגובה
+        const contentType = response.headers.get('Content-Type');
+        
+        if (contentType && contentType.includes('application/json')) {
+          // אם התוכן הוא JSON, ניתוח התשובה
+          const text = await response.text();
+          try {
+            const result = JSON.parse(text);
+            if (result.success) {
+              setResponse(result.reply); // שמירת התשובה שקיבלנו
+            } else {
+              Alert.alert('שגיאה', 'שליחת ההודעה נכשלה.');
+            }
+          } catch (jsonError) {
+            console.error('שגיאת ניתוח JSON:', jsonError);
+            Alert.alert('שגיאה', 'התקבלה תגובה שאינה בפורמט JSON מהשרת.');
           }
-        } catch (jsonError) {
-          console.error('JSON Parse error:', jsonError);
-          Alert.alert('Error', 'Received non-JSON response from server.');
+        } else {
+          // הצגת התגובה לשם אבחון
+          const text = await response.text();
+          console.error('Unexpected response:', text);
+          Alert.alert('שגיאה', 'התקבלה תגובה שאינה בפורמט JSON.');
         }
       } else {
-        Alert.alert('Error', `Server returned status: ${response.status}`);
+        Alert.alert('שגיאה', `השרת החזיר סטטוס: ${response.status}`);
       }
     } catch (error) {
-      console.error('Error:', error);
-      Alert.alert('Error', 'Something went wrong.');
+      console.error('שגיאה:', error);
+      Alert.alert('שגיאה', 'משהו השתבש.');
     }
   };
-  
-  
 
+  // פונקציה לחזרה למסך הקודם
   const navigateBack = () => {
-    navigation.goBack(); // ניווט חזרה
+    navigation.goBack(); // חזרה למסך הקודם
   };
 
   return (
@@ -62,9 +70,9 @@ const RSVPs = () => {
         <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
       </TouchableOpacity>
       <TouchableOpacity style={styles.button} onPress={sendMessageAndFetchResponse}>
-        <Text style={styles.buttonText}>Send Question via WhatsApp</Text>
+        <Text style={styles.buttonText}>שלח שאלה בוואטסאפ</Text>
       </TouchableOpacity>
-      {response && <Text style={styles.responseText}>Response: {response}</Text>}
+      {response && <Text style={styles.responseText}>תשובה: {response}</Text>}
     </View>
   );
 };
