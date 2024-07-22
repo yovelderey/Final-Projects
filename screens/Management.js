@@ -38,6 +38,8 @@ const Management = (props) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
+  const [newPrice, setnewPrice] = useState('');
+
   const [user, setUser] = useState(null); // State to hold user info
   const id = props.route.params.id; // Accessing the passed id
   const insets = useSafeAreaInsets();
@@ -95,12 +97,16 @@ const Management = (props) => {
         recordID: recordidd,
         displayName: newContactName,
         phoneNumbers: newContactPhone,
+        price: newPrice,
+
       };
       set(databaseRef, newContact); // שימור האיש קשר במסד הנתונים כאיבר חדש
       setContacts([...contacts, newContact]);
       setModalVisible(false);
       setNewContactName('');
       setNewContactPhone('');
+      setnewPrice('');
+
     } else {
       Alert.alert('Error', 'Please fill in both fields');
     }
@@ -155,6 +161,7 @@ const Management = (props) => {
         recordID: recordid,
         displayName: contact.name,
         phoneNumbers: contact.phoneNumbers ? contact.phoneNumbers[0].number : 'No phone number',
+        newPrice: newPrice,
       };
       set(databaseRef, newContact); // שימור האיש קשר במסד הנתונים כאיבר חדש
     });
