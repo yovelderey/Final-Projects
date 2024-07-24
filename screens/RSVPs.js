@@ -1,78 +1,98 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
-import { useNavigation } from '@react-navigation/native'; // לוודא שהספריה מותקנת
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
 
-const RSVPs = () => {
-  const [response, setResponse] = useState(null); // שמירת התשובה מהשרת
-  const navigation = useNavigation(); // גישה לניווט בין מסכים
+const RSVPs = ({ navigation }) => {
+  const [message, setMessage] = useState('');
+  const [phoneNumbers, setPhoneNumbers] = useState(['']); // רשימת מספרי טלפון
+  const [responses, setResponses] = useState([]);
 
-  // פונקציה לשליחת הודעה ולקבל תשובה מהשרת
-  const sendMessageAndFetchResponse = async () => {
+  // פונקציה לשליחת הודעות לכל אנשי הקשר ולהמתין לתגובות
+  const sendMessageToRecipients = async () => {
     try {
-      const phoneNumber = '+972542455869'; // מספר הטלפון של הלקוח
-      const message = 'האם אתה זמין?'; // ההודעה שנשלחת
-      const apiUrl = 'https://your-api-url.com/send-message'; // כתובת ה-URL של ה-API
+      const apiUrl = 'http://172.20.10.2:3000/send-messages'; // כתובת ה-API שלך
 
-      // שליחת ההודעה לשרת
+      // שלח את ההודעה לכל אנשי הקשר
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          phone: phoneNumber,
-          message: message
+          recipients: phoneNumbers, // שלח את המספרים
+          message,
         }),
       });
 
-      // בדיקת קוד הסטטוס של התגובה
+      console.log('Received response from server:', response);
+      
       if (response.ok) {
-        // קבלת סוג התוכן של התגובה
-        const contentType = response.headers.get('Content-Type');
-        
-        if (contentType && contentType.includes('application/json')) {
-          // אם התוכן הוא JSON, ניתוח התשובה
-          const text = await response.text();
-          try {
-            const result = JSON.parse(text);
-            if (result.success) {
-              setResponse(result.reply); // שמירת התשובה שקיבלנו
-            } else {
-              Alert.alert('שגיאה', 'שליחת ההודעה נכשלה.');
-            }
-          } catch (jsonError) {
-            console.error('שגיאת ניתוח JSON:', jsonError);
-            Alert.alert('שגיאה', 'התקבלה תגובה שאינה בפורמט JSON מהשרת.');
-          }
+        const result = await response.json();
+        console.log('Response JSON:', result);
+        if (result.success) {
+          setResponses(result.responses); // הצג את התגובות
         } else {
-          // הצגת התגובה לשם אבחון
-          const text = await response.text();
-          console.error('Unexpected response:', text);
-          Alert.alert('שגיאה', 'התקבלה תגובה שאינה בפורמט JSON.');
+          Alert.alert('Error', 'Failed to send messages.');
         }
       } else {
-        Alert.alert('שגיאה', `השרת החזיר סטטוס: ${response.status}`);
+        console.log('Server returned status:', response.status);
+        Alert.alert('Error', `Server returned status: ${response.status}`);
       }
     } catch (error) {
-      console.error('שגיאה:', error);
-      Alert.alert('שגיאה', 'משהו השתבש.');
+      console.error('Error:', error);
+      Alert.alert('Error', 'Something went wrong.');
     }
   };
 
-  // פונקציה לחזרה למסך הקודם
-  const navigateBack = () => {
-    navigation.goBack(); // חזרה למסך הקודם
+  const handlePhoneNumberChange = (index, text) => {
+    const updatedNumbers = [...phoneNumbers];
+    updatedNumbers[index] = text;
+    setPhoneNumbers(updatedNumbers);
   };
+
+  const addPhoneNumberField = () => {
+    setPhoneNumbers([...phoneNumbers, '']);
+  };
+
+  const renderResponseItem = ({ item }) => (
+    <View style={styles.responseItem}>
+      <Text>{item}</Text>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.backButton} onPress={navigateBack}>
-        <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
+      <Text style={styles.header}>הכנס הודעה לשליחה</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="הכנס את ההודעה שלך"
+        value={message}
+        onChangeText={setMessage}
+      />
+      <Text style={styles.header}>הכנס מספרי טלפון של אנשי קשר</Text>
+      {phoneNumbers.map((phone, index) => (
+        <TextInput
+          key={index}
+          style={styles.input}
+          placeholder="מספר טלפון"
+          value={phone}
+          onChangeText={(text) => handlePhoneNumberChange(index, text)}
+        />
+      ))}
+      <TouchableOpacity onPress={addPhoneNumberField} style={styles.button}>
+        <Text style={styles.buttonText}>הוסף מספר טלפון</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={styles.button} onPress={sendMessageAndFetchResponse}>
-        <Text style={styles.buttonText}>שלח שאלה בוואטסאפ</Text>
+      <TouchableOpacity onPress={sendMessageToRecipients} style={styles.button}>
+        <Text style={styles.buttonText}>שלח הודעה</Text>
       </TouchableOpacity>
-      {response && <Text style={styles.responseText}>תשובה: {response}</Text>}
+      <FlatList
+        data={responses}
+        renderItem={renderResponseItem}
+        keyExtractor={(item, index) => index.toString()}
+        ListHeaderComponent={<Text style={styles.responsesHeader}>תגובות</Text>}
+      />
+      <TouchableOpacity onPress={() => navigation.navigate('Home')} style={styles.button}>
+        <Text style={styles.buttonText}>חזור</Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -80,37 +100,41 @@ const RSVPs = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+    padding: 16,
+    backgroundColor: '#fff',
+  },
+  header: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  input: {
+    height: 40,
+    borderColor: 'gray',
+    borderWidth: 1,
+    marginBottom: 12,
+    paddingHorizontal: 8,
   },
   button: {
-    backgroundColor: '#25D366',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 20,
+    backgroundColor: '#007BFF',
+    padding: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginBottom: 12,
   },
   buttonText: {
     color: '#fff',
+    fontSize: 16,
+  },
+  responseItem: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+  responsesHeader: {
     fontSize: 18,
     fontWeight: 'bold',
-  },
-  backButton: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    width: 50,
-    height: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backIcon: {
-    width: 30,
-    height: 30,
-  },
-  responseText: {
-    marginTop: 20,
-    fontSize: 18,
+    marginBottom: 10,
   },
 });
 
