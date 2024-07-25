@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Alert } from 'react-native';
 
 const RSVPs = ({ navigation }) => {
   const [message, setMessage] = useState('');
-  const [phoneNumbers, setPhoneNumbers] = useState(['']); // רשימת מספרי טלפון
+  const [phoneNumbers, setPhoneNumbers] = useState(['']);
   const [responses, setResponses] = useState([]);
 
   // פונקציה לשליחת הודעות לכל אנשי הקשר ולהמתין לתגובות
   const sendMessageToRecipients = async () => {
     try {
-      const apiUrl = 'http://172.20.10.2:3000/send-messages'; // כתובת ה-API שלך
+      const apiUrl = 'http://127.0.0.1:5000/send-messages';
 
       // שלח את ההודעה לכל אנשי הקשר
       const response = await fetch(apiUrl, {
@@ -18,13 +18,13 @@ const RSVPs = ({ navigation }) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          recipients: phoneNumbers, // שלח את המספרים
+          recipients: phoneNumbers.filter(num => num.trim() !== ''), // סנן מספרים ריקים
           message,
         }),
       });
 
       console.log('Received response from server:', response);
-      
+
       if (response.ok) {
         const result = await response.json();
         console.log('Response JSON:', result);
@@ -55,7 +55,7 @@ const RSVPs = ({ navigation }) => {
 
   const renderResponseItem = ({ item }) => (
     <View style={styles.responseItem}>
-      <Text>{item}</Text>
+      <Text>{item.response}</Text>
     </View>
   );
 
