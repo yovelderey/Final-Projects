@@ -21,6 +21,8 @@ import Providers from './screens/Providers';
 import ContactsList from './screens/ContactsList';
 import Document from './screens/Document';
 import Gift from './screens/Gift';
+import SplashScreen from './screens/SplashScreen';
+
 
 
 const App = () => {
@@ -28,7 +30,8 @@ const App = () => {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="Main" screenOptions={{ headerShown: false }}>
+      <Stack.Navigator initialRouteName="Splash" screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Splash" component={SplashScreen} options={{ headerShown: false }} />
         <Stack.Screen name="Main" component={Main} options={{ title: "" }} />
         <Stack.Screen name="Login" component={Login} />
         <Stack.Screen name="Register" component={Register} />
@@ -46,7 +49,6 @@ const App = () => {
         <Stack.Screen name="Providers" component={Providers} />
         <Stack.Screen name="ContactsList" component={ContactsList} />
         <Stack.Screen name="Document" component={Document} />
-        <Stack.Screen name="Gift" component={Gift} />
 
       </Stack.Navigator>
     </NavigationContainer>

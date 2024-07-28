@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "project_two",
+    "name": "EasyVent",
     "slug": "project_two",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/ic_easy.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",

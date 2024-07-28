@@ -5,6 +5,30 @@ const RSVPs = ({ navigation }) => {
   const [message, setMessage] = useState('');
   const [phoneNumbers, setPhoneNumbers] = useState(['']);
   const [responses, setResponses] = useState([]);
+  const [yesCount, setYesCount] = useState(0);
+  const [noCount, setNoCount] = useState(0);
+  const [noResponseCount, setNoResponseCount] = useState(0);
+
+  // פונקציה לספירת התגובות
+  const countResponses = (responses) => {
+    let yes = 0;
+    let no = 0;
+    let noResponse = 0;
+
+    responses.forEach(response => {
+      if (response.response === 'כן') {
+        yes += 1;
+      } else if (response.response === 'לא') {
+        no += 1;
+      } else if (response.response === 'No response') {
+        noResponse += 1;
+      }
+    });
+
+    setYesCount(yes);
+    setNoCount(no);
+    setNoResponseCount(noResponse);
+  };
 
   // פונקציה לשליחת הודעות לכל אנשי הקשר ולהמתין לתגובות
   const sendMessageToRecipients = async () => {
@@ -30,6 +54,7 @@ const RSVPs = ({ navigation }) => {
         console.log('Response JSON:', result);
         if (result.success) {
           setResponses(result.responses); // הצג את התגובות
+          countResponses(result.responses); // בצע ספירה של התגובות
         } else {
           Alert.alert('Error', 'Failed to send messages.');
         }
@@ -90,6 +115,11 @@ const RSVPs = ({ navigation }) => {
         keyExtractor={(item, index) => index.toString()}
         ListHeaderComponent={<Text style={styles.responsesHeader}>תגובות</Text>}
       />
+      <View style={styles.counterContainer}>
+        <Text>כן: {yesCount}</Text>
+        <Text>לא: {noCount}</Text>
+        <Text>no response: {noResponseCount}</Text>
+      </View>
       <TouchableOpacity onPress={() => navigation.navigate('Home')} style={styles.button}>
         <Text style={styles.buttonText}>חזור</Text>
       </TouchableOpacity>
@@ -136,6 +166,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 10,
   },
+  counterContainer: {
+    marginTop: 20,
+    marginBottom: 20,
+  }
 });
 
 export default RSVPs;

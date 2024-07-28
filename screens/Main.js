@@ -10,6 +10,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { getDatabase, ref, remove,get } from 'firebase/database';
 import 'firebase/database'; // Import the Realtime Database module
 import { useNavigation } from '@react-navigation/native';
+import NetInfo from '@react-native-community/netinfo';
 
 
 function Main(props) {
@@ -23,6 +24,8 @@ function Main(props) {
     const [eventName, setEventName] = useState('');
     const [data, setData] = useState([]);
     const [showDialog, setShowDialog] = useState(false);
+    const [isConnected, setIsConnected] = useState(true);
+    const navigation = useNavigation();
 
 
     const firebaseConfig = {
@@ -63,6 +66,8 @@ function Main(props) {
 
 
   useEffect(() => {
+
+
     const fetchData = async () => {
         try {
             const user = firebase.auth().currentUser;
@@ -85,10 +90,15 @@ function Main(props) {
 
     fetchData();
 
-    const unsubscribe = props.navigation.addListener('focus', () => {
-        fetchData();
+    const unsubscribe2 = NetInfo.addEventListener(state => {
+      setIsConnected(state.isConnected);
     });
 
+    const unsubscribe = props.navigation.addListener('focus', () => {
+        fetchData();
+        
+    });
+ 
     const unsubscribeAuth = firebase.auth().onAuthStateChanged((authUser) => {
         if (authUser) {
             console.log("The user is logged in:", authUser.email);
@@ -104,10 +114,12 @@ function Main(props) {
     });
 
     return () => {
+        unsubscribe2();
         unsubscribe();
         unsubscribeAuth();
+        
     };
-}, [props.navigation]);
+}, [props.navigation, isConnected]);
 
   
   const handleDeleteData = async (idToDelete) => {
@@ -147,6 +159,43 @@ function Main(props) {
       const setting_button = () => {
         // כאן תוכל להוסיף לוגיקה להתחברות
       };
+
+      if (!isConnected) {
+        return (
+          <View style={styles.container}>
+            <Text style={styles.errorText}>בעיית אינטרנט</Text>
+            <Text style={styles.errorSubText}>נא בדוק חיבור לרשת ה - wifi או בדוק עם ספק התקשורת שלך, תודה רבה.</Text>
+            <TouchableOpacity style={styles.button} onPress={() => {
+              // נסה לטעון מחדש את האפליקציה
+              navigation.replace('Main');
+            }}>
+              <Text style={styles.buttonText}>טען מחדש</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.button} onPress={() => {
+              // סגור את האפליקציה
+              Alert.alert(
+                "יציאה",
+                "האם אתה בטוח שברצונך לצאת מהאפליקציה?",
+                [
+                  {
+                    text: "ביטול",
+                    style: "cancel"
+                  },
+                  {
+                    text: "יציאה", 
+                    onPress: () => {
+                      // יציאה מהאפליקציה (פועל רק על אנדרואיד)
+                      BackHandler.exitApp();
+                    }
+                  }
+                ]
+              );
+            }}>
+              <Text style={styles.buttonText}>יציאה</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      }
 
     return (
 
@@ -375,6 +424,31 @@ function Main(props) {
       },
       deleteText: {
         color: 'white',
+        fontWeight: 'bold',
+      },
+      errorText: {
+        fontSize: 24,
+        color: 'red',
+        fontWeight: 'bold',
+        textAlign: 'center',
+      },
+      errorSubText: {
+        fontSize: 18,
+        color: 'black',
+        textAlign: 'center',
+        marginVertical: 10,
+      },
+      button: {
+        marginTop: 20,
+        padding: 15,
+        backgroundColor: 'black',
+        borderRadius: 5,
+        width: '80%',
+        alignItems: 'center',
+      },
+      buttonText: {
+        color: 'white',
+        fontSize: 18,
         fontWeight: 'bold',
       },
     });

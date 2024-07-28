@@ -108,6 +108,10 @@ const SeatedAtTable = (props) => {
       const fileName = uri.split('/').pop();
       const localUri = `${FileSystem.documentDirectory}${userId}/${fileName}`;
       // Check if directory exists, if not create it
+      console.log('Image saved to local storage fileName', fileName);
+      console.log('Image saved to local storage localUri', localUri);
+
+
       const dirInfo = await FileSystem.getInfoAsync(`${FileSystem.documentDirectory}${userId}`);
       if (!dirInfo.exists) {
         await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}${userId}`, { intermediates: true });
@@ -117,6 +121,7 @@ const SeatedAtTable = (props) => {
         to: localUri,
       });
       console.log('Image saved to local storage at', localUri);
+
     } catch (error) {
       console.error('Error saving image to local storage: ', error);
       throw error;
