@@ -33,7 +33,8 @@ const RSVPs = ({ navigation }) => {
   // פונקציה לשליחת הודעות לכל אנשי הקשר ולהמתין לתגובות
   const sendMessageToRecipients = async () => {
     try {
-      const apiUrl = 'http://127.0.0.1:5000/send-messages';
+      //const apiUrl = 'http://127.0.0.1:5000/send-messages';
+      const apiUrl = 'http://192.168.1.213:5000/send-messages';
 
       // שלח את ההודעה לכל אנשי הקשר
       const response = await fetch(apiUrl, {

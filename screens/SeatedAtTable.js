@@ -109,7 +109,6 @@ const SeatedAtTable = (props) => {
       const localUri = `${FileSystem.documentDirectory}${userId}/${fileName}`;
       // Check if directory exists, if not create it
       console.log('Image saved to local storage fileName', fileName);
-      console.log('Image saved to local storage localUri', localUri);
 
 
       const dirInfo = await FileSystem.getInfoAsync(`${FileSystem.documentDirectory}${userId}`);
