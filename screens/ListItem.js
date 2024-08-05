@@ -277,7 +277,7 @@ import React, { useEffect, useState } from 'react';
           <View style={styles.section}>
             <Text style={styles.header}>מוזמנים</Text>
             <View style={styles.priceContainer}>
-              <Text style={styles.textPrice}>0 / {eventDetails.Numberofguests}</Text>
+              <Text style={styles.textPrice}> {eventDetails.counter_contacts} / {eventDetails.Numberofguests}</Text>
             </View>
           </View>
           <View style={styles.section}>
@@ -295,7 +295,7 @@ import React, { useEffect, useState } from 'react';
           source={require('../assets/warning.png')}
           style={styles.background}
         />
-        <Text style={styles.imageText}>0</Text>
+        <Text style={styles.imageText}>{eventDetails.no_cuming}</Text>
       </View>
 
       <View style={styles.imageContainer}>
@@ -303,7 +303,7 @@ import React, { useEffect, useState } from 'react';
           source={require('../assets/warningy.png')}
           style={styles.background}
         />
-        <Text style={styles.imageText}>0</Text>
+        <Text style={styles.imageText}>{eventDetails.maybe}</Text>
       </View>
 
       <View style={styles.imageContainer}>
@@ -311,7 +311,7 @@ import React, { useEffect, useState } from 'react';
           source={require('../assets/checked.png')}
           style={styles.background}
         />
-        <Text style={styles.imageText}>0</Text>
+        <Text style={styles.imageText}>{eventDetails.yes_caming}</Text>
       </View>
     </View>
 

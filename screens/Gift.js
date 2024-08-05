@@ -60,6 +60,7 @@ const Gift = (props) => {
             const data = snapshot.val();
             if (data) {
               const contactsArray = Object.values(data);
+
               setContacts(contactsArray);
             } else {
               setContacts([]);
@@ -75,26 +76,7 @@ const Gift = (props) => {
     requestPermissions();
   }, []);
 
-  const addContact = () => {
-    const recordidd = String(new Date().getTime());
-    const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordidd}`);
 
-    if (newContactName.trim() && newContactPhone.trim()) {
-      const newContact = {
-        recordID: recordidd,
-        displayName: newContactName,
-        phoneNumbers: newContactPhone,
-        newPrice: ''
-      };
-      set(databaseRef, newContact);
-      setContacts([...contacts, newContact]);
-      setModalVisible(false);
-      setNewContactName('');
-      setNewContactPhone('');
-    } else {
-      Alert.alert('Error', 'Please fill in both fields');
-    }
-  };
 
   const updatePrice = (recordID, price) => {
     const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordID}`);
@@ -160,37 +142,7 @@ const Gift = (props) => {
 
       <Text style={styles.contactCount}>כמות אנשי קשר: {contacts.length}</Text>
 
-      <Modal visible={modalVisible} animationType="slide">
-        <Image source={require('../assets/Signbac.png')} style={styles.backIcon2} />
-        <View style={styles.modalContainer}>
-          <View style={styles.buttonContainer3}>
-            <Text style={styles.modalTitle}>הוסף איש קשר חדש</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="שם"
-              value={newContactName}
-              onChangeText={setNewContactName}
-            />
-          </View>
-          <View style={styles.buttonContainer2}>
-            <TextInput
-              style={styles.input2}
-              placeholder="מספר טלפון"
-              value={newContactPhone}
-              onChangeText={setNewContactPhone}
-              keyboardType="phone-pad"
-            />
-          </View>
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity style={styles.modalButton} onPress={addContact}>
-              <Text style={styles.modalButtonText}>הוסף</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setModalVisible(false)}>
-              <Text style={styles.modalButtonText}>ביטול</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+
 
       <TouchableOpacity
         onPress={() => props.navigation.navigate('ListItem', { id })}

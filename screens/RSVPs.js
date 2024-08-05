@@ -1,16 +1,114 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Alert, ScrollView } from 'react-native';
+import 'firebase/database';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
+import 'firebase/compat/firestore';
+import { initializeApp } from 'firebase/app';
+import { getDatabase, ref, set, onValue } from 'firebase/database';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
+  authDomain: "final-project-d6ce7.firebaseapp.com",
+  projectId: "final-project-d6ce7",
+  storageBucket: "final-project-d6ce7.appspot.com",
+  messagingSenderId: "1056060530572",
+  appId: "1:1056060530572:web:d08d859ca2d25c46d340a9",
+  measurementId: "G-LD61QH3VVP"
+};
+
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
+}
+
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app);
+const auth = getAuth(app);
 
 const RSVPs = (props) => {
-  const [message, setMessage] = useState('שלום, הוזמנתם לחתונה של יובל וליאור בתאריך 15.9.2024 פרטים ואישור הגעה, לחץ כן לאישור, לחץ לא לסרוב, תודה צוות EasyVent');
+  const [message, setMessage] = useState('שלום, הוזמנתם לחתונה של יובל וליאור בתאריך 15.9.2024 לפרטים ואישורי הגעה, לחץ *כן* לאישור, לחץ *לא* לסרוב, תודה צוות EasyVent');
   const [phoneNumbers, setPhoneNumbers] = useState(['']);
   const [responses, setResponses] = useState([]);
   const [yesCount, setYesCount] = useState(0);
   const [noCount, setNoCount] = useState(0);
   const [noResponseCount, setNoResponseCount] = useState(0);
   const id = props.route.params.id; // Accessing the passed id
+  const [contacts, setContacts] = useState([]);
+  const [user, setUser] = useState(null);
+  const insets = useSafeAreaInsets();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [eventDetails, setEventDetails] = useState({});
 
-  // פונקציה לספירת התגובות
+  useEffect(() => {
+
+    const fetchData = async () => {
+      if (user) {
+        try {
+          const databaseRef = ref(database, `Events/${user.uid}/${id}/`);
+          const snapshot = await get(databaseRef);
+          const fetchedData = snapshot.val();
+
+          if (fetchedData) {
+            setEventDetails(fetchedData); // Set the fetched event details
+          }
+
+
+          
+          return () => clearInterval(intervalId);
+
+        } catch (error) {
+          console.error("Error fetching data: ", error);
+        }
+      }
+    };
+    onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+
+        
+        
+        const databaseRef = ref(database, `Events/${currentUser.uid}/${id}/contacts`);
+        onValue(databaseRef, (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            const contactsArray = Object.values(data);
+            setContacts(contactsArray);
+          } else {
+            setContacts([]);
+          }
+        });
+      } else {
+        setUser(null);
+        setContacts([]);
+      }
+    });
+
+    fetchData();
+
+  }, [user, id]);
+  useEffect(() => {
+    if (user) {
+      const eventRef = ref(database, `Events/${user.uid}/${id}/`);
+      
+      const handleValueChange = (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          setEventDetails(data);
+        }
+      };
+      
+      // Attach listener
+      const unsubscribe = onValue(eventRef, handleValueChange);
+      
+      // Cleanup function
+      return () => {
+        unsubscribe(); // Call unsubscribe to remove the listener
+      };
+    }
+  }, [user, id]);
+  
   const countResponses = (responses) => {
     let yes = 0;
     let no = 0;
@@ -29,21 +127,34 @@ const RSVPs = (props) => {
     setYesCount(yes);
     setNoCount(no);
     setNoResponseCount(noResponse);
+    const yes_caming = ref(database, `Events/${user.uid}/${id}/yes_caming`);
+    set(yes_caming, yes);
+
+    const maybe = ref(database, `Events/${user.uid}/${id}/maybe`);
+    set(maybe, noResponse);
+
+    const no_cuming = ref(database, `Events/${user.uid}/${id}/no_cuming`);
+    set(no_cuming, no);
   };
 
-  // פונקציה לשליחת הודעות לכל אנשי הקשרים ולהמתין לתגובות
+  const filteredContacts = contacts.filter(contact =>
+    contact.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    contact.phoneNumbers.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (contact.newPrice && contact.newPrice.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
   const sendMessageToRecipients = async () => {
     try {
       const apiUrl = 'http://192.168.1.213:5000/send-messages';
 
-      // שלח את ההודעה לכל אנשי הקשרים
+      const recipients = contacts.map(contact => contact.phoneNumbers).filter(num => num.trim() !== '');
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          recipients: phoneNumbers.filter(num => num.trim() !== ''), // סנן מספרים ריקים
+          recipients,
           message,
         }),
       });
@@ -52,8 +163,8 @@ const RSVPs = (props) => {
         const result = await response.json();
         console.log('Response JSON:', result);
         if (result.success) {
-          setResponses(result.responses); // הצג את התגובות
-          countResponses(result.responses); // בצע ספירה של התגובות
+          setResponses(result.responses);
+          countResponses(result.responses);
         } else {
           Alert.alert('Error', 'Failed to send messages.');
         }
@@ -66,24 +177,35 @@ const RSVPs = (props) => {
     }
   };
 
-  const handlePhoneNumberChange = (index, text) => {
-    const updatedNumbers = [...phoneNumbers];
-    updatedNumbers[index] = text;
-    setPhoneNumbers(updatedNumbers);
+  const updatePrice = (recordID, price) => {
+    const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordID}`);
+    const updatedContacts = contacts.map(contact =>
+      contact.recordID === recordID ? { ...contact, newPrice: price } : contact
+    );
+    setContacts(updatedContacts);
+    set(databaseRef, { ...contacts.find(contact => contact.recordID === recordID), newPrice: price });
   };
 
-  const addPhoneNumberField = () => {
-    setPhoneNumbers([...phoneNumbers, '']);
-  };
-
-  const renderPhoneNumberItem = ({ item, index }) => (
-    <View style={[styles.phoneNumberItem, index % 2 === 0 ? styles.evenRow : styles.oddRow]}>
-      <Text style={styles.phoneNumberText}>{item}</Text>
+  const renderItem = ({ item, index }) => (
+    <View style={[styles.itemContainer, { backgroundColor: index % 2 === 0 ? '#f5f5f5' : '#ffffff' }]}>
+      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+        <TextInput
+          style={styles.itemInput}
+          placeholder="מחיר"
+          keyboardType="numeric"
+          value={item.newPrice}
+          onChangeText={(text) => updatePrice(item.recordID, text)}
+        />
+        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+          <Text style={styles.itemText}>{item.displayName}</Text>
+          <Text style={styles.itemText}>{item.phoneNumbers}</Text>
+        </View>
+      </View>
     </View>
   );
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <View style={styles.container}>
       <Text style={styles.header2}>הכנס הודעה לשליחה</Text>
       <TextInput
         style={styles.input}
@@ -92,24 +214,11 @@ const RSVPs = (props) => {
         onChangeText={setMessage}
         multiline
       />
-      <Text style={styles.header}>הכנס מספרי טלפון של אנשי קשר</Text>
-      {phoneNumbers.map((phone, index) => (
-        <TextInput
-          key={index}
-          style={styles.input2}
-          placeholder="מספר טלפון"
-          value={phone}
-          onChangeText={(text) => handlePhoneNumberChange(index, text)}
-        />
-      ))}
-      <TouchableOpacity onPress={addPhoneNumberField} style={styles.addButton}>
-        <Text style={styles.buttonText}>הוסף מספר טלפון</Text>
-      </TouchableOpacity>
+
       <TouchableOpacity onPress={sendMessageToRecipients} style={styles.sendButton}>
         <Text style={styles.buttonText}>שלח הודעה</Text>
       </TouchableOpacity>
 
-      {/* כפתור ניווט לדף התגובות */}
       <TouchableOpacity 
         onPress={() => props.navigation.navigate('ResponsesScreen', { responses })}
         style={styles.viewResponsesButton}
@@ -119,33 +228,36 @@ const RSVPs = (props) => {
 
       <View style={styles.counterContainer}>
         <View style={styles.counterItemGreen}>
-          <Text style={styles.counterText}>{yesCount}</Text>
+          <Text style={styles.counterText}>{eventDetails.yes_caming}</Text>
           <Text style={styles.counterLabel}>כן</Text>
         </View>
         <View style={styles.counterItemYellow}>
-          <Text style={styles.counterText}>{noResponseCount}</Text>
+          <Text style={styles.counterText}>{eventDetails.maybe}</Text>
           <Text style={styles.counterLabel}>ללא מענה</Text>
         </View>
         <View style={styles.counterItemRed}>
-          <Text style={styles.counterText}>{noCount}</Text>
+          <Text style={styles.counterText}>{eventDetails.no_cuming}</Text>
           <Text style={styles.counterLabel}>לא</Text>
         </View>
       </View>
+
       <TouchableOpacity onPress={() => props.navigation.navigate('ListItem', { id })} style={styles.backButton}>
         <Text style={styles.buttonText}>חזור</Text>
       </TouchableOpacity>
 
-      {/* טבלה להצגת המספרים */}
       <View style={styles.tableContainer}>
         <Text style={styles.tableHeader}>מספרי טלפון שנשלחה אליהם הודעה</Text>
         <FlatList
-          data={phoneNumbers}
-          renderItem={renderPhoneNumberItem}
-          keyExtractor={(item, index) => index.toString()}
+            data={filteredContacts}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.recordID}
+            style={styles.list}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
       </View>
-    </ScrollView>
+    </View>
   );
+
 };
 
 const styles = StyleSheet.create({
@@ -170,8 +282,8 @@ const styles = StyleSheet.create({
     textAlign: 'center', // מרכז את הטקסט בתוך הרכיב
   },
   input: {
-    height: 200, // גובה של 8 שורות
-    minHeight: 200,
+    height: 100, // גובה של 8 שורות
+    minHeight: 100,
     borderColor: '#ced4da',
     borderWidth: 1,
     borderRadius: 8,

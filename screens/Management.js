@@ -72,6 +72,7 @@ const Management = (props) => {
             if (data) {
               const contactsArray = Object.values(data);
               setContacts(contactsArray);
+              
             } else {
               setContacts([]);
             }
@@ -88,9 +89,9 @@ const Management = (props) => {
 
   const addContact = () => {
 
-
     const recordidd = String(new Date().getTime());
     const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordidd}`);
+  
 
     if (newContactName.trim() && newContactPhone.trim()) {
       const newContact = {
@@ -107,6 +108,10 @@ const Management = (props) => {
       setNewContactPhone('');
       setnewPrice('');
 
+    // Update the counter_contacts field
+      const databaseRef3 = ref(database, `Events/${user.uid}/${id}/counter_contacts`);
+      set(databaseRef3, contacts.length + 1);
+
     } else {
       Alert.alert('Error', 'Please fill in both fields');
     }
@@ -120,6 +125,8 @@ const Management = (props) => {
         
         await remove(contactRef);
         setContacts((prevContacts) => prevContacts.filter((contact) => contact.recordID !== contactId));
+        const databaseRef3 = ref(database, `Events/${user.uid}/${id}/counter_contacts`);
+        set(databaseRef3, contacts.length -1);
       } catch (error) {
         console.error('Error deleting contact from Firebase:', error);
         Alert.alert('Error', 'Failed to delete contact. Please try again.');
@@ -165,6 +172,9 @@ const Management = (props) => {
       };
       set(databaseRef, newContact); // שימור האיש קשר במסד הנתונים כאיבר חדש
     });
+      // Update the counter_contacts field
+      const databaseRef3 = ref(database, `Events/${user.uid}/${id}/counter_contacts`);
+      set(databaseRef3, contacts.length);
   };
 
 
@@ -174,6 +184,8 @@ const Management = (props) => {
       try {
         await remove(databaseRef);
         setContacts([]);
+        const databaseRef3 = ref(database, `Events/${user.uid}/${id}/counter_contacts`);
+        set(databaseRef3, 0);
       } catch (error) {
         console.error('Error deleting all contacts from Firebase:', error);
         Alert.alert('Error', 'Failed to delete all contacts. Please try again.');
@@ -261,6 +273,7 @@ const Management = (props) => {
         <TouchableOpacity style={styles.button} onPress={pickContacts}>
         <Text style={styles.buttonText}>Open Contacts</Text>
       </TouchableOpacity>
+
 
         <Text style={styles.contactCount}>כמות אנשי קשר: {contacts.length}</Text>
   
