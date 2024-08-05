@@ -22,6 +22,7 @@ import ContactsList from './screens/ContactsList';
 import Document from './screens/Document';
 import Gift from './screens/Gift';
 import SplashScreen from './screens/SplashScreen';
+import ResponsesScreen from './screens/ResponsesScreen';
 
 
 
@@ -50,7 +51,9 @@ const App = () => {
         <Stack.Screen name="ContactsList" component={ContactsList} />
         <Stack.Screen name="Document" component={Document} />
         <Stack.Screen name="Gift" component={Gift} />
+        <Stack.Screen name="ResponsesScreen" component={ResponsesScreen} />
 
+        
       </Stack.Navigator>
     </NavigationContainer>
   );

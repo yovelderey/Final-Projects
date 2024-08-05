@@ -31,12 +31,12 @@ const RSVPs = (props) => {
     setNoResponseCount(noResponse);
   };
 
-  // פונקציה לשליחת הודעות לכל אנשי הקשר ולהמתין לתגובות
+  // פונקציה לשליחת הודעות לכל אנשי הקשרים ולהמתין לתגובות
   const sendMessageToRecipients = async () => {
     try {
       const apiUrl = 'http://192.168.1.213:5000/send-messages';
 
-      // שלח את ההודעה לכל אנשי הקשר
+      // שלח את ההודעה לכל אנשי הקשרים
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -48,8 +48,6 @@ const RSVPs = (props) => {
         }),
       });
 
-      //console.log('Received response from server:', response);
-
       if (response.ok) {
         const result = await response.json();
         console.log('Response JSON:', result);
@@ -60,7 +58,6 @@ const RSVPs = (props) => {
           Alert.alert('Error', 'Failed to send messages.');
         }
       } else {
-        console.log('Server returned status:', response.status);
         Alert.alert('Error', `Server returned status: ${response.status}`);
       }
     } catch (error) {
@@ -79,9 +76,9 @@ const RSVPs = (props) => {
     setPhoneNumbers([...phoneNumbers, '']);
   };
 
-  const renderResponseItem = ({ item }) => (
-    <View style={styles.responseItem}>
-      <Text style={styles.responseText}>{`${item.response} - ${item.recipient}`}</Text>
+  const renderPhoneNumberItem = ({ item, index }) => (
+    <View style={[styles.phoneNumberItem, index % 2 === 0 ? styles.evenRow : styles.oddRow]}>
+      <Text style={styles.phoneNumberText}>{item}</Text>
     </View>
   );
 
@@ -111,12 +108,15 @@ const RSVPs = (props) => {
       <TouchableOpacity onPress={sendMessageToRecipients} style={styles.sendButton}>
         <Text style={styles.buttonText}>שלח הודעה</Text>
       </TouchableOpacity>
-      <FlatList
-        data={responses}
-        renderItem={renderResponseItem}
-        keyExtractor={(item, index) => index.toString()}
-        ListHeaderComponent={<Text style={styles.responsesHeader}>תגובות</Text>}
-      />
+
+      {/* כפתור ניווט לדף התגובות */}
+      <TouchableOpacity 
+        onPress={() => props.navigation.navigate('ResponsesScreen', { responses })}
+        style={styles.viewResponsesButton}
+      >
+        <Text style={styles.buttonText}>הצג תגובות</Text>
+      </TouchableOpacity>
+
       <View style={styles.counterContainer}>
         <View style={styles.counterItemGreen}>
           <Text style={styles.counterText}>{yesCount}</Text>
@@ -134,6 +134,16 @@ const RSVPs = (props) => {
       <TouchableOpacity onPress={() => props.navigation.navigate('ListItem', { id })} style={styles.backButton}>
         <Text style={styles.buttonText}>חזור</Text>
       </TouchableOpacity>
+
+      {/* טבלה להצגת המספרים */}
+      <View style={styles.tableContainer}>
+        <Text style={styles.tableHeader}>מספרי טלפון שנשלחה אליהם הודעה</Text>
+        <FlatList
+          data={phoneNumbers}
+          renderItem={renderPhoneNumberItem}
+          keyExtractor={(item, index) => index.toString()}
+        />
+      </View>
     </ScrollView>
   );
 };
@@ -227,34 +237,69 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginTop: 24,
-    marginBottom: 16,
   },
   counterItemGreen: {
-    backgroundColor: '#28a745',
-    padding: 16,
+    backgroundColor: '#d4edda',
     borderRadius: 8,
+    padding: 16,
     alignItems: 'center',
+    width: '30%',
   },
   counterItemYellow: {
-    backgroundColor: '#ffc107',
-    padding: 16,
+    backgroundColor: '#fff3cd',
     borderRadius: 8,
+    padding: 16,
     alignItems: 'center',
+    width: '30%',
   },
   counterItemRed: {
-    backgroundColor: '#dc3545',
-    padding: 16,
+    backgroundColor: '#f8d7da',
     borderRadius: 8,
+    padding: 16,
     alignItems: 'center',
+    width: '30%',
   },
   counterText: {
-    color: '#ffffff',
     fontSize: 24,
     fontWeight: 'bold',
   },
   counterLabel: {
-    color: '#ffffff',
     fontSize: 16,
+    color: '#495057',
+  },
+  tableContainer: {
+    marginTop: 24,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+  },
+  tableHeader: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#dee2e6',
+    textAlign: 'center', // מרכז את הטקסט בתוך הרכיב
+  },
+  phoneNumberItem: {
+    padding: 12,
+  },
+  evenRow: {
+    backgroundColor: '#f8f9fa',
+  },
+  oddRow: {
+    backgroundColor: '#ffffff',
+  },
+  phoneNumberText: {
+    fontSize: 16,
+  },
+  viewResponsesButton: {
+    backgroundColor: '#007bff',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 16,
   },
 });
 
