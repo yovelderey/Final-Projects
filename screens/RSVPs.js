@@ -41,6 +41,7 @@ const RSVPs = (props) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [eventDetails, setEventDetails] = useState({});
 
+
   useEffect(() => {
 
     const fetchData = async () => {
@@ -119,7 +120,7 @@ const RSVPs = (props) => {
         yes += 1;
       } else if (response.response === 'לא') {
         no += 1;
-      } else if (response.response === 'No response') {
+      } else  {
         noResponse += 1;
       }
     });
@@ -131,7 +132,7 @@ const RSVPs = (props) => {
           messages_status = ref(database, `Events/${user.uid}/${id}/messages_status/yes/`);
         } else if (response.response === 'לא') {
           messages_status = ref(database, `Events/${user.uid}/${id}/messages_status/no/`);
-        } else if (response.response === 'No response') {
+        } else  {
           messages_status = ref(database, `Events/${user.uid}/${id}/messages_status/maybe/`);
         }
     
@@ -195,25 +196,107 @@ const RSVPs = (props) => {
     }
   };
 
-  const updatePrice = (recordID, price) => {
-    const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordID}`);
-    const updatedContacts = contacts.map(contact =>
-      contact.recordID === recordID ? { ...contact, newPrice: price } : contact
+
+  const triggerWaitForResponse = async () => {
+    try {
+      const apiUrl = 'http://192.168.1.213:5000/trigger-wait-for-response';
+  
+      const recipients = contacts.map(contact => contact.phoneNumbers).filter(num => num.trim() !== '');
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          recipients,
+        }),
+      });
+  
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Response JSON:', result);
+        if (result.success) {
+          setResponses(result.responses);
+          countResponses(result.responses);
+        } else {
+          Alert.alert('Error', 'Failed to trigger response wait.');
+        }
+      } else {
+        Alert.alert('Error', `Server returned status: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      Alert.alert('Error', 'Something went wrong.');
+    }
+  };
+  
+  const handleReset = () => {
+    if (user) {
+      console.log('Refresh button handleReset');
+
+      const yesRef = ref(database, `Events/${user.uid}/${id}/messages_status/yes/`);
+      set(yesRef, {});
+
+      const noRef = ref(database, `Events/${user.uid}/${id}/messages_status/no/`);
+      set(noRef, {});
+
+      const maybeRef = ref(database, `Events/${user.uid}/${id}/messages_status/maybe/`);
+      set(maybeRef, {});
+
+      const yes_caming = ref(database, `Events/${user.uid}/${id}/yes_caming/`);
+      set(yes_caming, 0);
+
+      const maybe = ref(database, `Events/${user.uid}/${id}/maybe/`);
+      set(maybe, 0);
+
+      const no_cuming = ref(database, `Events/${user.uid}/${id}/yes_caming/`);
+      set(no_cuming, 0);
+    }
+  };
+  const handlemessage = () => {
+    Alert.alert(
+      "שליחת הודעות",
+      "האם אתה בטוח שברצונך לשלוח את ההודעה לנמענים?",
+      [
+        {
+          text: "ביטול",
+          style: "cancel",
+        },
+        {
+          text: "אישור",
+          onPress: () => {
+            sendMessageToRecipients();
+          },
+        },
+      ]
     );
-    setContacts(updatedContacts);
-    set(databaseRef, { ...contacts.find(contact => contact.recordID === recordID), newPrice: price });
+  };
+
+  const handleRefresh = () => {
+    Alert.alert(
+      "רענון",
+      " שים לב, פעולה זו מרעננת את הנותונים הקיימים בחדשים",
+      [
+        {
+          text: "ביטול",
+          style: "cancel",
+        },
+        {
+          text: "אישור",
+          onPress: () => {
+            console.log('הנתונים נמחקו');
+            handleReset();
+            triggerWaitForResponse();
+          },
+        },
+      ]
+    );
   };
 
   const renderItem = ({ item, index }) => (
     <View style={[styles.itemContainer, { backgroundColor: index % 2 === 0 ? '#f5f5f5' : '#ffffff' }]}>
       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
-        <TextInput
-          style={styles.itemInput}
-          placeholder="מחיר"
-          keyboardType="numeric"
-          value={item.newPrice}
-          onChangeText={(text) => updatePrice(item.recordID, text)}
-        />
+
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
           <Text style={styles.itemText}>{item.displayName}</Text>
           <Text style={styles.itemText}>{item.phoneNumbers}</Text>
@@ -233,7 +316,7 @@ const RSVPs = (props) => {
         multiline
       />
 
-      <TouchableOpacity onPress={sendMessageToRecipients} style={styles.sendButton}>
+      <TouchableOpacity onPress={handlemessage} style={styles.sendButton}>
         <Text style={styles.buttonText}>שלח הודעה</Text>
       </TouchableOpacity>
 
@@ -260,6 +343,10 @@ const RSVPs = (props) => {
           <Text style={styles.counterLabel}>לא</Text>
         </View>
       </View>
+
+      <TouchableOpacity onPress={handleRefresh} style={styles.triggerButton}>
+        <Text style={styles.buttonText}>רענן נתונים</Text>
+      </TouchableOpacity>
 
       <TouchableOpacity onPress={() => props.navigation.navigate('ListItem', { id })} style={styles.backButton}>
         <Text style={styles.buttonText}>חזור</Text>
@@ -433,6 +520,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
+    // שאר הסגנונות שלך
+    triggerButton: {
+      backgroundColor: '#17a2b8',
+      padding: 12,
+      borderRadius: 8,
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    buttonText: {
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: 'bold',
+    },
+  
 });
 
 export default RSVPs;

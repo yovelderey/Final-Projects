@@ -86,7 +86,7 @@ const ResponsesScreen = (props) => {
       const maybe = ref(database, `Events/${user.uid}/${id}/maybe/`);
       set(maybe, 0);
 
-      const no_cuming = ref(database, `Events/${user.uid}/${id}/yes_caming/`);
+      const no_cuming = ref(database, `Events/${user.uid}/${id}/no_cuming/`);
       set(no_cuming, 0);
     }
   };
@@ -110,25 +110,7 @@ const ResponsesScreen = (props) => {
       ]
     );
   };
-  const handleupdate = () => {
-    Alert.alert(
-      "אישור רענון",
-      "האם אתה בטוח שברצונך לרענן את הנתונים?",
-      [
-        {
-          text: "ביטול",
-          style: "cancel",
-        },
-        {
-          text: "אישור",
-          onPress: () => {
-            console.log('הנתונים רעננו');
-            //handleReset();
-          },
-        },
-      ]
-    );
-  };
+
   
   const renderItem = ({ item }) => (
     <View style={styles.responseContainer}>
@@ -177,9 +159,6 @@ const ResponsesScreen = (props) => {
 
       <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
         <Text style={styles.buttonText}>חזור</Text>
-      </TouchableOpacity>
-      <TouchableOpacity onPress={handleupdate} style={styles.refreshButton}>
-        <Text style={styles.buttonText}>רענן</Text>
       </TouchableOpacity>
 
     </View>
