@@ -66,7 +66,18 @@ const Home = (props) => {
       .catch((error) => {
         console.error('Error writing data to the database:', error);
       });
+      const yes_caming = ref(database, 'Events/' + firebase.auth().currentUser.uid + '/'+ eventName + '/' + 'yes_caming');
+      set(yes_caming, 0);
+  
+      const maybe = ref(database, 'Events/' + firebase.auth().currentUser.uid + '/'+ eventName + '/' + 'maybe');
+      set(maybe, 0);
+  
+      const no_cuming = ref(database, 'Events/' + firebase.auth().currentUser.uid + '/'+ eventName + '/' + 'no_cuming');
+      set(no_cuming, 0);
+
   };
+
+
 
   return (
     <ImageBackground 

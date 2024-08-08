@@ -367,7 +367,7 @@ import React, { useEffect, useState } from 'react';
 
           <TouchableOpacity 
           onPress={() => props.navigation.navigate('Main')}
-              style={[styles.showPasswordButton, { position: 'absolute', top: '94%', left: '3%' }]}>
+              style={[styles.showPasswordButton, { position: 'absolute', top: '97%', left: '3%' }]}>
               <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
           </TouchableOpacity>
 

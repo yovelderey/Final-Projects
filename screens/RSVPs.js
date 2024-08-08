@@ -5,7 +5,7 @@ import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, onValue } from 'firebase/database';
+import { getDatabase, ref, set, push,get, onValue } from 'firebase/database';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -59,7 +59,7 @@ const RSVPs = (props) => {
           return () => clearInterval(intervalId);
 
         } catch (error) {
-          console.error("Error fetching data: ", error);
+          //console.error("Error fetching data: ", error);
         }
       }
     };
@@ -123,6 +123,24 @@ const RSVPs = (props) => {
         noResponse += 1;
       }
     });
+
+    responses.forEach(response => {
+      if (user) {
+        let messages_status;
+        if (response.response === 'כן') {
+          messages_status = ref(database, `Events/${user.uid}/${id}/messages_status/yes/`);
+        } else if (response.response === 'לא') {
+          messages_status = ref(database, `Events/${user.uid}/${id}/messages_status/no/`);
+        } else if (response.response === 'No response') {
+          messages_status = ref(database, `Events/${user.uid}/${id}/messages_status/maybe/`);
+        }
+    
+        if (messages_status) {
+          push(messages_status, response.recipient);
+        }
+      }
+    });
+    
 
     setYesCount(yes);
     setNoCount(no);
@@ -220,7 +238,9 @@ const RSVPs = (props) => {
       </TouchableOpacity>
 
       <TouchableOpacity 
-        onPress={() => props.navigation.navigate('ResponsesScreen', { responses })}
+        onPress={() => props.navigation.navigate('ResponsesScreen', { id,responses })}
+
+
         style={styles.viewResponsesButton}
       >
         <Text style={styles.buttonText}>הצג תגובות</Text>
