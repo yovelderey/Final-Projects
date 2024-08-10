@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, Alert, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity,Modal, FlatList, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
@@ -40,7 +40,9 @@ const RSVPs = (props) => {
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const [eventDetails, setEventDetails] = useState({});
-
+  const [modalVisible, setModalVisible] = useState(false);
+  const [timer, setTimer] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
 
   useEffect(() => {
 
@@ -109,7 +111,30 @@ const RSVPs = (props) => {
       };
     }
   }, [user, id]);
-  
+
+  useEffect(() => {
+    let interval = null;
+    if (isRunning && timer > 0) {
+      interval = setInterval(() => {
+        setTimer(prevTimer => prevTimer - 1);
+      }, 1000);
+    } else if (timer === 0) {
+      clearInterval(interval);
+      setIsRunning(false);
+    }
+    return () => clearInterval(interval);
+  }, [isRunning, timer]);
+
+  const startTimer = () => {
+    setTimer(eventDetails.counter_contacts*40);
+    setIsRunning(true);
+  };
+
+  const startTimer_2 = () => {
+    setTimer(eventDetails.counter_contacts*10);
+    setIsRunning(true);
+  };
+
   const countResponses = (responses) => {
     let yes = 0;
     let no = 0;
@@ -142,6 +167,10 @@ const RSVPs = (props) => {
       }
     });
     
+    const startTimer = () => {
+      setTimer(10);
+      setIsRunning(true);
+    };
 
     setYesCount(yes);
     setNoCount(no);
@@ -164,8 +193,9 @@ const RSVPs = (props) => {
 
   const sendMessageToRecipients = async () => {
     try {
+      setModalVisible(true);
+      startTimer();
       const apiUrl = 'http://192.168.1.213:5000/send-messages';
-
       const recipients = contacts.map(contact => contact.phoneNumbers).filter(num => num.trim() !== '');
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -184,14 +214,27 @@ const RSVPs = (props) => {
         if (result.success) {
           setResponses(result.responses);
           countResponses(result.responses);
+
+          setTimeout(() => {
+            setModalVisible(false);
+          }, 0); // טוען למשך 10 שניות
         } else {
           Alert.alert('Error', 'Failed to send messages.');
+          setTimeout(() => {
+            setModalVisible(false);
+          }, 0); // טוען למשך 10 שניות
         }
       } else {
         Alert.alert('Error', `Server returned status: ${response.status}`);
+        setTimeout(() => {
+          setModalVisible(false);
+        }, 0); // טוען למשך 10 שניות
       }
     } catch (error) {
       console.error('Error:', error);
+      setTimeout(() => {
+        setModalVisible(false);
+      }, 0); // טוען למשך 10 שניות
       Alert.alert('Error', 'Something went wrong.');
     }
   };
@@ -199,6 +242,8 @@ const RSVPs = (props) => {
 
   const triggerWaitForResponse = async () => {
     try {
+      setModalVisible(true);
+      startTimer_2();
       const apiUrl = 'http://192.168.1.213:5000/trigger-wait-for-response';
   
       const recipients = contacts.map(contact => contact.phoneNumbers).filter(num => num.trim() !== '');
@@ -218,15 +263,27 @@ const RSVPs = (props) => {
         if (result.success) {
           setResponses(result.responses);
           countResponses(result.responses);
+          setTimeout(() => {
+          setModalVisible(false);
+          }, 0); // טוען למשך 10 שניות
         } else {
           Alert.alert('Error', 'Failed to trigger response wait.');
+          setTimeout(() => {
+          setModalVisible(false);
+          }, 0); // טוען למשך 10 שניות
         }
       } else {
         Alert.alert('Error', `Server returned status: ${response.status}`);
+        setTimeout(() => {
+        setModalVisible(false);
+        }, 0); // טוען למשך 10 שניות
       }
     } catch (error) {
       console.error('Error:', error);
       Alert.alert('Error', 'Something went wrong.');
+      setTimeout(() => {
+      setModalVisible(false);
+      }, 0); // טוען למשך 10 שניות
     }
   };
   
@@ -256,7 +313,7 @@ const RSVPs = (props) => {
   const handlemessage = () => {
     Alert.alert(
       "שליחת הודעות",
-      "האם אתה בטוח שברצונך לשלוח את ההודעה לנמענים?",
+      "האם אתה בטוח לשלוח את ההודעה לנמענים?",
       [
         {
           text: "ביטול",
@@ -272,6 +329,7 @@ const RSVPs = (props) => {
     );
   };
 
+
   const handleRefresh = () => {
     Alert.alert(
       "רענון",
@@ -284,7 +342,7 @@ const RSVPs = (props) => {
         {
           text: "אישור",
           onPress: () => {
-            console.log('הנתונים נמחקו');
+            console.log('מרענן נתונים');
             handleReset();
             triggerWaitForResponse();
           },
@@ -320,10 +378,8 @@ const RSVPs = (props) => {
         <Text style={styles.buttonText}>שלח הודעה</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity 
-        onPress={() => props.navigation.navigate('ResponsesScreen', { id,responses })}
-
-
+      <TouchableOpacity
+        onPress={() => props.navigation.navigate('ResponsesScreen', { id, responses })}
         style={styles.viewResponsesButton}
       >
         <Text style={styles.buttonText}>הצג תגובות</Text>
@@ -355,17 +411,44 @@ const RSVPs = (props) => {
       <View style={styles.tableContainer}>
         <Text style={styles.tableHeader}>מספרי טלפון שנשלחה אליהם הודעה</Text>
         <FlatList
-            data={filteredContacts}
-            renderItem={renderItem}
-            keyExtractor={(item) => item.recordID}
-            style={styles.list}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
+          data={filteredContacts}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.recordID}
+          style={styles.list}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
       </View>
+
+      <Modal
+  transparent={true}
+  visible={modalVisible}
+  onRequestClose={() => setModalVisible(false)}
+>
+  <View style={styles.modalContainer}>
+    <View style={styles.modalContent}>
+      <Text>אנא המתן לשליחת ההודעות</Text>
+      <ActivityIndicator size="large" color="#0000ff" />
+      <Text style={styles.timerText}>{timer > 0 ? `${timer} seconds remaining` : 'Time is up!'}</Text>
+      
+      {/* כפתור ביטול פעולה */}
+      <TouchableOpacity
+        style={styles.cancelButton}
+        onPress={() => {
+          // הוספת פונקציה לביטול שליחת ההודעות
+          setModalVisible(false);
+        }}
+      >
+        <Text style={styles.cancelButtonText}>ביטול</Text>
+      </TouchableOpacity>
+      
+    </View>
+  </View>
+</Modal>
+
     </View>
   );
-
 };
+
 
 const styles = StyleSheet.create({
   container: {
@@ -533,7 +616,35 @@ const styles = StyleSheet.create({
       fontSize: 16,
       fontWeight: 'bold',
     },
-  
+    modalContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(0,0,0,0.5)',
+    },
+    modalContent: {
+      width: 200,
+      padding: 20,
+      backgroundColor: 'white',
+      borderRadius: 10,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    timerText: {
+      fontSize: 16,
+      marginTop: 10,
+    },
+    cancelButton: {
+      marginTop: 20,
+      padding: 10,
+      backgroundColor: 'red',
+      borderRadius: 5,
+      alignItems: 'center',
+    },
+    cancelButtonText: {
+      color: 'white',
+      fontSize: 16,
+    },
 });
 
 export default RSVPs;

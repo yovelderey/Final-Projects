@@ -165,9 +165,10 @@ const ResponsesScreen = (props) => {
   );
 };
 
+
 const styles = StyleSheet.create({
   container: {
-    flexGrow: 1,
+    flex: 1,
     padding: 16,
     backgroundColor: '#f8f9fa',
   },
@@ -185,13 +186,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 16,
     marginBottom: 16,
+    height: 180, // גובה קבוע עבור כל טבלה
   },
-  tableTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    color: '#343a40',
-  },
+tableTitle: {
+  fontSize: 20,
+  fontWeight: 'bold',
+  color: '#ffffff',
+  textAlign: 'center',
+  backgroundColor: '#007bff',
+  paddingVertical: 8,
+  paddingHorizontal: 16,
+  borderRadius: 4,
+  marginBottom: 12,
+  textTransform: 'uppercase',
+},
+
   responseContainer: {
     padding: 12,
     borderBottomWidth: 1,
@@ -208,21 +217,27 @@ const styles = StyleSheet.create({
   },
   refreshButton: {
     backgroundColor: '#17a2b8',
-    padding: 12,
+    padding: 16, // הגדלת גובה הכפתור
     borderRadius: 8,
     alignItems: 'center',
-    marginBottom: 16,
+    position: 'absolute',
+    bottom: 80, // מרחק מהתחתית
+    left: 16,
+    right: 16,
   },
   backButton: {
     backgroundColor: '#6c757d',
-    padding: 12,
+    padding: 16, // הגדלת גובה הכפתור
     borderRadius: 8,
     alignItems: 'center',
-    marginBottom: 16,
+    position: 'absolute',
+    bottom: 16, // מרחק מהתחתית
+    left: 16,
+    right: 16,
   },
   buttonText: {
     color: '#ffffff',
-    fontSize: 16,
+    fontSize: 18, // הגדלת גודל הטקסט בכפתורים
     fontWeight: 'bold',
   },
 });
