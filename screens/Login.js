@@ -1,12 +1,20 @@
 import React, { useRef, useState } from 'react';
-import { View, Image, TextInput, Button, TouchableOpacity,StyleSheet,ImageBackground, Alert } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { firebaseConfig } from '../config';
+import { initializeApp } from 'firebase/app';
+import 'firebase/database'; // Import the Realtime Database module
 import { getDatabase, ref, set } from 'firebase/database';
-import firebase from 'firebase/compat/app';
+import  firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
-import { useNavigation } from '@react-navigation/native';
+import 'firebase/compat/firestore';
+import { getAuth } from 'firebase/auth';
+
+
 
 function Login(props) {
+
   const firebaseConfig = {
     apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
     authDomain: "final-project-d6ce7.firebaseapp.com",
@@ -17,8 +25,8 @@ function Login(props) {
     measurementId: "G-LD61QH3VVP"
   };
 
-  if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
+  if (!firebase.apps.length){
+        firebase.initializeApp(firebaseConfig);
   }
   
   const database = getDatabase();
@@ -28,8 +36,6 @@ function Login(props) {
   const [verificationId, setVerificationId] = useState(null);
   const recaptchaVerifier = useRef(null); 
   const [phoneNumberSave, setPhoneNumberSave] = useState(''); 
-  const [refreshCount, setRefreshCount] = useState(0);
-  const navigation = useNavigation()
 
   const sendVerification = () => {
     const phoneProvider = new firebase.auth.PhoneAuthProvider();
@@ -37,72 +43,34 @@ function Login(props) {
     phoneProvider
       .verifyPhoneNumber(phoneNumber, recaptchaVerifier.current)
       .then((verificationId) => {
-        
         setVerificationId(verificationId);
-        setPhoneNumber('')
-        showAlert();
+        setPhoneNumber('');
         // No need to setPhoneNumberSave here, as it should be done in confirmCode
       })
       .catch((error) => {
         console.error('Error sending verification code:', error.message);
         Alert.alert('Error', 'Failed to send verification code. ' + error.message);
       });
-
   };
 
-
-  const showAlert = () => {
-    Alert.prompt(
-      'Enter Digit Code',
-      'A verification code will be sent to you at this moment.',
-      [
-        {
-          text: 'Cancel',
-          onPress: () => console.log('Cancel Pressed'),
-          style: 'cancel',
-        },
-        {
-          text: 'OK',
-          onPress: (text) => {
-            const digit = text.trim(); // Access the entered text and remove any leading/trailing spaces
-            if (digit.length <= 6) {
-              console.log('Entered Digit:', digit);
-              setCode(digit);
-              confirmCode(verificationId); // Pass verificationId to confirmCode
-              console.log('verificationId verificationId verificationId', verificationId);
-              console.log('digit digit digit', digit);
-
-            } else {
-              console.log('Digit length exceeds 6 digits');
-            }
-          },
-          
-        },
-      ],
-      'plain-text',
-      '',
-      'numeric'
-    );
-  };
-
-  const confirmCode = (verificationId) => {
+  const confirmCode = () => {
     const credential = firebase.auth.PhoneAuthProvider.credential(verificationId, code);
-  
+
     firebase
       .auth()
       .signInWithCredential(credential)
       .then((userCredential) => {
         setCode('');
         Alert.alert('Login successful');
-        navigation.navigate('Main');
+        props.navigation.navigate('Home');
         const phoneNumberSave = userCredential.user.phoneNumber;
-        const databaseRef = ref(database, 'users/' + userCredential.user.uid);
-  
+        const databaseRef = ref(getDatabase(), 'users/' + userCredential.user.uid);
+
         const data = {
           phone: phoneNumberSave,
           // Add additional data as needed
         };
-  
+
         set(databaseRef, data)
           .then(() => {
             console.log('Data written to the database successfully');
@@ -113,93 +81,98 @@ function Login(props) {
       })
       .catch((error) => {
         console.error('Error signing in with phone number:', error.message);
-        if (error.code === 'auth/code-expired') {
-          Alert.alert('Error', 'The SMS code has expired. Please re-send the verification code to try again.');
-          sendVerification(); // Prompt the user to resend the verification code
-        } else {
-          Alert.alert('Error', 'Failed to sign in with phone number. ' + error.message);
-        }
+        Alert.alert('Error', 'Failed to sign in with phone number. ' + error.message);
       });
   };
-  
-  
   return (
-    <ImageBackground 
-    source={require('../assets/phonecrreate.png')} // Adjust the path accordingly
-    style={styles.background}
-  >
     <View style={styles.container}>
+      <View style={styles.card}>
+        <FirebaseRecaptchaVerifierModal ref={recaptchaVerifier}
+        firebaseConfig={firebaseConfig}/>
 
-
+        <Text style={styles.header}>Login with Phone Verification</Text>
         <TextInput
-        
-          placeholder="+972XXXXXXXXX"
+          placeholder="Phone Number"
           style={styles.input}
           value={phoneNumber}
           onChangeText={(text) => setPhoneNumber(text)}
-          
+        />
+        <Button
+          title="Send OTP"
+          onPress={sendVerification}
+          buttonStyle={styles.button}
+        />
+        <TextInput
+          placeholder="Enter OTP"
+          style={styles.input}
+          value={setCode}
+          onChangeText={(text) => setCode(text)}
+        />
+        <Button
+          title="Verify OTP"
+          onPress={confirmCode}
+          buttonStyle={styles.button}
+        />
+         <Button
+          title="register with email"
+          onPress={() => props.navigation.navigate('Register')} 
+          buttonStyle={styles.button}
+        />
+         <Button
+          title="login with email"
+          onPress={() => props.navigation.navigate('LoginEmail')} 
+          buttonStyle={styles.button}
         />
 
-        <TouchableOpacity onPress={sendVerification} style={styles.phoneButton}>
-          <Image source={require('../assets/button.png')}  />
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          onPress={() => navigation.navigate('LoginEmail')}
-            style={[styles.showPasswordButton, { position: 'absolute', top: '91%', left: '4%' }]}>
-            <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
-        </TouchableOpacity>
-        
+        <Button
+          title="back"
+          onPress={() => props.navigation.navigate('Home')} 
+          buttonStyle={styles.back}
+        />
       </View>
-      </ImageBackground>
-
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    width: '90%',
     justifyContent: 'center',
     alignItems: 'center',
-    
+    backgroundColor: '#f0f0f0',
   },
-
+  card: {
+    width: '80%',
+    borderRadius: 10,
+    backgroundColor: 'white',
+    padding: 20,
+    shadowColor: 'rgba(0, 0, 0, 0.2)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 2,
+    elevation: 2,
+  },
   header: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 20,
   },
   input: {
-    width: 350,
-    height: 40,
-    backgroundColor: 'white',
-    marginTop: -150,
-    borderColor: 'gray',
-    borderWidth: 1,
-    borderRadius: 5,
     marginBottom: 10,
-    paddingLeft: 10,
+    padding: 10,
+    backgroundColor: 'white',
+    borderRadius: 5,
+  },
+  button: {
+    backgroundColor: 'blue',
+    marginTop: 10,
+    borderRadius: 5,
   },
 
   back: {
     backgroundColor: 'red',
     marginTop: 30,
     borderRadius: 10,
-  },
-  phoneButton: {
-    marginTop: 240,
-  },
-  background: {
-    flex: 1,
-    resizeMode: 'cover',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backIcon: {
-    width: 60,
-    height: 60,
-
   },
 });
 
