@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList,ImageBackground, StyleSheet, TouchableOpacity, Image, Alert, TextInput, Modal, Button, PermissionsAndroid, StatusBar,Platform } from 'react-native';
-import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, push, remove, set } from 'firebase/database';
 import { getAuth, onAuthStateChanged } from 'firebase/auth'; // Import auth methods
 import { onValue } from 'firebase/database';
+import { initializeApp, getApps } from 'firebase/app';
+
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Contacts from 'expo-contacts';
 import { useNavigation } from '@react-navigation/native';
+import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 import 'firebase/database'; // Import the Realtime Database module
@@ -28,9 +31,12 @@ if (!firebase.apps.length){
       firebase.initializeApp(firebaseConfig);
 }
 
-const app = initializeApp(firebaseConfig);
-const database = getDatabase(app);
-const auth = getAuth(app); // Get the auth instance
+if (!getApps().length) {
+  initializeApp(firebaseConfig);
+}
+
+// קבלת ה-Auth instance
+const database = getDatabase();
 
 const Management = (props) => {
 
@@ -46,6 +52,7 @@ const Management = (props) => {
   const [selectedContacts, setSelectedContacts] = useState([]);
   const navigation = useNavigation();
   const [searchQuery, setSearchQuery] = useState('');
+  const auth = getAuth();
 
 
   useEffect(() => {
@@ -270,7 +277,7 @@ const Management = (props) => {
           <Text style={styles.addButtonText}>הוסף אנשי קשר</Text>        
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.button} onPress={pickContacts}>
+        <TouchableOpacity style={styles.button_contact} onPress={pickContacts}>
         <Text style={styles.buttonText}>Open Contacts</Text>
       </TouchableOpacity>
 
@@ -480,11 +487,17 @@ const Management = (props) => {
       padding: 10,
 
     },
-
+    
     addButtonText: {
       color: 'white',
       fontWeight: 'bold',
       
+    },
+    button_contact: {
+      fontWeight: 'bold',
+      marginTop: -40, // יותר קרוב למעלה
+      marginBottom: 180,
+
     },
     backIcon: {
       width: 50,

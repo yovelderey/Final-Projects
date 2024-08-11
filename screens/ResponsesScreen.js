@@ -21,9 +21,7 @@ if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
 
-const app = initializeApp(firebaseConfig);
-const database = getDatabase(app);
-const auth = getAuth(app);
+
 
 const ResponsesScreen = (props) => {
   const id = props.route.params.id; // Accessing the passed id
@@ -33,7 +31,9 @@ const ResponsesScreen = (props) => {
   const [yesResponses, setYesResponses] = useState([]);
   const [noResponses, setNoResponses] = useState([]);
   const [maybeResponses, setMaybeResponses] = useState([]);
-
+  const auth = getAuth();
+  const database = getDatabase();
+  
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {

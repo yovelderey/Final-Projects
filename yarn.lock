@@ -2579,10 +2579,10 @@
     prompts "^2.4.2"
     semver "^7.5.2"
 
-"@react-native-community/datetimepicker@^8.0.1", "@react-native-community/datetimepicker@>=6.7.0":
-  version "8.0.1"
-  resolved "https://registry.npmjs.org/@react-native-community/datetimepicker/-/datetimepicker-8.0.1.tgz"
-  integrity sha512-4BO0t3geMNNw9cIIm9p9FNUzwMXexdzD4pAH0AaUAycs3BS71HLrX8jHbrI7nzq/+8O7cLAXn5Gudte+YpTV8Q==
+"@react-native-community/datetimepicker@^8.2.0", "@react-native-community/datetimepicker@>=6.7.0":
+  version "8.2.0"
+  resolved "https://registry.npmjs.org/@react-native-community/datetimepicker/-/datetimepicker-8.2.0.tgz"
+  integrity sha512-qrUPhiBvKGuG9Y+vOqsc56RPFcHa1SU2qbAMT0hfGkoFIj3FodE0VuPVrEa8fgy7kcD5NQmkZIKgHOBLV0+hWg==
   dependencies:
     invariant "^2.2.4"
 
@@ -2615,6 +2615,11 @@
   integrity sha512-iF5Wv7dcDPmxu2om5SkPVGPELAwahAp3izFXjrv6wQAFmOTQ+2rEIDRBFMmS7EZ/qwNodvKK3vgDLEnOxDtTAQ==
   dependencies:
     plist "^3.0.5"
+
+"@react-native-picker/picker@^2.7.7":
+  version "2.7.7"
+  resolved "https://registry.npmjs.org/@react-native-picker/picker/-/picker-2.7.7.tgz"
+  integrity sha512-CTHthVmx8ujlH/u5AnxLQfsheh/DoEbo+Kbx0HGTlbKVLC1eZ4Kr9jXIIUcwB7JEgOXifdZIPQCsoTc/7GQ0ag==
 
 "@react-native/assets-registry@0.74.87":
   version "0.74.87"
@@ -3937,6 +3942,11 @@ data-view-byte-offset@^1.0.0:
     es-errors "^1.3.0"
     is-data-view "^1.0.1"
 
+date-fns@^3.6.0:
+  version "3.6.0"
+  resolved "https://registry.npmjs.org/date-fns/-/date-fns-3.6.0.tgz"
+  integrity sha512-fRHTG8g/Gif+kSh50gaGEdToemgfj74aRX3swtiouboip5JDLAyDE9F11nHMIcvOaXeOC6D7SpNhi7uFyB7Uww==
+
 dayjs@^1.8.15:
   version "1.11.11"
   resolved "https://registry.npmjs.org/dayjs/-/dayjs-1.11.11.tgz"
@@ -4501,7 +4511,7 @@ expo-status-bar@~1.12.1:
   resolved "https://registry.npmjs.org/expo-status-bar/-/expo-status-bar-1.12.1.tgz"
   integrity sha512-/t3xdbS8KB0prj5KG5w7z+wZPFlPtkgs95BsmrP/E7Q0xHXTcDcQ6Cu2FkFuRM+PKTb17cJDnLkawyS5vDLxMA==
 
-expo@*, expo@>=47.0.0, expo@~51.0.26:
+expo@*, expo@>=47.0.0, expo@>=50.0.0, expo@~51.0.26:
   version "51.0.26"
   resolved "https://registry.npmjs.org/expo/-/expo-51.0.26.tgz"
   integrity sha512-7ThQa6CVbiVtk4GNw0E9CewSzXYOeHkcRTCGorBZVcjAu6SuxbdWEtl0RI01/VpRKV+6I+yy/BmGnCl7lFRILg==
@@ -7060,6 +7070,11 @@ react-native-image-picker@^7.1.2:
   resolved "https://registry.npmjs.org/react-native-image-picker/-/react-native-image-picker-7.1.2.tgz"
   integrity sha512-b5y5nP60RIPxlAXlptn2QwlIuZWCUDWa/YPUVjgHc0Ih60mRiOg1PSzf0IjHSLeOZShCpirpvSPGnDExIpTRUg==
 
+react-native-localize@^3.2.1:
+  version "3.2.1"
+  resolved "https://registry.npmjs.org/react-native-localize/-/react-native-localize-3.2.1.tgz"
+  integrity sha512-XZsK9+V98XygBkutaPVxTIrwV48wXKk4AQfbjUOmrrsGCqa8WzWsBuEafwWVCMOEQ5coQt0SfM3XKT0Qg7DFXw==
+
 react-native-modal-datetime-picker@^17.1.0:
   version "17.1.0"
   resolved "https://registry.npmjs.org/react-native-modal-datetime-picker/-/react-native-modal-datetime-picker-17.1.0.tgz"
@@ -7152,7 +7167,7 @@ react-native-webview@*, react-native-webview@^13.8.6:
     escape-string-regexp "2.0.0"
     invariant "2.2.4"
 
-react-native@*, "react-native@^0.0.0-0 || >=0.60 <1.0", react-native@^0.74.5, "react-native@>= 0.30.0", "react-native@>= 0.62", react-native@>=0.40.0, react-native@>=0.46.0, react-native@>=0.57, react-native@>=0.59, react-native@>=0.64.0, react-native@>=0.65.0, react-native@>0.62.0:
+react-native@*, "react-native@^0.0.0-0 || >=0.60 <1.0", react-native@^0.74.5, "react-native@>= 0.30.0", "react-native@>= 0.62", react-native@>=0.40.0, react-native@>=0.46.0, react-native@>=0.57, react-native@>=0.59, react-native@>=0.64.0, react-native@>=0.65.0, react-native@>=0.70.0, react-native@>0.62.0:
   version "0.74.5"
   resolved "https://registry.npmjs.org/react-native/-/react-native-0.74.5.tgz"
   integrity sha512-Bgg2WvxaGODukJMTZFTZBNMKVaROHLwSb8VAGEdrlvKwfb1hHg/3aXTUICYk7dwgAnb+INbGMwnF8yeAgIUmqw==
@@ -7223,7 +7238,7 @@ react-transition-group@^4.4.5:
     loose-envify "^1.4.0"
     prop-types "^15.6.2"
 
-react@*, "react@^16.0.0 || ^17.0.0 || ^18.0.0", "react@^16.8.0 || ^17.0.0 || ^18.0.0", "react@^17.0.0 || ^18.0.0", react@^18.2.0, "react@>= 15.2.1", react@>=16.0, react@>=16.6.0, react@>=16.8, react@>=16.8.0, react@>=17.0.0, react@18.2.0:
+react@*, "react@^16.0.0 || ^17.0.0 || ^18.0.0", "react@^16.8.0 || ^17.0.0 || ^18.0.0", "react@^17.0.0 || ^18.0.0", react@^18.2.0, "react@>= 15.2.1", react@>=16.0, react@>=16.6.0, react@>=16.8, react@>=16.8.0, react@>=17.0.0, react@>=18.1.0, react@18.2.0:
   version "18.2.0"
   resolved "https://registry.npmjs.org/react/-/react-18.2.0.tgz"
   integrity sha512-/3IjMdb2L9QbBdWiW5e3P2/npwMBaU9mHCSCUzNln0ZCYbcfTsGbTJrU/kGemdH2IWmB2ioZ+zkxtmq6g09fGQ==

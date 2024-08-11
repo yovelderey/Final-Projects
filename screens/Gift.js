@@ -24,9 +24,7 @@ if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
 
-const app = initializeApp(firebaseConfig);
-const database = getDatabase(app);
-const auth = getAuth(app);
+
 
 const Gift = (props) => {
   const [contacts, setContacts] = useState([]);
@@ -37,7 +35,9 @@ const Gift = (props) => {
   const id = props.route.params.id;
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
-
+  const auth = getAuth();
+  const database = getDatabase();
+  
   useEffect(() => {
     const requestPermissions = async () => {
       if (Platform.OS === 'android') {

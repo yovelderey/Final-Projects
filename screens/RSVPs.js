@@ -23,9 +23,7 @@ if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
 
-const app = initializeApp(firebaseConfig);
-const database = getDatabase(app);
-const auth = getAuth(app);
+
 
 const RSVPs = (props) => {
   const [message, setMessage] = useState('שלום, הוזמנתם לחתונה של יובל וליאור בתאריך 15.9.2024 לפרטים ואישורי הגעה, לחץ *כן* לאישור, לחץ *לא* לסרוב, תודה צוות EasyVent');
@@ -43,7 +41,9 @@ const RSVPs = (props) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [timer, setTimer] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
-
+  const auth = getAuth();
+  const database = getDatabase();
+  
   useEffect(() => {
 
     const fetchData = async () => {

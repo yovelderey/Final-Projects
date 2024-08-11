@@ -29,9 +29,7 @@ if (!firebase.apps.length){
   firebase.initializeApp(firebaseConfig);
 }
 
-const app = initializeApp(firebaseConfig);
-const database = getDatabase(app);
-const auth = getAuth(app); // Get the auth instance
+
 
 
 const SeatedAtTable = (props) => {
@@ -45,6 +43,8 @@ const SeatedAtTable = (props) => {
   const [newContactPhone, setNewContactPhone] = useState('');
   const [user, setUser] = useState(null); // State to hold user info
   const [selectedImage, setSelectedImage] = useState(null);
+  const auth = getAuth();
+  const database = getDatabase();
 
 
   useEffect(() => {

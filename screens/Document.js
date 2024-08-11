@@ -17,7 +17,6 @@ if (!firebase.apps.length) {
 }
 
 const storage = firebase.storage();
-const database = firebase.database();
 
 const Document = (props) => {
     const [names, setNames] = useState(Array(10).fill(''));
@@ -29,7 +28,7 @@ const Document = (props) => {
     const [currentImage, setCurrentImage] = useState(null);
     const navigation = useNavigation();
     const id = props.route.params.id; // Accessing the passed id
-  
+    const database = getDatabase();
     useEffect(() => {
       const fetchUserId = async () => {
         const user = firebase.auth().currentUser;
