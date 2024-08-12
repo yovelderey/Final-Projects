@@ -155,7 +155,6 @@ const Management = (props) => {
         navigation.navigate('ContactsList', {
           contacts: data,
           selectedContacts,
-          onSelectContacts: handleSelectContacts,
         });
       }
     } else {

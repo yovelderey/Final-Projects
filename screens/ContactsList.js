@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Image, TextInput, StyleSheet } from 'react-native';
 
 const ContactsList = ({ route, navigation }) => {
@@ -14,6 +14,14 @@ const ContactsList = ({ route, navigation }) => {
     }
   };
 
+  useEffect(() => {
+    navigation.setOptions({
+      onSelectContacts: () => {
+        // כאן אפשר להחזיר את הבחירה
+        return localSelectedContacts;
+      },
+    });
+  }, [navigation, localSelectedContacts]);
   const navigateBackWithSelection = () => {
     onSelectContacts(localSelectedContacts);
     navigation.goBack();
