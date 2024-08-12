@@ -92,7 +92,6 @@ function Register(props) {
         });
     })
     .catch((error) => {
-      console.error('Error creating user:', error.message);
       // You might want to show a more user-friendly error message to the user
       alert('Registration failed. ' + error.message);
     });
@@ -147,9 +146,7 @@ function Register(props) {
           <Image source={require('../assets/buttonregister.png')}  />
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate('Login')}style={styles.phone2Button} >
-          <Image source={require('../assets/buttonphone.png')}  />
-        </TouchableOpacity>
+
 
         <TouchableOpacity 
          onPress={() => props.navigation.navigate('LoginEmail')}

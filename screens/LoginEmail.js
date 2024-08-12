@@ -89,9 +89,7 @@ function LoginEmail(props) {
 
         <Image source={require('../assets/divider.png')} style={styles.divider} />
 
-        <TouchableOpacity onPress={() => navigation.navigate('PhoneNumberScreen')} style={styles.phoneButton}>
-          <Image source={require('../assets/buttonphone.png')}  />
-        </TouchableOpacity>
+
 
         <TouchableOpacity onPress={() => navigation.navigate('Register')} style={styles.signupButton}>
           <Image source={require('../assets/SignUp.png')}  />

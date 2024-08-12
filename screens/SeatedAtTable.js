@@ -111,35 +111,42 @@ const SeatedAtTable = (props) => {
     }
   };
 
-  const uploadImage = async (uri, imageName, index) => {
-    if (!userId2) {
-      Alert.alert("User ID not found. Please log in.");
-      return;
+const uploadImage = async (uri, imageName, index) => {
+  let alertShown = false;
+
+  if (!userId2) {
+    Alert.alert("User ID not found. Please log in.");
+    return;
+  }
+  try {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    const ref = storage.ref().child(`users/${userId2}/${id}/seatOnTables/${imageName}`);
+    
+    const uploadTask = ref.put(blob);
+
+    uploadTask.on(
+      'state_changed',
+      () => {
+
+        uploadTask.snapshot.ref.getDownloadURL().then(downloadURL => {
+          setSelectedImage(downloadURL);
+        });
+      },
+      (error) => {
+        console.error("Image upload failed:", error.message);
+        Alert.alert("Image upload failed:", error.message);
+      }
+    );
+    if (!alertShown) {
+      Alert.alert("Image uploaded successfully!");
+      alertShown = true;
     }
-    try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const ref = storage.ref().child(`users/${userId2}/${id}/seatOnTables/${imageName}`);
-      
-      const uploadTask = ref.put(blob);
-  
-      uploadTask.on(
-        'state_changed',
-
-        () => {
-          uploadTask.snapshot.ref.getDownloadURL().then(downloadURL => {
-
-            setImages(downloadURL);
-            Alert.alert("Image uploaded successfully!");
-          });
-        }
-      );
-    } catch (error) {
-      console.error("Image upload failed:", error.message);
-      Alert.alert("Image upload failed:", error.message);
-    }
-  };
-
+  } catch (error) {
+    console.error("Image upload failed:", error.message);
+    Alert.alert("Image upload failed:", error.message);
+  }
+};
 
 
 

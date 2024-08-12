@@ -1,5 +1,5 @@
 import React, { useEffect,useState } from 'react';
-import { View,Button ,ScrollView, StatusBar,TouchableOpacity,Text, StyleSheet } from 'react-native';
+import { View,TextInput ,Alert,ScrollView, StatusBar,TouchableOpacity,Text, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -8,8 +8,8 @@ import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 
 function Manager(props) {
-  const navigation = useNavigation();
-  const [displayText, setDisplayText] = useState('Hello!');
+  const [email, setEmail] = useState('');
+
 
   const firebaseConfig = {
     apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
@@ -25,38 +25,20 @@ function Manager(props) {
         firebase.initializeApp(firebaseConfig);
   }
 
+  const handlePasswordReset = async () => {
+    if (!email) {
+      Alert.alert('Error', 'Please enter your email address.');
+      return;
+    }
 
-
-  
-  useEffect(() => {
-
-    const unsubscribeAuth = firebase.auth().onAuthStateChanged((authUser) => {
-
-      if (authUser) {
-        console.log("the user is logged in:", authUser.email);
-        setUser(authUser);
-        setLoggedIn(true);
-        setDisplayText(authUser.email);
-
-      } else {
-        console.log("the user is not logged in");
-        setUser(null);
-        setLoggedIn(false);
-      }
-    });
-
-    return () => unsubscribeAuth();
-  }, []);
-
-  const handleRegister = () => {
-    // Add your registration logic here (e.g., sending data to a server).
-    // You can use the data entered in the TextInput fields.
+    try {
+      await firebase.auth().sendPasswordResetEmail(email);
+      Alert.alert('Success', 'Password reset email sent.');
+    } catch (error) {
+      console.error(error);
+      Alert.alert('Error', 'Failed to send password reset email.');
+    }
   };
-  const handlePress = (screen) => {
-    // Implement navigation logic based on the pressed button
-    console.log(`Navigating to ${screen}`);
-  };
-  
   return (
     <ScrollView contentContainerStyle={styles.scrollViewContainer}>
                 <View style={styles.innerContainer}>
@@ -66,12 +48,15 @@ function Manager(props) {
 
               <View style={styles.toolbar_bag}>
                        
-
-              <TouchableOpacity onPress={() => props.navigation.navigate('Setting')} style={[styles.toolbar_down, { marginHorizontal: 0,marginTop:70 }]}>
-                  <Text style={styles.text}>Add</Text>
-              </TouchableOpacity>             
-           
-
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your email"
+                value={email}
+                onChangeText={(text) => setEmail(text)}
+              />
+              <TouchableOpacity onPress={handlePasswordReset} style={[styles.toolbar_down, { marginHorizontal: 0, marginTop: 20 }]}>
+                <Text style={styles.text}>Reset Password</Text>
+              </TouchableOpacity>
 
               <TouchableOpacity onPress={() => props.navigation.navigate('Setting')} style={[styles.toolbar_down, { marginHorizontal: 0,marginTop:20 }]}>
                   <Text style={styles.text}>back</Text>
