@@ -1,14 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Image, Modal,FlatList, TextInput, StyleSheet,StatusBar , TouchableOpacity, } from 'react-native';
+import { View, Text, Image, Modal,FlatList, TextInput,Alert, StyleSheet,StatusBar , TouchableOpacity, } from 'react-native';
 import { getDatabase, ref, push, remove, set } from 'firebase/database';
-
-import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged } from 'firebase/auth'; // Import auth methods
 import { onValue } from 'firebase/database';
+import 'firebase/compat/storage';
 
 import 'firebase/database'; // Import the Realtime Database module
 import  firebase from 'firebase/compat/app';
@@ -45,9 +42,23 @@ const SeatedAtTable = (props) => {
   const [selectedImage, setSelectedImage] = useState(null);
   const auth = getAuth();
   const database = getDatabase();
+  const storage = firebase.storage();
+  const [images, setImages] = useState(Array(1).fill(null));
+  const [userId2, setUserId2] = useState(null);
 
 
   useEffect(() => {
+    const fetchUserId = async () => {
+      const user = firebase.auth().currentUser;
+      if (user) {
+        setUserId2(user.uid);
+        loadImagesFromStorage(user.uid);
+      } else {
+        Alert.alert("משתמש לא מחובר");
+      }
+    };
+    fetchUserId();
+
     const requestPermissions = async () => {
 
 
@@ -55,7 +66,6 @@ const SeatedAtTable = (props) => {
         if (currentUser) {
           setUser(currentUser);
           const databaseRef = ref(database, `Events/${currentUser.uid}/${id}/tables`);
-          console.log('databaseRefdatabaseRef2', databaseRef);
 
           onValue(databaseRef, (snapshot) => {
             const data = snapshot.val();
@@ -74,73 +84,65 @@ const SeatedAtTable = (props) => {
     };
 
     requestPermissions();
-    loadImage(userId);
 
   }, []);
 
-  const selectImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission required', 'Permission to access media library is required!');
-      return;
+  const loadImagesFromStorage = async (userId) => {
+    try {
+      const imageName = 'image_0.jpg'; // חשוב לוודא ששימוש בשם התמונה מתאים
+      const listRef = storage.ref().child(`users/${userId}/${id}/seatOnTables/${imageName}`);
+      const downloadURL = await listRef.getDownloadURL();
+      setSelectedImage(downloadURL);
+    } catch (error) {
     }
+  };
+  
 
-    const result = await ImagePicker.launchImageLibraryAsync({
+  const handleButtonPress = async (index) => {
+    let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 3],
       quality: 1,
     });
 
-    if (!result.cancelled) {
-      const uri = result.assets[0]?.uri;
-      if (!uri) {
-        console.error('No URI returned from ImagePicker');
-        return;
-      }
-      setSelectedImage(uri);
-      await saveImageToLocal(uri, userId); // Save the image locally with user's ID
+    if (!result.canceled) {
+      uploadImage(result.assets[0].uri, `image_${index}.jpg`, index);
     }
   };
 
-  const saveImageToLocal = async (uri, userId) => {
-    try {
-      const fileName = uri.split('/').pop();
-      const localUri = `${FileSystem.documentDirectory}${userId}/${fileName}`;
-      // Check if directory exists, if not create it
-      console.log('Image saved to local storage fileName', fileName);
-
-
-      const dirInfo = await FileSystem.getInfoAsync(`${FileSystem.documentDirectory}${userId}`);
-      if (!dirInfo.exists) {
-        await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}${userId}`, { intermediates: true });
-      }
-      await FileSystem.copyAsync({
-        from: uri,
-        to: localUri,
-      });
-      console.log('Image saved to local storage at', localUri);
-
-    } catch (error) {
-      console.error('Error saving image to local storage: ', error);
-      throw error;
+  const uploadImage = async (uri, imageName, index) => {
+    if (!userId2) {
+      Alert.alert("User ID not found. Please log in.");
+      return;
     }
-  };
-
-  const loadImage = async (userId) => {
     try {
-      const dirInfo = await FileSystem.getInfoAsync(`${FileSystem.documentDirectory}${userId}`);
-      if (dirInfo.exists) {
-        const files = await FileSystem.readDirectoryAsync(`${FileSystem.documentDirectory}${userId}`);
-        if (files.length > 0) {
-          const firstImageUri = `${FileSystem.documentDirectory}${userId}/${files[0]}`;
-          setSelectedImage(firstImageUri);
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const ref = storage.ref().child(`users/${userId2}/${id}/seatOnTables/${imageName}`);
+      
+      const uploadTask = ref.put(blob);
+  
+      uploadTask.on(
+        'state_changed',
+
+        () => {
+          uploadTask.snapshot.ref.getDownloadURL().then(downloadURL => {
+
+            setImages(downloadURL);
+            Alert.alert("Image uploaded successfully!");
+          });
         }
-      }
+      );
     } catch (error) {
-      console.error('Error loading image from local storage: ', error);
+      console.error("Image upload failed:", error.message);
+      Alert.alert("Image upload failed:", error.message);
     }
   };
+
+
+
+
 
 
   const addContact = () => {
@@ -210,14 +212,15 @@ const SeatedAtTable = (props) => {
       </View>
   
       {selectedImage ? (
-        <TouchableOpacity onPress={selectImage} style={styles.imagePlaceholder}>
+        <TouchableOpacity onPress={() => handleButtonPress(0)} style={styles.imagePlaceholder}>
           <Image source={{ uri: selectedImage }} style={styles.imageBackground2} />
         </TouchableOpacity>
       ) : (
-        <TouchableOpacity onPress={selectImage} style={styles.imagePlaceholder}>
+        <TouchableOpacity onPress={() => handleButtonPress(0)} style={styles.imagePlaceholder}>
           <Image source={require('../assets/uploadimg.png')} style={styles.imageBackground} />
         </TouchableOpacity>
       )}
+
       
       <Text style={styles.noItemsText}>לחץ על התמונה להעלות תרשים אולם</Text>
       <Text style={styles.noItemsText2}>פורמט jpeg, png, jpg</Text>

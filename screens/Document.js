@@ -7,6 +7,7 @@ import 'firebase/compat/storage';
 import 'firebase/compat/auth';
 import 'firebase/compat/database'; // Import the Realtime Database module
 import * as Progress from 'react-native-progress';
+import { getDatabase, ref, set, onValue } from 'firebase/database';
 
 const firebaseConfig = {
   // Config here
@@ -29,6 +30,7 @@ const Document = (props) => {
     const navigation = useNavigation();
     const id = props.route.params.id; // Accessing the passed id
     const database = getDatabase();
+
     useEffect(() => {
       const fetchUserId = async () => {
         const user = firebase.auth().currentUser;
@@ -64,7 +66,6 @@ const Document = (props) => {
         setImages(images);
         setProgress(progress);
       } catch (error) {
-        console.error("Failed to load saved data:", error.message);
       }
     };
   
@@ -154,7 +155,7 @@ const Document = (props) => {
       try {
         await database.ref().update(updates);
       } catch (error) {
-        console.error("Failed to save data:", error.message);
+        //console.error("Failed to save data:", error.message);
       }
     };
   
