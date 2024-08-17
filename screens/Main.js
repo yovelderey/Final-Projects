@@ -2,7 +2,7 @@
 import React, { useEffect,useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, Button,ImageBackground, TouchableOpacity, Alert, StyleSheet, StatusBar,ScrollView ,Image} from 'react-native';
+import { View, Text, Button,Dimensions, TouchableOpacity, Alert, StyleSheet, StatusBar,ScrollView ,Image} from 'react-native';
 import  firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
@@ -26,6 +26,7 @@ function Main(props) {
     const [showDialog, setShowDialog] = useState(false);
     const [isConnected, setIsConnected] = useState(true);
     const navigation = useNavigation();
+    const { width } = Dimensions.get('window');
 
 
     const firebaseConfig = {
@@ -199,10 +200,7 @@ function Main(props) {
 
     return (
 
-            <ScrollView contentContainerStyle={styles.scrollViewContainer}>
-            <ImageBackground 
-            source={require('../assets/Welcome.png')} // Adjust the path accordingly        
-            style={styles.background} >
+
               
             <View style={styles.innerContainer}>
               <StatusBar backgroundColor="#000" barStyle="light-content" />
@@ -215,21 +213,45 @@ function Main(props) {
               )}
              </View>
 
-              <Text style={[styles.title, { marginTop: 10 }]}>EasyVent</Text>
               {!isLoggedIn && (
-              <Text style={styles.title_2}>שלום אורח, ברוך הבא!</Text>
+                <Image
+                  source={require('../assets/VIDEOLOADING.gif')} // נתיב ל-GIF שלך
+                  style={{
+                    width: width * 1,  // 60% מרוחב המסך
+                    height: (width * 1) * (350 / 440),
+                    marginTop: -30  // לשמור על היחס המקורי של התמונה
+                  }}                 />
+              )}
+
+              {!isLoggedIn && (
+                <Image 
+                  source={require('../assets/eastvent_text1.png')} 
+                  style={{
+                    width: width * 0.8333,  // 60% מרוחב המסך
+                    height: (width * 0.5) * (350 / 440),
+                    marginTop: 80  // לשמור על היחס המקורי של התמונה
+                  }} 
+                />
               )}
     
               {!isLoggedIn && (
                <TouchableOpacity onPress={() => props.navigation.navigate('LoginEmail')} style={styles.loginBtn}>
-                <Text style={styles.loginText}>לחץ להתחברות או הרשמה</Text>
+                <Image source={ require('../assets/easyvent_login_botton.png')}  style={[styles.img,{width: 340,height: 50,}]}/>
+
               </TouchableOpacity>
               )}
+              {!isLoggedIn && (
+                <Text style={styles.footerText}>כל הזכויות שמורות לליאור ויובל ©</Text>
+       
+              )}
+
               {!isCreate && (
                <TouchableOpacity onPress={handlePressRefresh} style={styles.loginBtn}>
                 <Text style={styles.loginText}>צור אירוע חדש</Text>
               </TouchableOpacity>          
               )}
+
+
               {!isCreate && (
               <View style={styles.container}>
                   <Text style={[styles.titleEvent, { marginTop: 15 }]}>- My Events -</Text>
@@ -252,34 +274,10 @@ function Main(props) {
                 </View>
                 )}
               <Text style={[styles.toolbar_down, { marginTop:550 }]}></Text>
-    
-
-               <View style={{ flexDirection: 'row',}}>
-                <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
-                  <Image source={ require('../assets/icons8-facebook-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
-                </TouchableOpacity>
-    
-                <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
-                <Image source={ require('../assets/icons8-instagram-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
-                </TouchableOpacity>
-    
-                <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
-                <Image source={ require('../assets/icons8-tiktok-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
-                </TouchableOpacity>
-    
-                <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
-                <Image source={ require('../assets/icons8-whatsapp-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
-                </TouchableOpacity>
-
-              </View>
- 
-              <Text style={styles.title_toolbar_yovel}> יובל ליאור פיתח אפליקציות | ylgroup</Text>
-    
+        
               </View>   
           
-            </ImageBackground>
             
-            </ScrollView>
     
       );
     };
@@ -289,6 +287,7 @@ function Main(props) {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
+
       },
       toolbar_bag: {
         position: 'absolute',
@@ -299,6 +298,7 @@ function Main(props) {
       innerContainer: {
         flex: 1,
         alignItems: 'center',
+        backgroundColor: 'white', // רקע לבן
         marginTop: StatusBar.currentHeight || 40, // הרווח מתחת לסטטוס בר
       },
       title: {
@@ -326,13 +326,12 @@ function Main(props) {
       
       loginBtn: {
         width: 180,
-        backgroundColor: '#000',
-        borderRadius: 25,
-        height: 40,
+
+        height: 140,
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 0,
-        marginBottom: 10,
+        marginTop: 100,
+        marginBottom: 0,
       },
       loginText: {
         color: 'white',
@@ -353,7 +352,12 @@ function Main(props) {
         alignItems: 'center',
         justifyContent: 'center',
         marginTop: 50,
-        marginBottom: 5,
+        marginBottom: 0,
+      },
+      img2: {
+
+        marginTop: 0,
+        marginBottom: 0,
       },
     
       title_toolbar_yovel: {
@@ -450,6 +454,14 @@ function Main(props) {
         color: 'white',
         fontSize: 18,
         fontWeight: 'bold',
+      },
+      footerText: {
+        position: 'absolute',
+        bottom: 20, // מרחק מהתחתית
+        fontSize: 13,
+        color: 'gray',
+        marginTop: 150  // לשמור על היחס המקורי של התמונה
+
       },
     });
     export default Main;

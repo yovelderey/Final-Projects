@@ -191,19 +191,39 @@ const RSVPs = (props) => {
     (contact.newPrice && contact.newPrice.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  function formatPhoneNumber(phoneNumber) {
+    // Remove any non-numeric characters except for the plus sign
+    phoneNumber = phoneNumber.replace(/[^0-9+]/g, '');
+  
+    // אם המספר מתחיל ב-0, מחליף את הקידומת ב-+972
+    if (phoneNumber.startsWith('0')) {
+      phoneNumber = `+972${phoneNumber.slice(1)}`;
+    }
+  
+    // אם המספר לא מתחיל ב-+972, הוסף את הקידומת
+    if (!phoneNumber.startsWith('+972')) {
+      phoneNumber = `+972${phoneNumber}`;
+    }
+  
+    return phoneNumber;
+  }
+  
+
+  
   const sendMessageToRecipients = async () => {
     try {
       setModalVisible(true);
       startTimer();
       const apiUrl = 'http://192.168.1.213:5000/send-messages';
       const recipients = contacts.map(contact => contact.phoneNumbers).filter(num => num.trim() !== '');
+      const formattedContacts = recipients.map(formatPhoneNumber);
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          recipients,
+          formattedContacts,
           message,
         }),
       });
@@ -247,13 +267,14 @@ const RSVPs = (props) => {
       const apiUrl = 'http://192.168.1.213:5000/trigger-wait-for-response';
   
       const recipients = contacts.map(contact => contact.phoneNumbers).filter(num => num.trim() !== '');
+      const formattedContacts = recipients.map(formatPhoneNumber);
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          recipients,
+          formattedContacts,
         }),
       });
   

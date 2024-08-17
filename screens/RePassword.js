@@ -13,34 +13,30 @@ function RePassword(props) {
   };
 
   return (
-    <ImageBackground 
-    source={require('../assets/Signbac.png')} // Adjust the path accordingly
-    style={styles.background}
-  >
+
       <View style={styles.container}>
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          keyboardType="email-address"
-          
-        />
-
-      <TouchableOpacity onPress={handleRegister} style={styles.phoneButton}>
-          <Image source={require('../assets/sendcodebutton.png')}  />
-        </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('LoginEmail')}>
+              <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
+            </TouchableOpacity>
 
 
-        <TouchableOpacity 
-          onPress={() => navigation.navigate('LoginEmail')}
-            style={[styles.showPasswordButton, { position: 'absolute', top: '91%', left: '4%' }]}>
-            <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
-        </TouchableOpacity>
+            <Image source={require('../assets/epos_password.png')} style={styles.loginText} />
 
-        <View>
-          <Text style={styles.text}>Enter your email address and wait for a verification code to be sent to your mailbox</Text>
-        </View>
+            <TextInput
+              style={styles.input}
+              placeholder="אימייל"
+              keyboardType="email-address"
+              
+            />
+
+          <TouchableOpacity onPress={handleRegister} style={styles.phoneButton}>
+              <Image source={require('../assets/send_code2.png')}  />
+            </TouchableOpacity>
+
+            <View>
+              <Text style={styles.text}>הזן את כתובת הדואר האלקטרוני שלך והמתן עד שקוד אימות יישלח לתיבת הדואר שלך</Text>
+            </View>
     </View>
-    </ImageBackground>
 
   );
 }
@@ -48,32 +44,33 @@ function RePassword(props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    width: '90%',
+    width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    
+    backgroundColor: 'white',
   },
-  background: {
-    flex: 1,
-    resizeMode: 'cover',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+
   input: {
     width: '90%',
     height: 40,
-    backgroundColor: 'white',
-    marginTop: -200,
     borderColor: 'gray',
     borderWidth: 1,
     borderRadius: 5,
-    marginBottom: 10,
-    paddingLeft: 10,
+    backgroundColor: 'white',
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderRadius: 7,
+    borderColor: 'orange',
+    textAlign: 'right',
+    marginBottom: 20,
   },
   backIcon: {
     width: 60,
     height: 60,
 
+  },
+  loginText: {
+    marginTop: -410,
   },
   showPasswordButton: {
     marginLeft: -20,
@@ -85,6 +82,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     margin: 20,
+  },
+  imageback: {
+    width: 40,
+    height: 40,
+    marginTop: -430,
+    marginRight: 300,
   },
 });
 

@@ -155,6 +155,8 @@ const Management = (props) => {
         navigation.navigate('ContactsList', {
           contacts: data,
           selectedContacts,
+          onSelectContacts: handleSelectContacts, // Ensure this function is defined in the parent component
+
         });
       }
     } else {

@@ -1,170 +1,117 @@
-// RegistrationScreen.js
-import React, { useRef, useState } from 'react';
-import { View, TextInput, Alert, StyleSheet,Image,ImageBackground,TouchableOpacity,Text } from 'react-native';
+import React, { useState } from 'react';
+import { View, TextInput, Alert, StyleSheet, Image, TouchableOpacity, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { firebaseConfig } from '../config';
-import { initializeApp } from 'firebase/app';
-import  firebase from 'firebase/compat/app';
-import 'firebase/compat/auth';
-import 'firebase/compat/firestore';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
-import 'firebase/database'; // Import the Realtime Database module
 import { getDatabase, ref, set } from 'firebase/database';
-import uuid from 'react-native-uuid';
-
-
 
 function Register(props) {
-
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
-    authDomain: "final-project-d6ce7.firebaseapp.com",
-    projectId: "final-project-d6ce7",
-    storageBucket: "final-project-d6ce7.appspot.com",
-    messagingSenderId: "1056060530572",
-    appId: "1:1056060530572:web:d08d859ca2d25c46d340a9",
-    measurementId: "G-LD61QH3VVP"
-  };
-
-  if (!firebase.apps.length){
-        firebase.initializeApp(firebaseConfig);
-  }
-  const database = getDatabase();
-  //const databaseRef = ref(database, 'Users');
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [passwordAgain, setpasswordAgain] = useState('')
-
-  const [fullname, setfullName] = useState('')
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [passwordAgain, setPasswordAgain] = useState('');
+  const [fullname, setFullname] = useState('');
+  const [isChecked, setIsChecked] = useState(false); // state for checkbox
 
   const auth = getAuth();
+  const navigation = useNavigation();
 
-  const navigation = useNavigation()
-// Get the currently authenticated user's UID
-  //const user = auth.currentUser;
-  //const uniqueID = uuidv4();
-
-  //const databaseRef = ref(database, 'users/' + uniqueID);
-
-    const showAlert = () => {
-      Alert.alert('Terms of Service By using this application, you agree to be bound by the following terms of service. Please read these terms carefully before using the application. 1. Agreement 1.1. By using the application, you agree to the following terms of service in full and without reservation. 1.2. If you do not agree to these terms of service, please refrain from using the application. 2. Usage and Registration 2.1. Usage of the application is permitted only to users who are of legal age and who accept these terms of service. 2.2. Additional services in the application may require registration and submission of personal information. 3. Privacy 3.1. We are committed to maintaining the privacy of users and not disclosing personal information to third parties without prior authorization. 3.2. User privacy may be disclosed as necessary to comply with legal obligations, protect the rights of the company, or ensure public safety. 4. Liability ', "", [{ text: 'Agree' }]);
-    };
+  const showAlert = () => {
+    Alert.alert('Terms of Service', 'כללי אפליקציה זו נועדה לספק פלטפורמה נוחה לשימוש עבור הזמנות לחתונות, תוך שמירה על פרטיות המשתמשים והתאמה לחוקי ההגנה על מידע. השימוש באפליקציה מותנה בקבלת כלל תנאי התקנון המפורטים להלן. השימוש באפליקציה מהווה אישור כי קראתם והסכמתם לכלל התנאים המפורטים במסמך זה. הגדרת המשתמשים משתמשים באפליקציה הם כל אדם שהוריד והתקין את האפליקציה, וכן כל אדם המקבל או שולח הזמנות לאירועים באמצעותה. המשתמש מתחייב להיות בגיל 18 ומעלה ולהשתמש באפליקציה בהתאם לחוקי המדינה בה הוא מתגורר. מטרת האפליקציה מטרת האפליקציה היא לאפשר שליחה וקבלת הזמנות לאירועים, בדגש על חתונות, בצורה דיגיטלית ונוחה. המשתמש יכול להעלות פרטי אירוע, לשלוח הזמנות לאורחים, ולנהל את התשובות המתקבלות. פרטיות ושמירת מידע החברה המחזיקה באפליקציה מתחייבת לשמירה על פרטיות המשתמשים בהתאם לחוקי הגנת המידע. כל המידע הנמסר על ידי המשתמשים, כולל פרטי האורחים ומידע אישי אחר, ישמש אך ורק למטרות הקשורות לתפעול האפליקציה ולא יועבר לצד שלישי ללא אישור מפורש של המשתמש, אלא במקרים שהחוק מחייב זאת. שימוש במידע אישי המשתמש מתחייב כי כל המידע הנמסר לאפליקציה, כולל שמות האורחים, מספרי הטלפון ופרטי האירוע, ייעשה ברשותם של כל הנוגעים בדבר. המשתמש מתחייב שלא לעשות שימוש לרעה בפרטי המוזמנים ולא למסור מידע כוזב. אחריות המשתמש המשתמש אחראי בלעדית לתוכן המוזן לאפליקציה, כגון פרטי האירוע, תמונות והודעות. על המשתמש להימנע משימוש בתוכן פוגעני, משפיל או בלתי חוקי. במקרה של הפרת תנאים אלו, החברה רשאית להסיר את המשתמש מהשירות ללא התראה מוקדמת. הגבלת אחריות החברה החברה המפעילה את האפליקציה אינה נושאת באחריות לכל נזק ישיר או עקיף הנגרם למשתמש או לצד שלישי כתוצאה משימוש באפליקציה, לרבות עיכובים, שגיאות, תקלות טכניות, או שיבושים במערכת. האפליקציה מסופקת "כמות שהיא", והחברה אינה מתחייבת לפעילות רציפה ונטולת שגיאות. שימוש הוגן המשתמש מתחייב להשתמש באפליקציה לצרכים אישיים בלבד, ולא למטרות מסחריות או פרסומיות ללא הסכמת החברה. כל שימוש המנוגד לכך עשוי להוביל לחסימת המשתמש ולאי יכולתו להמשיך להשתמש בשירותי האפליקציה. שינויים ועדכונים באפליקציה החברה רשאית לשנות ולעדכן את האפליקציה, כולל ממשק המשתמש, תכונות ומדיניות הפרטיות, בכל עת וללא הודעה מוקדמת. מומלץ למשתמשים לעקוב אחר עדכונים ולהתעדכן בתנאי השימוש החדשים. תמיכה ושירות לקוחות החברה מציעה שירותי תמיכה טכנית דרך פלטפורמות התקשורת הרשמיות שלה. במקרה של תקלה טכנית או שאלה בנושא השימוש באפליקציה, ניתן לפנות לשירות הלקוחות ולקבל מענה בהתאם לשעות הפעילות המפורסמות. תנאים כספיים השימוש הבסיסי באפליקציה הוא חינמי. עם זאת, ייתכן שחלק מהשירותים באפליקציה יהיו כרוכים בתשלום נוסף, אשר יפורט בנפרד בהתאם לתוכנית השימוש שתבחר. משתמש המבצע רכישות או משלם עבור שירותים מיוחדים אינו זכאי להחזר כספי, אלא אם נקבע אחרת בחוק. זכויות יוצרים כל התכנים באפליקציה, לרבות עיצובים, טקסטים, קוד, ותמונות, הם רכוש החברה או צדדים שלישיים שקיבלו הרשאה לשימוש בתכנים אלו. חל איסור מוחלט להעתיק, להפיץ, לשנות או להשתמש בתכנים אלו ללא אישור מפורש של החברה. עדכון אחרון: אוגוסט 2024', [{ text: 'Agree' }]);
+  };
 
   const handleRegister = () => {
+    if (!isChecked) {
+      alert("You must agree to the terms and conditions before registering.");
+      return;
+    }
+
     if (password !== passwordAgain) {
       alert("Passwords do not match");
       return;
     }
 
     createUserWithEmailAndPassword(auth, email, password)
-    .then((userCredential) => {
-      const user = userCredential.user;
-      console.log('Registered with:', user.email);
+      .then((userCredential) => {
+        const user = userCredential.user;
+        const database = getDatabase();
+        const databaseRef = ref(database, 'users/' + user.uid);
 
-      const database = getDatabase();
-      const databaseRef = ref(database, 'users/' + user.uid);
+        const userData = {
+          email: user.email,
+          displayName: fullname,
+        };
 
-      const userData = {
-        email: user.email,
-        displayName: fullname,
-        // Note: Avoid storing passwords in plain text in the database
-        // It's not secure, consider using a more secure authentication method
-        // or hash the password before storing it
-        // Example: hashedPassword: hashFunction(password),
-      };
+        set(databaseRef, userData)
+          .then(() => {
+            console.log('Data written to the database successfully');
+            props.navigation.navigate('Main');
+          })
+          .catch((error) => {
+            console.error('Error writing data to the database:', error);
+          });
+      })
+      .catch((error) => {
+        alert('Registration failed. ' + error.message);
+      });
+  };
 
-      set(databaseRef, userData)
-        .then(() => {
-          console.log('Data written to the database successfully');
-          props.navigation.navigate('Main');
-          //do here
-
-
-          const database = getDatabase();
-            //const databaseRef = ref(database, 'Events/' + firebase.auth().currentUser.uid + '/'+ eventName + '/');
-         
-
-
-        })
-        .catch((error) => {
-          console.error('Error writing data to the database:', error);
-        });
-    })
-    .catch((error) => {
-      // You might want to show a more user-friendly error message to the user
-      alert('Registration failed. ' + error.message);
-    });
-};
-  
   return (
-    <ImageBackground 
-    source={require('../assets/bacregg.png')} // Adjust the path accordingly
-    style={styles.background} >
-
     <View style={styles.container}>
+      <TouchableOpacity onPress={() => navigation.navigate('LoginEmail')}>
+        <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
+      </TouchableOpacity>
 
-      <View style={styles.container}>
+      <Image source={require('../assets/shalom_oreah.png')} style={styles.loginText} />
 
+      <View style={styles.container2}>
+        <TextInput
+          style={styles.input}
+          placeholder="שם מלא"
+          keyboardType="email-address"
+          onChangeText={text => setFullname(text)}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="אימייל"
+          keyboardType="email-address"
+          onChangeText={text => setEmail(text)}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="סיסמה"
+          onChangeText={text => setPassword(text)}
+          textContentType="password"
+          secureTextEntry={true}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="אימות סיסמה"
+          onChangeText={text => setPasswordAgain(text)}
+          textContentType="password"
+          secureTextEntry={true}
+        />
 
-
-
-      <TextInput
-        style={styles.input}
-        placeholder="Full Name"
-        keyboardType="email-address"
-        onChangeText={text => setfullName(text)}
-
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        keyboardType="email-address"
-        onChangeText={text => setEmail(text)}
-
-      />
-
-    <TextInput
-        style={styles.input}
-        placeholder="Password"
-        onChangeText={text => setPassword(text)}
-        textContentType="password"
-        secureTextEntry={true}
-
-      />
-    <TextInput
-        style={styles.input}
-        placeholder="password again"
-        onChangeText={text => setpasswordAgain(text)}
-        textContentType="password"
-        secureTextEntry={true}
-
-      />  
-
-      <TouchableOpacity onPress={handleRegister} style={styles.phoneButton}>
-          <Image source={require('../assets/buttonregister.png')}  />
+      </View>
+      <TouchableOpacity
+          style={styles.checkboxContainer}
+          onPress={() => setIsChecked(!isChecked)}
+        >
+          <View style={styles.checkbox}>
+            {isChecked && <View style={styles.checkboxChecked} />}
+          </View>
+          <Text style={styles.checkboxLabel}>קראתי ואני מסכים לתקנון</Text>
         </TouchableOpacity>
 
-
-
-        <TouchableOpacity 
-         onPress={() => props.navigation.navigate('LoginEmail')}
-            style={[styles.showPasswordButton, { position: 'absolute', top: '91%', left: '8%' }]}>
-            <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
+        <TouchableOpacity onPress={showAlert} style={styles.showPasswordButton}>
+          <Image source={require('../assets/readtakanon.png')} />
         </TouchableOpacity>
 
-        <TouchableOpacity 
-         onPress={showAlert}
-            style={[styles.showPasswordButton, { position: 'absolute', top: '82%', left: '20%' }]}>
-            <Image source={require('../assets/privacy.png')} />
+        <TouchableOpacity onPress={handleRegister} style={styles.phoneButton}>
+          <Image source={require('../assets/button_reshum.png')} />
         </TouchableOpacity>
+
+        <Text style={styles.footerText}>כל הזכויות שמורות לליאור ויובל ©</Text>
 
     </View>
-
-    </View>
-    </ImageBackground>
-
   );
 }
 
@@ -174,44 +121,77 @@ const styles = StyleSheet.create({
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    
+    backgroundColor: 'white',
   },
-  background: {
+  container2: {
     flex: 1,
-    resizeMode: 'cover',
+    width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: -100,
   },
   input: {
-    width: 280,
+    width: '90%',
     height: 40,
-    backgroundColor: 'white',
-    marginTop: 15,
     borderColor: 'gray',
     borderWidth: 1,
     borderRadius: 5,
-    marginBottom: 10,
-    paddingLeft: 10,
+    backgroundColor: 'white',
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderRadius: 7,
+    borderColor: 'orange',
+    textAlign: 'right',
+    marginBottom: 20,
   },
-  backIcon: {
-    width: 60,
-    height: 60,
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: -110,
 
   },
-  showPasswordButton: {
-    marginLeft: -20,
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 1,
+    borderColor: 'gray',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    width: 14,
+    height: 14,
+    backgroundColor: 'orange',
+  },
+  checkboxLabel: {
+    fontSize: 16,
+    color: 'black',
+    marginLeft: 10,
   },
   phoneButton: {
-    marginTop: 40,
+    marginBottom: 70,
   },
+  showPasswordButton: {
+    marginTop: 120,
+    marginBottom: 90,
 
-  phone2Button: {
-    marginTop: 25,
   },
-  text: {
-    fontSize: 16,
-    textAlign: 'center',
-    margin: 20,
+  loginText: {
+    marginTop: 10,
+  },
+  imageback: {
+    width: 40,
+    height: 40,
+    marginTop: 50,
+    marginRight: 300,
+  },
+  footerText: {
+    position: 'absolute',
+    bottom: 20, // מרחק מהתחתית
+    fontSize: 13,
+    color: 'gray',
+    marginTop: 150  // לשמור על היחס המקורי של התמונה
+
   },
 });
 

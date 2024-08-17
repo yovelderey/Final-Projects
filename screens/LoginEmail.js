@@ -50,58 +50,69 @@ function LoginEmail(props) {
   };
 
   return (
-    <ImageBackground 
-      source={require('../assets/Login.png')} // Adjust the path accordingly
-      style={styles.background}
-    >
+
+
       <View style={styles.container}>
+
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('Main')} >
+          <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
+        </TouchableOpacity>
+        
+        <Image source={require('../assets/wellcome_text.png')} style={styles.imagetext} />
+
           <View style={styles.emailInput}>
             <TextInput
               style={styles.input}
-              placeholder="Email"
+              placeholder="אימייל"
               keyboardType="email-address"
               onChangeText={text => setEmail(text)}
             />
             </View>
+
+
             <View style={styles.passwordInput}>
               <TextInput
                 style={styles.input}
-                placeholder="Password"
+                placeholder="סיסמה"
                 secureTextEntry={!showPassword}
 
                 onChangeText={text => setPassword(text)}
               />
+
+              <TouchableOpacity 
+                onPress={togglePasswordVisibility} 
+                  style={[styles.showPasswordButton]}>
+                  <Image source={require('../assets/Eye.png')} style={styles.eyeIcon} />
+              </TouchableOpacity>
             </View>
 
-        <TouchableOpacity 
-          onPress={togglePasswordVisibility} 
-            style={[styles.showPasswordButton, { position: 'absolute', top: '40%', left: '7%' }]}>
-            <Image source={require('../assets/Eye.png')} style={styles.eyeIcon} />
-        </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => navigation.navigate('RePassword')} style={styles.fpButton}>
-          <Image source={require('../assets/Fp.png')}  />
-        </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('RePassword')} style={styles.fpButton}>
+              <Text style={styles.header_re}>לחץ לאיפוס סיסמה</Text>
+            </TouchableOpacity>
+
+
+
+
 
         <TouchableOpacity onPress={handleLogin} style={styles.loginButton}>
-          <Image source={require('../assets/Loginbutton.png')} style={styles.image} />
+          <Image source={require('../assets/ithaber_easyvent.png')} style={styles.image} />
         </TouchableOpacity>
 
-        <Image source={require('../assets/divider.png')} style={styles.divider} />
+        <Image source={require('../assets/find_us.png')} style={styles.divider} />
 
 
 
         <TouchableOpacity onPress={() => navigation.navigate('Register')} style={styles.signupButton}>
-          <Image source={require('../assets/SignUp.png')}  />
+          <Text style={styles.header_re2}>
+            עדיין אין לך חשבון?,{' '}
+            <Text style={styles.registerNow}>הירשם עכשיו</Text>
+          </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          onPress={() => navigation.navigate('Main')}
-            style={[styles.showPasswordButton, { position: 'absolute', top: '91%', left: '4%' }]}>
-            <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
-        </TouchableOpacity>
+
       </View>
-    </ImageBackground>
   );
 }
 
@@ -110,6 +121,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'white', // רקע לבן
+
   },
   background: {
     flex: 1,
@@ -137,6 +150,11 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: 'white',
     paddingHorizontal: 10,
+    borderWidth: 1, // עובי המסגרת
+    borderRadius: 7,
+    borderColor: 'orange', // צבע השוליים לכתום
+    textAlign: 'right', // מיישר את ה-placeholder והטקסט לימין
+
   },
   inputemail: {
     width: '80%',
@@ -152,16 +170,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
+    marginTop: 150,
+
+
   },
   passwordInput: {
     width: '90%',
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 20,
   },
 
   showPasswordButton: {
-    marginLeft: -20,
+    marginLeft: -345,
   },
   eyeIcon: {
     width: 20,
@@ -169,13 +190,18 @@ const styles = StyleSheet.create({
 
   },
   backIcon: {
-    width: 60,
-    height: 60,
+    width: 40,
+    height: 40,
 
   },
   fpButton: {
-    marginTop: 5,
+    marginTop: -15,
+    marginBottom: 14,
+    alignSelf: 'flex-end', // מיישר את הכפתור לימין בתוך רכיב ההורה
+    marginRight: 20, // ריווח בין התמונה לטקסט
+
   },
+  
   loginButton: {
     marginTop: 20,
   },
@@ -183,18 +209,61 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   signupButton: {
-    marginTop: 20,
+    marginTop: -60,
+    marginBottom: 210,
+
   },
 
-
-  image: {
-    width: 350,
+  imageback: {
+    width: 40,
     height: 40,
+    marginTop: 150,
+    marginRight: 300, // ריווח בין התמונה לטקסט
+
+  },
+  imagetext: {
+    marginBottom: -60,
+    marginTop: 55,
+
   },
   divider: {
-    width: 350,
-    height: 25,
-    marginTop: 40,
+
+    marginTop: 85,
+  },
+  logo: {
+    width: 450,  // רוחב הלוגו
+    height: 450, // גובה הלוגו
+    marginTop: 0,
+
+  },
+  header_re: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 5,
+    color: 'black',
+    textAlign: 'right', // יישור הטקסט לימין
+
+  },
+
+  header_re: {
+    color: 'black', // צבע ורוד כהה יותר
+    fontWeight: 'bold', // הדגשה (עיבוי הטקסט)
+    fontSize: 12,
+
+  },
+
+  header_re2: {
+    color: '#FF66B2', // צבע ורוד כהה יותר
+    fontWeight: 'bold', // הדגשה (עיבוי הטקסט)
+    fontSize: 15,
+
+  },
+  registerNow: {
+    color: 'lightblue', // צבע התכלת
+    fontWeight: 'bold', // עבה יותר, אופציונלי
+    fontSize: 15,
+    color: '#0099FF', // צבע תכלת כהה יותר
+
   },
 });
 
