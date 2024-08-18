@@ -2,7 +2,7 @@
 import React, { useEffect,useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { View, Text, Button,Dimensions, TouchableOpacity, Alert, StyleSheet, StatusBar,ScrollView ,Image} from 'react-native';
+import { View, Text, ImageBackground,Dimensions, TouchableOpacity, Alert, StyleSheet, StatusBar,ScrollView ,Image} from 'react-native';
 import  firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
@@ -56,14 +56,24 @@ function Main(props) {
   };
   const showAlert = (idToDelete) => {
     Alert.alert(
-      'Delete',
-      'Are you sure you want to delete??',
+      'מחק אירוע', // כותרת ההתראה
+      'האם אתה בטוח שברצונך למחוק אירוע זה?', // הודעת התראה
       [
-        { text: 'Delete', onPress: () => deletAlert(idToDelete) },
-        { text: 'Cancel', onPress: () => console.log('cacnel') }
-      ]
+        {
+          text: 'מחק', // כפתור מחיקה
+          onPress: () => deleteAlert(idToDelete), // פונקציה שמבצעת את המחיקה
+          style: 'destructive', // עיצוב אדום ובולט למחיקה
+        },
+        {
+          text: 'ביטול', // כפתור ביטול
+          onPress: () => console.log('cancel'), // פעולה במקרה של ביטול
+          style: 'cancel', // עיצוב סטנדרטי לביטול
+        },
+      ],
+      { cancelable: true } // מאפשר ביטול בלחיצה מחוץ להתראה
     );
   };
+  
 
 
   useEffect(() => {
@@ -131,7 +141,30 @@ function Main(props) {
         console.error('No user is currently authenticated.');
     }
 };
-
+const handleSignOut = () => {
+  Alert.alert(
+    'יציאה מהחשבון',
+    'האם אתה בטוח שברצונך לצאת מהחשבון?',
+    [
+      {
+        text: 'ביטול',
+        style: 'cancel',
+      },
+      {
+        text: 'צא',
+        onPress: async () => {
+          try {
+            await firebase.auth().signOut();
+            props.navigation.navigate('Main');
+          } catch (e) {
+            console.log(e);
+          }
+        },
+      },
+    ],
+    { cancelable: false }
+  );
+};
   
   const deletAlert = async (idToDelete) => {
     try {
@@ -203,14 +236,67 @@ function Main(props) {
 
               
             <View style={styles.innerContainer}>
+
+                  {!isCreate && (  
+                    <ImageBackground
+                      source={require('../assets/Socialm.gif')} // טוען את ה-GIF מהתיקייה המקומית
+                      style={styles.gif}
+                      imageStyle={{ opacity: 0.3 }} // בהירות של 30%
+                      resizeMode="cover" // כדי שה-GIF יכסה את כל המסך
+                    />               
+                  )}
+               {!isCreate && (  
+                <Text style={styles.footerText2}>EasyVent</Text>
+               )}
               <StatusBar backgroundColor="#000" barStyle="light-content" />
-              <View style={styles.toolbar_bag}>          
+
+              <View style={styles.toolbar_bag}>  
+
+
+
               {!isCreate && (
 
-              <TouchableOpacity onPress={() => props.navigation.navigate('Setting')} style={[styles.toolbar_down, { marginHorizontal: 319,marginTop:70 }]}>
+              <TouchableOpacity onPress={() => props.navigation.navigate('Setting')} style={[styles.toolbar_down, { marginHorizontal: 319,marginTop:60 }]}>
                   <Image source={ require('../assets/user.png')}  style={[styles.img,{width: 30,height: 30,}]}/>
               </TouchableOpacity>             
               )}
+              {!isCreate && (
+
+              <TouchableOpacity onPress={handleSignOut} style={[styles.toolbar_down2, { marginHorizontal: 280,marginTop:-40 }]}>
+                  <Image source={ require('../assets/logout.png')}  style={[styles.img,{width: 35,height: 35,}]}/>
+              </TouchableOpacity>             
+              )}
+              {!isCreate && (
+                
+                <TouchableOpacity onPress={handlePressRefresh} style={styles.loginBtn2}>
+                <Image source={require('../assets/zor_event.png')} style={styles.newevent} />
+               </TouchableOpacity>          
+               )}
+
+
+               {!isCreate && (
+              <View style={styles.container}>
+                  <Text style={[styles.titleEvent, { marginTop: 15 }]}>- האירועים שלי -</Text>
+
+                  {data.length === 0 ? (
+                    <Text>אין כרגע אירועים, צור אירוע חדש</Text>
+                  ) : (
+                    data.map(event => (
+                      <TouchableOpacity key={event.id} onPress={() => handlePressHome(event.id)} style={styles.eventContainer}>
+                        <Text style={styles.eventTitle}>{event.id}</Text>
+
+                        <TouchableOpacity onPress={() => handleDeleteData(event.id)} style={styles.deleteButton}>
+                          <Image source={require('../assets/delete.png')} style={styles.icon} />
+
+                        </TouchableOpacity>
+
+                      </TouchableOpacity>
+                    ))
+                  )}
+
+                </View>
+                )}
+
              </View>
 
               {!isLoggedIn && (
@@ -244,35 +330,16 @@ function Main(props) {
                 <Text style={styles.footerText}>כל הזכויות שמורות לליאור ויובל ©</Text>
        
               )}
-
               {!isCreate && (
-               <TouchableOpacity onPress={handlePressRefresh} style={styles.loginBtn}>
-                <Text style={styles.loginText}>צור אירוע חדש</Text>
-              </TouchableOpacity>          
-              )}
+                
+                <Text style={styles.footerText}>כל הזכויות שמורות לליאור ויובל ©</Text>
+        
+               )}
 
 
-              {!isCreate && (
-              <View style={styles.container}>
-                  <Text style={[styles.titleEvent, { marginTop: 15 }]}>- My Events -</Text>
 
-                  {data.length === 0 ? (
-                    <Text>You have no events</Text>
-                  ) : (
-                    data.map(event => (
-                      <TouchableOpacity key={event.id} onPress={() => handlePressHome(event.id)} style={styles.eventContainer}>
-                        <Text style={styles.eventTitle}>{event.id}</Text>
 
-                        <TouchableOpacity onPress={() => handleDeleteData(event.id)} style={styles.deleteButton}>
-                          <Text style={styles.deleteText}>Delete</Text>
-                        </TouchableOpacity>
 
-                      </TouchableOpacity>
-                    ))
-                  )}
-
-                </View>
-                )}
               <Text style={[styles.toolbar_down, { marginTop:550 }]}></Text>
         
               </View>   
@@ -284,9 +351,11 @@ function Main(props) {
     
     const styles = StyleSheet.create({
       container: {
-        flex: 1,
+        flex: 0,
         alignItems: 'center',
         justifyContent: 'center',
+        left: -150,
+        top: -300,
 
       },
       toolbar_bag: {
@@ -294,12 +363,13 @@ function Main(props) {
         left: 5,
         top: -50,
         zIndex: 1, // To ensure the button is on top of other elements
+
       },
       innerContainer: {
         flex: 1,
         alignItems: 'center',
         backgroundColor: 'white', // רקע לבן
-        marginTop: StatusBar.currentHeight || 40, // הרווח מתחת לסטטוס בר
+        marginTop: StatusBar.currentHeight || 20, // הרווח מתחת לסטטוס בר
       },
       title: {
         fontSize: 40,
@@ -325,16 +395,25 @@ function Main(props) {
       },
       
       loginBtn: {
-        width: 180,
 
-        height: 140,
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 100,
-        marginBottom: 0,
+        marginTop: 70,
+        marginBottom: 320,
+        left: 0,
+
+      },
+      loginBtn2: {
+
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 70,
+        marginBottom: 320,
+        left: -150,
+
       },
       loginText: {
-        color: 'white',
+        color: 'black',
       },
      
     
@@ -384,22 +463,23 @@ function Main(props) {
       eventContainer: {
         marginBottom: 20,
         width: 350,
-        height: 65,
+        height: 60,
         padding: 10,
-        borderRadius: 10,
+        borderRadius: 15,
         borderWidth: 1,
         backgroundColor: '#f0f0f0',
+        alignItems: 'center', // ממקם את התוכן במרכז האופקי
+
         shadowOffset: {
           width: 0,
           height: 2,
         },
-        shadowOpacity: 0.25,
+        shadowOpacity: 1.25,
         shadowRadius: 3.84,
         elevation: 5,
       },
       eventTitle: {
         fontSize: 30,
-        fontWeight: 'bold',
         marginBottom: 5,
         backgroundColor: '#f0f0f0',
 
@@ -421,10 +501,7 @@ function Main(props) {
         position: 'absolute',
         top: 15,
         right: 10,
-        backgroundColor: 'red',
-        paddingVertical: 8,
-        paddingHorizontal: 15,
-        borderRadius: 10,
+   
       },
       deleteText: {
         color: 'white',
@@ -459,10 +536,39 @@ function Main(props) {
         position: 'absolute',
         bottom: 20, // מרחק מהתחתית
         fontSize: 13,
-        color: 'gray',
+        color: 'black',
         marginTop: 150  // לשמור על היחס המקורי של התמונה
 
       },
+      icon: {
+        width: 28,
+        height: 28,
+      },
+      newevent: {
+        width: 210,
+        height: 37,
+      },
+      gif: {
+        width: '100%',
+        height: '115%',
+        marginTop: -20, // מרווח מהחלק העליון, לשמירת מראה מאוזן
+
+      },
+
+      footerText2: {
+        position: 'absolute',
+        bottom: 740, // מרחק מהתחתית, ייתכן שתצטרך להתאים אותו לפי גודל המסך שלך
+        fontSize: 40, // גודל גופן גדול לכותרת
+        color: 'black', // צבע הטקסט שחור
+        marginTop: 10, // מרווח מהחלק העליון, לשמירת מראה מאוזן
+        alignSelf: 'center', // יישור הטקסט במרכז האופקי
+        fontWeight: 'bold', // הפיכת הכותרת ליותר בולטת עם גופן מודגש
+        textShadowColor: 'rgba(0, 0, 0, 0.75)', // צל לתלת מימדיות קלה
+        textShadowOffset: { width: -1, height: 1 }, // מיקום הצל
+        textShadowRadius: 10, // רדיוס הצל
+      }
+      
+      
     });
     export default Main;
 
