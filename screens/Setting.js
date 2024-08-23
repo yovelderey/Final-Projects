@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, TextInput, ScrollView, StatusBar, TouchableOpacity, Image, Text, Alert, StyleSheet, Modal, Button } from 'react-native';
+import { View, TextInput, ImageBackground,ScrollView, StatusBar, TouchableOpacity, Image, Text, Alert, StyleSheet, Modal, Button } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
@@ -79,15 +79,12 @@ function Setting(props) {
   return (
     <ScrollView contentContainerStyle={styles.scrollViewContainer}>
       <View style={styles.innerContainer}>
-        <StatusBar backgroundColor="#000" barStyle="light-content" />
-        
-        <Text style={[styles.title, { marginTop: 10 }]}>החשבון שלי</Text>
-
-        {/* Re-added TouchableOpacity */}
-        <TouchableOpacity style={[styles.toolbar_down2, { marginHorizontal: 0, marginTop: 10 ,marginBottom: 100,}]}>
-          <Image source={require('../assets/rec.png')} style={[styles.img, { width: 150, height: 150 }]} />
-          <Text style={{ marginTop: -80, marginHorizontal: 25 }}>{displayText}</Text>
-        </TouchableOpacity>
+      <ImageBackground
+          source={require('../assets/ezorishi.png')} // טוען את ה-GIF מהתיקייה המקומית
+          style={styles.gif}
+          resizeMode="cover" // כדי שה-GIF יכסה את כל המסך
+        />          
+       <Text style={{ marginTop: -620, marginHorizontal: 25, fontSize: 18 }}>שלום, {displayText}</Text>
 
 
         <View style={styles.toolbar_bag}>
@@ -105,21 +102,25 @@ function Setting(props) {
 
 
 
-          <TouchableOpacity onPress={() => navigation.navigate('Manager')} style={[styles.toolbar_down, { marginHorizontal: 0, marginTop: 70 }]}>
+          <TouchableOpacity onPress={() => navigation.navigate('Manager')} style={[styles.toolbar_down, { marginHorizontal: 0, marginTop: 20 }]}>
             <Text style={styles.text}>איפוס סיסמה</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={handleSignOut} style={[styles.toolbar_down, styles.signOutButton]}>
-            <Text style={styles.text}>התנתק</Text>
-          </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => navigation.navigate('Main')} style={[styles.toolbar_down, { marginHorizontal: 0, marginTop: 20 }]}>
-            <Text style={styles.text}>חזור</Text>
-          </TouchableOpacity>
+
         </View>
 
-        <Text style={styles.title_toolbar_yovel}> יובל ליאור פיתח אפליקציות | ylgroup</Text>
+        <TouchableOpacity 
+        onPress={handleSignOut}
+        style={[styles.showPasswordButton, { position: 'absolute', top: '84%', left: '70%' }]}>
+          <Text style={styles.text2}>התנתק</Text>
+        </TouchableOpacity>
 
+        <TouchableOpacity 
+        onPress={() => navigation.navigate('Main')}
+        style={[styles.showPasswordButton, { position: 'absolute', top: '93%', left: '61%' }]}>
+          <Text style={styles.text}>חזור</Text>
+        </TouchableOpacity>
 
         {/* Address Book Modal */}
         <Modal
@@ -190,8 +191,7 @@ const styles = StyleSheet.create({
   innerContainer: {
     flex: 1,
     alignItems: 'center',
-    marginTop: StatusBar.currentHeight || 40,
-    paddingHorizontal: 20,
+
   },
   title: {
     fontSize: 24,
@@ -204,23 +204,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   toolbar_down: {
-    width: '100%',
-    padding: 15,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
-    marginVertical: 10,
-    alignItems: 'center',
+    width: '80%',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderColor: '#000', // Black border
+    borderWidth: 2, // Thickness of the border
+    borderRadius: 5, // Round corners (optional)
+    alignItems: 'center', // Center the text horizontally
+    justifyContent: 'center', // Center the text vertically
   },
   signOutButton: {
     backgroundColor: 'red',
   },
   text: {
     fontSize: 16,
+    color: '#000',
+    fontWeight: '600',
+  },
+  text2: {
+    fontSize: 20,
     color: '#000',
     fontWeight: '600',
   },
@@ -254,6 +256,11 @@ const styles = StyleSheet.create({
   star: {
     fontSize: 18,
     marginVertical: 5,
+  },
+  gif: {
+    width: '100%',
+    height: '100%',
+
   },
 });
 

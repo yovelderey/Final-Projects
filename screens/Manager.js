@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, TextInput, Alert, ScrollView, StatusBar, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import { View, TextInput, Alert, ScrollView, StatusBar, TouchableOpacity, Text, StyleSheet, ImageBackground } from 'react-native';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
@@ -7,6 +7,8 @@ import 'firebase/compat/firestore';
 function Manager(props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showThankYou, setShowThankYou] = useState(false); // סטייט למסך התודה
 
   const firebaseConfig = {
     apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
@@ -24,16 +26,7 @@ function Manager(props) {
 
   const validatePassword = (password) => {
     const minLength = 8;
-    const hasUpperCase = /[A-Z]/.test(password);
-    const hasLowerCase = /[a-z]/.test(password);
-    const hasNumber = /[0-9]/.test(password);
-
-    return (
-      password.length >= minLength &&
-      hasUpperCase &&
-      hasLowerCase &&
-      hasNumber
-    );
+    return password.length >= minLength;
   };
 
   const handlePasswordReset = async () => {
@@ -43,21 +36,40 @@ function Manager(props) {
     }
 
     if (!validatePassword(password)) {
-      Alert.alert('שגיאה', 'הסיסמה חייבת להיות באורך של לפחות 8 תווים, לכלול אותיות גדולות וקטנות, מספרים ותווים מיוחדים.');
+      Alert.alert('שגיאה', 'הסיסמה חייבת להיות באורך של לפחות 8 תווים.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert('שגיאה', 'הסיסמאות אינן תואמות.');
       return;
     }
 
     try {
       await firebase.auth().sendPasswordResetEmail(email);
-      Alert.alert('הצלחה', 'מייל לאיפוס סיסמה נשלח.');
+      setShowThankYou(true); // הצגת מסך התודה עם תמונת רקע
+      setTimeout(() => {
+        setShowThankYou(false);
+        props.navigation.navigate('Setting'); // חזרה למסך אחר אחרי 4 שניות
+      }, 4000);
     } catch (error) {
       console.error(error);
       Alert.alert('שגיאה', 'שליחת המייל לאיפוס סיסמה נכשלה.');
     }
   };
 
+  if (showThankYou) {
+    return (
+      <ImageBackground
+        source={require('../assets/toda.png')} // נתיב לתמונה שלך
+        style={styles.imageBackground}
+      >
+        {/* ניתן להוסיף אלמנטים נוספים אם יש צורך */}
+      </ImageBackground>
+    );
+  }
+
   return (
-    <ScrollView contentContainerStyle={styles.scrollViewContainer}>
       <View style={styles.innerContainer}>
         <StatusBar backgroundColor="#000" barStyle="light-content" />
         <Text style={styles.title}>איפוס סיסמה</Text>
@@ -69,6 +81,7 @@ function Manager(props) {
             value={email}
             onChangeText={(text) => setEmail(text)}
             keyboardType="email-address"
+            textAlign="right"
           />
           <TextInput
             style={styles.input}
@@ -76,9 +89,18 @@ function Manager(props) {
             value={password}
             onChangeText={(text) => setPassword(text)}
             secureTextEntry={true}
+            textAlign="right"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="אמת סיסמה חדשה"
+            value={confirmPassword}
+            onChangeText={(text) => setConfirmPassword(text)}
+            secureTextEntry={true}
+            textAlign="right"
           />
           <Text style={styles.passwordHint}>
-            הסיסמה חייבת להיות באורך של לפחות 8 תווים, לכלול אותיות גדולות וקטנות, מספרים ותווים מיוחדים.
+            הסיסמה חייבת להיות באורך של לפחות 8 תווים.
           </Text>
 
           <View style={styles.buttonContainer}>
@@ -86,76 +108,98 @@ function Manager(props) {
               <Text style={styles.buttonText}>איפוס סיסמה</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => props.navigation.navigate('Setting')} style={styles.button}>
+            <TouchableOpacity onPress={() => props.navigation.navigate('Setting')} style={styles.button2}>
               <Text style={styles.buttonText}>חזרה</Text>
             </TouchableOpacity>
           </View>
+
         </View>
+        <Text style={styles.footerText}>כל הזכויות שמורות לליאור ויובל ©</Text>
+
       </View>
-    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollViewContainer: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
+
   innerContainer: {
     flex: 1,
     alignItems: 'center',
-    marginTop: StatusBar.currentHeight || 40,
+    backgroundColor: '#fff'
   },
   title: {
     fontSize: 24,
     color: '#000',
-    marginBottom: 40, // רווח מתחת לכותרת
+    marginBottom: 40,
     fontWeight: 'bold',
-    marginTop: 20,
+    marginTop: 70,
+    color: '#EA47A7',
   },
   form: {
     width: '100%',
     alignItems: 'center',
   },
   input: {
-    width: '100%',
+    width: '90%',
     height: 50,
     borderColor: '#000',
     borderWidth: 2,
     borderRadius: 8,
-    marginBottom: 20, // רווח בין שדות האינפוט
+    marginBottom: 20,
     paddingLeft: 10,
     fontSize: 18,
   },
   passwordHint: {
     color: '#888',
     fontSize: 14,
-    marginBottom: 30, // רווח בין ההסבר לכפתורים
+    marginBottom: 30,
     textAlign: 'center',
   },
   buttonContainer: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: 50, // רווח בתחתית המסך
+    marginBottom: 50,
   },
   button: {
-    width: '100%',
-    padding: 15,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 5,
-    marginVertical: 10,
-    alignItems: 'center',
+    width: '80%',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderColor: '#000', // Black border
+    borderWidth: 2, // Thickness of the border
+    borderRadius: 5, // Round corners (optional)
+    alignItems: 'center', // Center the text horizontally
+    justifyContent: 'center', // Center the text vertically
+    marginBottom: 15,
+    backgroundColor: '#EA47A7'
+  },
+  button2: {
+    width: '80%',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderColor: '#000', // Black border
+    borderWidth: 2, // Thickness of the border
+    borderRadius: 5, // Round corners (optional)
+    alignItems: 'center', // Center the text horizontally
+    justifyContent: 'center', // Center the text vertically
+    marginBottom: 15,
   },
   buttonText: {
     fontSize: 16,
     color: '#000',
     fontWeight: '600',
+  },
+  imageBackground: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  footerText: {
+    position: 'absolute',
+    bottom: 20, // מרחק מהתחתית
+    fontSize: 13,
+    color: 'black',
+    marginTop: 150  // לשמור על היחס המקורי של התמונה
+
   },
 });
 

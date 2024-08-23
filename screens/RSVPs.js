@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity,Modal, FlatList, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { View, Text,Image, ImageBackground,TextInput, TouchableOpacity,Modal, FlatList, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
@@ -215,6 +215,8 @@ const RSVPs = (props) => {
       setModalVisible(true);
       startTimer();
       const apiUrl = 'http://192.168.1.213:5000/send-messages';
+      //const apiUrl = 'http://172.20.10.2:5000/send-messages';
+      //telephone ^^^
       const recipients = contacts.map(contact => contact.phoneNumbers).filter(num => num.trim() !== '');
       const formattedContacts = recipients.map(formatPhoneNumber);
       const response = await fetch(apiUrl, {
@@ -264,8 +266,9 @@ const RSVPs = (props) => {
     try {
       setModalVisible(true);
       startTimer_2();
-      const apiUrl = 'http://192.168.1.213:5000/trigger-wait-for-response';
-  
+      const apiUrl = 'http://77.137.76.253:5000/trigger-wait-for-response';
+      //const apiUrl = 'http://172.20.10.2:5000/trigger-wait-for-response';
+      //telephone ^^^
       const recipients = contacts.map(contact => contact.phoneNumbers).filter(num => num.trim() !== '');
       const formattedContacts = recipients.map(formatPhoneNumber);
       const response = await fetch(apiUrl, {
@@ -327,9 +330,11 @@ const RSVPs = (props) => {
       const maybe = ref(database, `Events/${user.uid}/${id}/maybe/`);
       set(maybe, 0);
 
-      const no_cuming = ref(database, `Events/${user.uid}/${id}/yes_caming/`);
+      const no_cuming = ref(database, `Events/${user.uid}/${id}/no_cuming/`);
       set(no_cuming, 0);
     }
+    console.log('Refresh button finish');
+
   };
   const handlemessage = () => {
     Alert.alert(
@@ -343,6 +348,7 @@ const RSVPs = (props) => {
         {
           text: "אישור",
           onPress: () => {
+            handleReset();
             sendMessageToRecipients();
           },
         },
@@ -386,25 +392,17 @@ const RSVPs = (props) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header2}>הכנס הודעה לשליחה</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="הכנס את ההודעה שלך"
-        value={message}
-        onChangeText={setMessage}
-        multiline
-      />
+          <ImageBackground
+          source={require('../assets/send_mesege_back.png')} // טוען את ה-GIF מהתיקייה המקומית
+          style={styles.gif}
+          resizeMode="cover" // כדי שה-GIF יכסה את כל המסך
+        />   
 
-      <TouchableOpacity onPress={handlemessage} style={styles.sendButton}>
-        <Text style={styles.buttonText}>שלח הודעה</Text>
+          <TouchableOpacity onPress={() => props.navigation.navigate('ListItem', { id })}>
+        <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
       </TouchableOpacity>
 
-      <TouchableOpacity
-        onPress={() => props.navigation.navigate('ResponsesScreen', { id, responses })}
-        style={styles.viewResponsesButton}
-      >
-        <Text style={styles.buttonText}>הצג תגובות</Text>
-      </TouchableOpacity>
+      <Text style={styles.header2}>שליחת הודעות</Text>
 
       <View style={styles.counterContainer}>
         <View style={styles.counterItemGreen}>
@@ -424,10 +422,30 @@ const RSVPs = (props) => {
       <TouchableOpacity onPress={handleRefresh} style={styles.triggerButton}>
         <Text style={styles.buttonText}>רענן נתונים</Text>
       </TouchableOpacity>
+      <Text style={styles.header3}>הכנס את ההודעה שברצונך המוזמנים יקבלו בעת שליחה</Text>
+      <Text style={styles.header3}>למטה מוצג טמפלייט</Text>
 
-      <TouchableOpacity onPress={() => props.navigation.navigate('ListItem', { id })} style={styles.backButton}>
-        <Text style={styles.buttonText}>חזור</Text>
+
+      <TextInput
+        style={styles.input}
+        placeholder="הכנס את ההודעה שלך"
+        value={message}
+        onChangeText={setMessage}
+        multiline
+      />
+
+      <TouchableOpacity onPress={handlemessage} style={styles.sendButton}>
+        <Text style={styles.buttonText}>שלח הודעה</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={() => props.navigation.navigate('ResponsesScreen', { id, responses })}
+        style={styles.viewResponsesButton}
+      >
+        <Text style={styles.buttonText}>הצג תגובות</Text>
+      </TouchableOpacity>
+
+
 
       <View style={styles.tableContainer}>
         <Text style={styles.tableHeader}>מספרי טלפון שנשלחה אליהם הודעה</Text>
@@ -435,8 +453,9 @@ const RSVPs = (props) => {
           data={filteredContacts}
           renderItem={renderItem}
           keyExtractor={(item) => item.recordID}
-          style={styles.list}
+          style={[styles.list, { maxHeight: 180 }]} // מגביל את הגובה של הטבלה
           ItemSeparatorComponent={() => <View style={styles.separator} />}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 10 }} // מרווח פנימי לטבלה
         />
       </View>
 
@@ -489,7 +508,15 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 16,
     color: '#343a40',
-    marginTop: 40, // הוסף מרווח מעל התיבה
+    marginTop: -775, // הוסף מרווח מעל התיבה
+    textAlign: 'center', // מרכז את הטקסט בתוך הרכיב
+  },
+  header3: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#343a40',
+    marginTop: -5, // הוסף מרווח מעל התיבה
     textAlign: 'center', // מרכז את הטקסט בתוך הרכיב
   },
   input: {
@@ -522,7 +549,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sendButton: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#ff5733',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -591,11 +618,9 @@ const styles = StyleSheet.create({
     color: '#495057',
   },
   tableContainer: {
-    marginTop: 24,
-    borderWidth: 1,
-    borderColor: '#dee2e6',
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
+    marginTop: -5,
+
+    borderRadius: 18,
   },
   tableHeader: {
     fontSize: 18,
@@ -618,7 +643,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   viewResponsesButton: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#ff69b4',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -626,11 +651,13 @@ const styles = StyleSheet.create({
   },
     // שאר הסגנונות שלך
     triggerButton: {
-      backgroundColor: '#17a2b8',
+      backgroundColor: '#ff69b4',
       padding: 12,
       borderRadius: 8,
       alignItems: 'center',
-      marginBottom: 16,
+      marginBottom: 26,
+      marginTop: 20,
+
     },
     buttonText: {
       color: '#ffffff',
@@ -665,6 +692,39 @@ const styles = StyleSheet.create({
     cancelButtonText: {
       color: 'white',
       fontSize: 16,
+    },
+    imageback: {
+      width: 40,
+      height: 40,
+      marginTop: -810,
+      marginRight: 300,
+    },
+    list: {
+      flexGrow: 0, // כדי לאפשר גלילה
+    },
+    separator: {
+      height: 1,
+      backgroundColor: '#dddddd',
+    },
+    gif: {
+      width: '101%',
+      height: '101%',
+  
+    },
+    itemContainer: {
+      borderRadius: 5, // מוסיף פינות מעוגלות
+      shadowColor: '#000', // מוסיף צל
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.3,
+      shadowRadius: 2,
+      elevation: 2, // הגדרה עבור Android
+      marginBottom: 12,
+
+    },
+    itemText: {
+      fontSize: 16,
+      color: '#000',
+
     },
 });
 

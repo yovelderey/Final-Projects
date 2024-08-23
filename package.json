@@ -35,12 +35,14 @@
     "expo-firebase-recaptcha": "^1.4.4",
     "expo-image-picker": "~15.0.7",
     "expo-status-bar": "~1.12.1",
+    "file-saver": "^2.0.5",
     "firebase": "^10.12.5",
     "react": "18.2.0",
     "react-native": "^0.74.5",
     "react-native-calendar-strip": "^1.4.2",
     "react-native-calendars": "^1.1303.0",
     "react-native-contacts": "^7.0.8",
+    "react-native-fs": "^2.20.0",
     "react-native-gesture-handler": "~2.16.1",
     "react-native-image-picker": "^7.1.2",
     "react-native-localize": "^3.2.1",
@@ -59,7 +61,8 @@
     "react-native-webview": "^13.8.6",
     "react-navigation": "^5.0.0",
     "reactotron-react-native": "^5.0.4",
-    "reactotron-redux": "^3.1.4"
+    "reactotron-redux": "^3.1.4",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@babel/core": "^7.24.8"

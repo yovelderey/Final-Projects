@@ -153,13 +153,16 @@ const ResponsesScreen = (props) => {
         />
       </View>
 
-      <TouchableOpacity onPress={handleRefresh} style={styles.refreshButton}>
-        <Text style={styles.buttonText}>איפוס נתונים</Text>
-      </TouchableOpacity>
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity onPress={handleRefresh} style={styles.refreshButton}>
+          <Text style={styles.buttonText}>איפוס נתונים</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-        <Text style={styles.buttonText}>חזור</Text>
-      </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Text style={styles.buttonText}>חזור</Text>
+        </TouchableOpacity>
+      </View>
+
 
     </View>
   );
@@ -171,6 +174,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
     backgroundColor: '#f8f9fa',
+    
   },
   title: {
     fontSize: 24,
@@ -178,6 +182,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: '#343a40',
     textAlign: 'center',
+    marginTop: 35,
   },
   tableContainer: {
     backgroundColor: '#ffffff',
@@ -185,22 +190,21 @@ const styles = StyleSheet.create({
     borderColor: '#ced4da',
     borderWidth: 1,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 6,
     height: 180, // גובה קבוע עבור כל טבלה
   },
-tableTitle: {
-  fontSize: 20,
-  fontWeight: 'bold',
-  color: '#ffffff',
-  textAlign: 'center',
-  backgroundColor: '#007bff',
-  paddingVertical: 8,
-  paddingHorizontal: 16,
-  borderRadius: 4,
-  marginBottom: 12,
-  textTransform: 'uppercase',
-},
-
+  tableTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textAlign: 'center',
+    backgroundColor: '#ff69b4',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 4,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+  },
   responseContainer: {
     padding: 12,
     borderBottomWidth: 1,
@@ -215,30 +219,31 @@ tableTitle: {
     backgroundColor: '#ced4da',
     marginVertical: 16,
   },
+  buttonContainer: {
+    flexDirection: 'column',
+    alignItems: 'center', // מרכז את הכפתורים באמצע
+    justifyContent: 'center', // וודא שהכפתורים מיושרים בצורה אנכית
+    marginTop: 20, // רווח מהטבלאות לכפתורים
+  },
   refreshButton: {
-    backgroundColor: '#17a2b8',
-    padding: 16, // הגדלת גובה הכפתור
+    backgroundColor: '#ff5733',
+    padding: 8, // הגדלת גובה הכפתור
     borderRadius: 8,
     alignItems: 'center',
-    position: 'absolute',
-    bottom: 80, // מרחק מהתחתית
-    left: 16,
-    right: 16,
+    width: '80%',
+    marginBottom: 12, // רווח בין הכפתורים
   },
   backButton: {
-    backgroundColor: '#6c757d',
-    padding: 16, // הגדלת גובה הכפתור
+    backgroundColor: '#000',
+    padding: 8, // הגדלת גובה הכפתור
     borderRadius: 8,
     alignItems: 'center',
-    position: 'absolute',
-    bottom: 16, // מרחק מהתחתית
-    left: 16,
-    right: 16,
+    width: '80%',
+
   },
   buttonText: {
     color: '#ffffff',
     fontSize: 18, // הגדלת גודל הטקסט בכפתורים
-    fontWeight: 'bold',
   },
 });
 

@@ -9,6 +9,9 @@ import 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
+import XLSX from 'xlsx';
+//import RNFS from 'react-native-fs';
+
 
 const firebaseConfig = {
   apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
@@ -24,8 +27,6 @@ if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
 
-
-
 const Gift = (props) => {
   const [contacts, setContacts] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
@@ -33,50 +34,91 @@ const Gift = (props) => {
   const [newContactPhone, setNewContactPhone] = useState('');
   const [user, setUser] = useState(null);
   const id = props.route.params.id;
-  const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
   const auth = getAuth();
   const database = getDatabase();
-  
+  const [totalPrice, setTotalPrice] = useState(0); // סטייט לסכום הכולל
+  const insets = useSafeAreaInsets();
+
   useEffect(() => {
     const requestPermissions = async () => {
       if (Platform.OS === 'android') {
-        await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
           {
-            title: 'Contacts Permission',
-            message: 'This app needs access to your contacts.',
-            buttonPositive: 'OK',
-            buttonNegative: 'Cancel',
+            title: 'ההרשאה דרושה',
+            message: 'אנא אפשר גישה לכתיבה על האחסון',
+            buttonNeutral: 'לא להפעיל',
+            buttonNegative: 'בטל',
+            buttonPositive: 'אישור',
           }
         );
-      }
-
-      onAuthStateChanged(auth, (currentUser) => {
-        if (currentUser) {
-          setUser(currentUser);
-          const databaseRef = ref(database, `Events/${currentUser.uid}/${id}/contacts`);
-          onValue(databaseRef, (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-              const contactsArray = Object.values(data);
-
-              setContacts(contactsArray);
-            } else {
-              setContacts([]);
-            }
-          });
-        } else {
-          setUser(null);
-          setContacts([]);
+        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+          console.log('Permission to write storage was denied');
         }
-      });
+      }
     };
+
+    const calculateTotalPrice = (contactsArray) => {
+      const total = contactsArray.reduce((sum, contact) => {
+        return sum + (parseFloat(contact.newPrice) || 0);
+      }, 0);
+      setTotalPrice(total);
+    };
+
+    onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        const databaseRef = ref(database, `Events/${currentUser.uid}/${id}/contacts`);
+        onValue(databaseRef, (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            const contactsArray = Object.values(data);
+            setContacts(contactsArray);
+            calculateTotalPrice(contactsArray);
+          } else {
+            setContacts([]);
+            setTotalPrice(0); // אפס את הסכום הכולל אם אין אנשי קשר
+          }
+        });
+      } else {
+        setUser(null);
+        setContacts([]);
+        setTotalPrice(0);
+      }
+    });
 
     requestPermissions();
   }, []);
 
+  const exportToExcel = async () => {
+    const data = contacts.map(contact => ({
+      Name: contact.displayName,
+      Phone: contact.phoneNumbers,
+      Price: contact.newPrice || 0,
+    }));
 
+    // יצירת גליון עבודה
+    const ws = XLSX.utils.json_to_sheet(data);
+
+    // יצירת חוברת עבודה
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Contacts");
+
+    // יצירת קובץ אקסל בפורמט array
+    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+
+    // שמירת הקובץ במכשיר
+    const path = `${RNFS.DocumentDirectoryPath}/Contacts.xlsx`;
+    
+    try {
+      await RNFS.writeFile(path, Buffer.from(excelBuffer).toString('base64'), 'base64');
+      Alert.alert('הצלחה', `קובץ אקסל נשמר בהצלחה ב-${path}`);
+    } catch (error) {
+      console.error('Error saving file:', error);
+      Alert.alert('שגיאה', 'הייתה בעיה בשמירת הקובץ');
+    }
+  };
 
   const updatePrice = (recordID, price) => {
     const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordID}`);
@@ -85,6 +127,11 @@ const Gift = (props) => {
     );
     setContacts(updatedContacts);
     set(databaseRef, { ...contacts.find(contact => contact.recordID === recordID), newPrice: price });
+    
+    const total = updatedContacts.reduce((sum, contact) => {
+      return sum + (parseFloat(contact.newPrice) || 0);
+    }, 0);
+    setTotalPrice(total);
   };
 
   const filteredContacts = contacts.filter(contact =>
@@ -141,8 +188,11 @@ const Gift = (props) => {
       )}
 
       <Text style={styles.contactCount}>כמות אנשי קשר: {contacts.length}</Text>
+      <Text style={styles.totalPriceText}>סכום כולל: {totalPrice} ₪</Text>
 
-
+      <TouchableOpacity onPress={exportToExcel} style={styles.exportButton}>
+    <Text style={styles.exportButtonText}>ייצא לאקסל</Text>
+  </TouchableOpacity>
 
       <TouchableOpacity
         onPress={() => props.navigation.navigate('ListItem', { id })}
@@ -255,6 +305,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 5,
   },
+  totalPriceText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    marginTop: 10,
+  },
   modalButton: {
     backgroundColor: '#007bff',
     padding: 10,
@@ -284,6 +340,17 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingHorizontal: 10,
   },
+  searchInput: {
+    height: 40, // גובה הקלט
+    borderColor: '#ccc', // צבע הגבול
+    borderWidth: 1, // עובי הגבול
+    borderRadius: 8, // עיגול הפינות
+    paddingHorizontal: 10, // מרווח פנימי אופקי
+    fontSize: 16, // גודל הפונט
+    color: '#333', // צבע הטקסט
+    backgroundColor: '#fff', // צבע הרקע
+    textAlign: 'right', // יישור הטקסט לימין
+  },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -304,6 +371,19 @@ const styles = StyleSheet.create({
     width: 50,
     height: 50,
   },
+  exportButton: {
+    backgroundColor: '#4CAF50',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginVertical: 10,
+  },
+  exportButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  
 });
 
 export default Gift;

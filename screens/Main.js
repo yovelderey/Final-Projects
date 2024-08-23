@@ -74,6 +74,22 @@ function Main(props) {
     );
   };
   
+  const deleteAlert = async (idToDelete) => {
+    try {
+        const user = firebase.auth().currentUser;
+        if (user) {
+            const database = getDatabase();
+            const databaseRef = ref(database, 'Events/' + user.uid + '/' + idToDelete);
+            await remove(databaseRef);
+            console.log('Event deleted successfully');
+            setData(data.filter(event => event.id !== idToDelete));
+        } else {
+            console.error('No user is currently authenticated.');
+        }
+    } catch (error) {
+        console.error('Error deleting event:', error);
+    }
+};
 
 
   useEffect(() => {
@@ -256,16 +272,11 @@ const handleSignOut = () => {
 
               {!isCreate && (
 
-              <TouchableOpacity onPress={() => props.navigation.navigate('Setting')} style={[styles.toolbar_down, { marginHorizontal: 319,marginTop:60 }]}>
+              <TouchableOpacity onPress={() => props.navigation.navigate('Setting')} style={[styles.toolbar_down, { marginHorizontal: 317,marginTop:60 }]}>
                   <Image source={ require('../assets/user.png')}  style={[styles.img,{width: 30,height: 30,}]}/>
               </TouchableOpacity>             
               )}
-              {!isCreate && (
 
-              <TouchableOpacity onPress={handleSignOut} style={[styles.toolbar_down2, { marginHorizontal: 280,marginTop:-40 }]}>
-                  <Image source={ require('../assets/logout.png')}  style={[styles.img,{width: 35,height: 35,}]}/>
-              </TouchableOpacity>             
-              )}
               {!isCreate && (
                 
                 <TouchableOpacity onPress={handlePressRefresh} style={styles.loginBtn2}>
