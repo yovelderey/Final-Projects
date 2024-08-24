@@ -182,15 +182,7 @@ const Task = (props) => {
       <View key={`${index}-4`} style={styles.cell}>
         <Text>{item[4]}</Text>
       </View>
-      <TouchableOpacity
-        style={styles.customAction}
-        onPress={() => {
-          console.log('Custom action button pressed');
-          handleCustomAction(index);
-        }}
-      >
-        <Text style={styles.customActionText}>פעולה מותאמת אישית</Text>
-      </TouchableOpacity>
+
     </View>
   );
   
@@ -327,13 +319,12 @@ const Task = (props) => {
           renderItem={renderItem}
           keyExtractor={(item, index) => index.toString()}
           contentContainerStyle={styles.table}/> 
+          
       </View>
 
-      <View style={styles.roundedBackground2}>
-        <Text style={styles.sumText2}>
+      <Text style={styles.sumText2}>
           משימות שבוצעו: {checkedCount}
-        </Text>
-      </View>
+      </Text>
 
 
     <TouchableOpacity
@@ -343,11 +334,11 @@ const Task = (props) => {
       </TouchableOpacity>
 
       <TouchableOpacity 
-        onPress={() => props.navigation.navigate('ListItem', { id })}
-        style={[styles.showPasswordButton, { position: 'absolute', top: '92%', left: '4%' }]}
-      >
-        <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
-      </TouchableOpacity>
+          onPress={() => props.navigation.navigate('ListItem', { id })}
+          style={[styles.showPasswordButton, { position: 'absolute', top: '7%', left: '4%' }]}
+        >
+          <Image source={require('../assets/back_icon2.png')} style={styles.backIcon} />
+        </TouchableOpacity>
     </View>
   );
 };
@@ -355,155 +346,81 @@ const Task = (props) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    paddingHorizontal: 10,
   },
-  table: {
-    borderWidth: 1,
-    borderColor: '#000',
-    width: '100%',
+  background: {
+    flex: 1,
+    resizeMode: 'cover',
+    justifyContent: 'center',
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    justifyContent: 'center',
+    marginTop: 20,
 
   },
   moreContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 15,
-    marginTop: 20,
-
-  },
-  leftIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    
-  },
-  addButton: {
-    marginRight: 20, // מרווח גדול יותר בין האייקונים
-  },
-  removeButton: {
-    marginRight: 10, // מרווח גדול יותר בין האייקונים
-  },
-
-  showPasswordButton: {
-    marginRight: 295,
-  },
-  icon: {
-    width: 24,
-    height: 24,
-  },
-  icon2: {
-    width: 18,
-    height: 18,
+    marginVertical: 15,
   },
   tableContainer: {
-    borderColor: '#000',
-    width: '98%',
-    marginTop: 0,
-    height: 500, // גובה קבוע לפריים
+    flex: 1,
+    marginTop: -10,
+  },
+  table: {
+    paddingBottom: 10,
 
   },
-
-
+ 
   row: {
     flexDirection: 'row',
-  },
-  cell: {
-    borderWidth: 1,
-    borderColor: '#000',
-    padding: 10,
-    width: 90, // Adjust width as needed
-    textAlign: 'center',
-  },
-
-
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderWidth: 1,
-    borderColor: '#000',
-    justifyContent: 'center',
     alignItems: 'center',
-    margin: 8,
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: '#C0C0C0',
   },
-
-
-  backIcon: {
-    width: 50,
-    height: 50,
-
-  },
-
-  customActionText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  deleteButton: {
-    backgroundColor: 'red',
-    padding: 10,
-    margin: 5,
-    borderRadius: 5,
-  },
-  deleteButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  refreshButton: {
-    backgroundColor: 'blue',
-    padding: 10,
-    borderRadius: 5,
-    marginTop: 20,
-  },
-  refreshButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  currencySymbol: {
-    fontSize: 24, // Smaller font size for the currency symbol
-    color: '#ff69b4', // White color for the currency symbol
-    fontWeight: 'bold',
-  },
-    addButton: {
-    backgroundColor: '#2196F3',
-    padding: 10,
-    borderRadius: 5,
-
-  },
-  addButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  icon: {
+  checkbox: {
     width: 30,
     height: 30,
-
-
-  },
-  topBar: {
-    backgroundColor: '#ff69b4',
-    width: '100%',
-    alignItems: 'center',
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#FFC0CB',
     justifyContent: 'center',
-    paddingVertical: 10,
-  },
-  title: {
-    fontSize: 24,
-    color: '#000',
-    marginTop: 15,
+    alignItems: 'center',
+    textAlign: 'center',
 
+    marginRight: 10,
   },
-  title3: {
-    fontSize: 20,
-    color: '#000',
-
+  checkboxText: {
+    fontSize: 18,
+    color: '#FFC0CB',
   },
-
+  cell: {
+    flex: 1,
+    height: 30,
+    borderColor: '#C0C0C0',
+    borderWidth: 1,
+    paddingHorizontal: 5,
+    borderRadius: 4,
+    marginRight: 10,
+  },
+  customAction: {
+    backgroundColor: '#FFC0CB',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 4,
+  },
+  customActionText: {
+    color: '#fff',
+  },
   largeButton: {
     width: '40%',
     height: 40,
-    backgroundColor: '#ff69b4',
+    backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
     marginVertical: 20,
@@ -513,26 +430,48 @@ const styles = StyleSheet.create({
     marginTop: 70,
 
   },
-
-
-
-
-  currencySymbol: {
-    fontSize: 24, // Smaller font size for the currency symbol
-    color: '#ff69b4', // White color for the currency symbol
+  title: {
+    fontSize: 22,
     fontWeight: 'bold',
+    color: '#000',
   },
-  
-  roundedBackground2: {
-    alignItems: 'center', // Center the text within the background
-    justifyContent: 'center',
-    marginTop: 10,
+  title3: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  showPasswordButton: {
+    padding: 5,
+  },
+  icon: {
+    width: 30,
+    height: 30,
+  },
+  leftIcons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  removeButton: {
+    marginLeft: 10,
+    padding: 5,
+  },
+  icon2: {
+    width: 20,
+    height: 20,
 
   },
-
+  backIcon: {
+    width: 40,
+    height: 40,
+  },
   sumText2: {
-    fontSize: 20, // Adjust the font size as needed
-    color: 'black', // Set the text color to white for better contrast
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#000',
+    textAlign: 'center',
+    marginBottom: -60,
+
   },
 });
 

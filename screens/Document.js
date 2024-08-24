@@ -20,10 +20,10 @@ if (!firebase.apps.length) {
 const storage = firebase.storage();
 
 const Document = (props) => {
-  const [names, setNames] = useState(Array(10).fill(''));
-  const [images, setImages] = useState(Array(10).fill(null));
+  const [names, setNames] = useState(Array(1).fill(''));
+  const [images, setImages] = useState(Array(1).fill(null));
   const [imageUrls, setImageUrls] = useState([]);
-  const [progress, setProgress] = useState(Array(10).fill(0));
+  const [progress, setProgress] = useState(Array(1).fill(0));
   const [userId, setUserId] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [currentImage, setCurrentImage] = useState(null);
@@ -123,7 +123,6 @@ const Document = (props) => {
           setProgress(newProgress);
         },
         error => {
-          console.error("Image upload failed:", error.message);
           Alert.alert("Image upload failed:", error.message);
         },
         () => {
@@ -131,14 +130,14 @@ const Document = (props) => {
             const newImages = [...images];
             newImages[index] = downloadURL;
             setImages(newImages);
-            Alert.alert("Image uploaded successfully!");
+            Alert.alert("התמונה עלתה בהצלחה");
             saveData(); // Ensure to save data after upload
           });
         }
       );
     } catch (error) {
       console.error("Image upload failed:", error.message);
-      Alert.alert("Image upload failed:", error.message);
+      Alert.alert("התמונה נכשלה:", error.message);
     }
   };
 
@@ -204,9 +203,9 @@ const Document = (props) => {
       updates[`users/${userId}/${id}/documents/${index}/image`] = null;
       await database.ref().update(updates);
       
-      Alert.alert("Image deleted successfully!");
+      Alert.alert("התמונה נמחקה!");
     } catch (error) {
-      console.error("Image delete failed:", error.message);
+      console.error("שגיאה בעת מחיקה:", error.message);
       Alert.alert("Image delete failed:", error.message);
     }
   };
@@ -229,9 +228,9 @@ const Document = (props) => {
       const newImageUrls = imageUrls.filter(imageUrl => imageUrl !== url);
       setImageUrls(newImageUrls);
       
-      Alert.alert("Image deleted successfully!");
+      Alert.alert("התמונה נמחקה!");
     } catch (error) {
-      console.error("Image delete failed:", error.message);
+      console.error("שגיאה בעת מחיקה:", error.message);
       Alert.alert("Image delete failed:", error.message);
     }
   };
@@ -242,18 +241,20 @@ const Document = (props) => {
   
     return (
         <View style={styles.container}>
-
-      
           <View style={styles.headerContainer}>
             <Text style={styles.header}>קבלות ומסמכים</Text>
           </View>
           <View style={styles.buttonRow}>
+          <Text style={styles.noItemsText}>          מספר הקבצים: {imageUrls.length} </Text>
+
             <TouchableOpacity onPress={addField} style={styles.addButton}>
               <Text style={styles.addButtonText}>+</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={removeField} style={styles.removeButton}>
               <Text style={styles.removeButtonText}>-</Text>
             </TouchableOpacity>
+
+
           </View>
 
           <ScrollView contentContainerStyle={styles.scrollViewContainer} style={styles.scrollContainer}>
@@ -263,13 +264,8 @@ const Document = (props) => {
               names.map((name, index) => (
                 <View key={index} style={styles.itemBackground}>
                   <View style={styles.itemContainer}>
-                    <TextInput
-                      style={styles.textInput}
-                      value={name}
-                      onChangeText={(text) => handleNameChange(index, text)}
-                      placeholder={`מסמך ${index + 1}`}
-                    />
-                    <TouchableOpacity onPress={() => handleButtonPress(index)} style={styles.button}>
+
+                    <TouchableOpacity onPress={() => handleButtonPress(index)} style={styles.button2}>
                       <Text style={styles.buttonText}>בחר תמונה</Text>
                     </TouchableOpacity>
                     {images[index] && (
@@ -283,10 +279,15 @@ const Document = (props) => {
                       </View>
                     )}
                     <Progress.Bar 
-                      progress={progress[index]} 
-                      width={300} 
-                      style={styles.progressBar} 
-                    />
+                        progress={progress[index]} 
+                        width={345} 
+                        height={12}
+                        color="#4caf50" // צבע ה-Progress Bar עצמו
+                        unfilledColor="#e0e0e0" // צבע החלק הלא ממולא
+                        borderWidth={0} // הסרת הגבול של ה-Progress Bar
+                        borderRadius={6} // עיגול פינות של ה-Progress Bar עצמו
+                        style={styles.progressBar} 
+                      />
                   </View>
                 </View>
               ))
@@ -311,9 +312,9 @@ const Document = (props) => {
       
           <TouchableOpacity 
         onPress={() => props.navigation.navigate('ListItem', { id })}
-        style={[styles.showPasswordButton, { position: 'absolute', top: '92%', left: '4%' }]}
+        style={[styles.showPasswordButton, { position: 'absolute', top: '7%', left: '4%' }]}
       >
-        <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
+        <Image source={require('../assets/back_icon2.png')} style={styles.backIcon} />
       </TouchableOpacity>
         </View>
       );
@@ -330,23 +331,24 @@ const Document = (props) => {
         flex: 1,
       },
       headerContainer: {
-        padding: 15,
         height: 100,
-        marginTop: 0,
-        backgroundColor: '#ff69b4',
+        marginTop: 50,
         alignItems: 'center',
       },
       header: {
         fontSize: 24,
         fontWeight: 'bold',
         color: 'black',
-        marginTop: 40,
+        marginTop: 0,
+        padding: 10,
+
+        alignItems: 'center',
+        textAlign: 'center',
 
       },
-
       backIcon: {
-        width: 50,
-        height: 50,
+        width: 40,
+        height: 40,
     
       },
       backButtonText: {
@@ -363,6 +365,7 @@ const Document = (props) => {
         color: '#888',
         textAlign: 'center',
         marginTop: 20,
+
       },
       itemBackground: {
         backgroundColor: '#fff',
@@ -380,6 +383,10 @@ const Document = (props) => {
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 2,
+        alignItems: 'center',
+        marginHorizontal: 5, // מוסיף רווח בין האיטמים בצדדים
+
+
       },
       textInput: {
         borderColor: 'gray',
@@ -389,13 +396,24 @@ const Document = (props) => {
         backgroundColor: '#fff',
         marginBottom: 10,
         fontSize: 16,
+        width: '100%',
+        alignItems: 'center',
       },
       button: {
-        backgroundColor: '#007BFF',
+        backgroundColor: '#000',
         padding: 12,
         borderRadius: 5,
         marginBottom: 10,
         alignItems: 'center',
+      },
+      button2: {
+        backgroundColor: '#000',
+        padding: 12,
+        borderRadius: 5,
+        marginBottom: 10,
+        width: '100%',
+        alignItems: 'center',
+
       },
       buttonText: {
         color: '#fff',
@@ -416,42 +434,62 @@ const Document = (props) => {
       },
       deleteButton: {
         backgroundColor: '#FF4C4C',
-        padding: 10,
-        borderRadius: 5,
+        width: 80,
+        height: 30,
+        borderRadius: 15,
+        marginTop: 10,
+        padding: 5,
+
       },
       deleteButtonText: {
         color: '#fff',
         fontWeight: 'bold',
         fontSize: 14,
+        textAlign: 'center',
+
       },
       progressBar: {
-        marginTop: 10,
+        borderRadius: 6, // עיגול פינות
+        backgroundColor: '#e0e0e0', // צבע רקע מאחורי ה-Progress Bar
+        marginVertical: 10, // רווח מעל ומתחת ל-Progress Bar
+        shadowColor: '#000', // צבע הצל
+        shadowOffset: { width: 0, height: 2 }, // מיקום הצל
+        shadowOpacity: 0.25, // שקיפות הצל
+        shadowRadius: 3.84, // רדיוס הצל
+        elevation: 5, // גובה הצל למכשירי אנדרואיד
       },
       buttonRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginVertical: 10,
+        justifyContent: 'flex-end', // Align items to the right
+        marginTop: -50, // Add some space from the top
+        marginRight: 10, // Space between buttons
+        marginBottom: 5,
+
       },
       addButton: {
         backgroundColor: '#28a745',
-        padding: 12,
         borderRadius: 5,
-        flex: 1,
-        marginRight: 10,
         alignItems: 'center',
+        marginLeft: 10, // Space between buttons
+        width: 30,
+        height: 30,
+        padding: 3,
       },
       removeButton: {
         backgroundColor: '#dc3545',
-        padding: 12,
         borderRadius: 5,
-        flex: 1,
-        marginLeft: 10,
         alignItems: 'center',
+        marginLeft: 5, // Space between buttons
+        width: 30,
+        height: 30,
+        padding: 3,
+
       },
       addButtonText: {
         color: '#fff',
         fontWeight: 'bold',
         fontSize: 18,
+
       },
       removeButtonText: {
         color: '#fff',
@@ -460,10 +498,10 @@ const Document = (props) => {
       },
       storedImagesContainer: {
         backgroundColor: '#f0f0f0',
-        padding: 10,
+        padding: 20,
         borderTopWidth: 1,
         borderTopColor: '#ddd',
-        paddingBottom: 20,
+        paddingBottom: 0,
       },
       horizontalScroll: {
         flexDirection: 'row',

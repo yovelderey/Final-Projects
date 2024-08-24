@@ -1,5 +1,5 @@
 import React, { useRef, useState ,useEffect} from 'react';
-import { View, Text, Image, FlatList, TextInput, StyleSheet ,StatusBar, TouchableOpacity,ScrollView,Alert } from 'react-native';
+import { View, Text, ImageBackground,Image, FlatList, TextInput, StyleSheet ,StatusBar, TouchableOpacity,ScrollView,Alert } from 'react-native';
 import { firebaseConfig } from '../config';
 import { getDatabase, ref, set,get,child } from 'firebase/database';
 import firebase from 'firebase/compat/app';
@@ -9,8 +9,8 @@ import { remove } from 'firebase/database';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 
-const Providers = (props) => {
-  const id = props.route.params.id; // Accessing the passed id
+const Providers = ({ route, navigation }) => {
+  const { id } = route.params;
   const initialData = [
     [true, 'מחיר', 'תוכן', 'טלפון', 'שם'],
     ...Array.from({ length: 4 }, () => Array(5).fill(''))
@@ -18,16 +18,10 @@ const Providers = (props) => {
 
   const [tableData, setTableData] = useState(initialData);
   const [checked, setChecked] = useState(Array(10).fill(false));
-  const [sumNumericColumn, setSumNumericColumn] = useState(Array(10).fill(0)); // סכום המספרים בעמודה האחרונה
+  const [sumNumericColumn, setSumNumericColumn] = useState(Array(10).fill(0));
   const database = getDatabase();
-  const databaseRef = ref(database, 'Events/' + firebase.auth().currentUser.uid );
   const user = firebase.auth().currentUser;
-  const [spend, setSpend] = useState('');
-  const [eventDetails, setEventDetails] = useState({});
-  const [deleteIndex, setDeleteIndex] = useState(''); // State to hold the index to be deleted
   const insets = useSafeAreaInsets();
-
-
 
   const handleInputChange = (text, rowIndex, colIndex) => {
     const newData = [...tableData];
@@ -35,79 +29,55 @@ const Providers = (props) => {
     setTableData(newData);
   };
 
-  
   const handleCheckBoxChange = (rowIndex) => {
     const newChecked = [...checked];
     newChecked[rowIndex] = !newChecked[rowIndex];
     setChecked(newChecked);
-  
+
     const newTableData = [...tableData];
-    newTableData[rowIndex][0] = newChecked[rowIndex]; // עדכון הערך בטבלה
+    newTableData[rowIndex][0] = newChecked[rowIndex];
     setTableData(newTableData);
 
-    // Update sumNumericColumn based on the checkbox change
     if (newChecked[rowIndex]) {
-      let sum = 0;
-      tableData[rowIndex].forEach((cell, colIndex) => {
-        if (colIndex === 1) { // Assuming the price column is at index 1
+      const sum = tableData[rowIndex].reduce((total, cell, colIndex) => {
+        if (colIndex === 1) {
           const numericValue = parseFloat(cell.replace(/[^0-9.-]/g, ''));
-          if (!isNaN(numericValue)) {
-            sum += numericValue;
-          }
+          if (!isNaN(numericValue)) total += numericValue;
         }
-      });
+        return total;
+      }, 0);
       const newSumNumericColumn = [...sumNumericColumn];
       newSumNumericColumn[rowIndex] = sum;
       setSumNumericColumn(newSumNumericColumn);
     } else {
       const newSumNumericColumn = [...sumNumericColumn];
-      newSumNumericColumn[rowIndex] = 0; // Set to 0 when checkbox is unchecked
+      newSumNumericColumn[rowIndex] = 0;
       setSumNumericColumn(newSumNumericColumn);
     }
   };
 
-  
   const handleDeleteBudgetItems = () => {
     const databaseRef = ref(database, `Events/${user.uid}/${id}/Providers`);
-
     remove(databaseRef)
       .then(() => {
-        Alert.alert('Deleted Successfully!', 'The budget items have been deleted from Firebase.');
+        Alert.alert('נמחק בהצלחה!', 'פרטי התקציב נמחקו מ-Firebase.');
       })
       .catch(error => {
-        Alert.alert('Delete Error', `An error occurred while deleting the budget items: ${error.message}`);
+        Alert.alert('שגיאה במחיקה', `אירעה שגיאה בעת מחיקת הנתונים: ${error.message}`);
       });
-
   };
-  
 
   const handleCustomAction = (index) => {
-    console.log(`Custom action button at index ${index} pressed`);
+    console.log(`לחצן פעולה מותאמת אישית בלחיצה, אינדקס ${index}`);
   };
-
-  const renderCheckBox = (index) => {
-    return (
-      <TouchableOpacity
-        style={styles.checkbox}
-        onPress={() => handleCheckBoxChange(index)}
-      >
-        <Text style={styles.checkboxText}>
-          {checked[index] ? 'V' : ''}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
-
 
   const fetchDataFromFirebase = () => {
     const databaseRef = ref(database, `Events/${user.uid}/${id}/Providers`);
-    if(user)
-    {
+    if (user) {
       get(databaseRef)
-        .then((snapshot) => {
+        .then(snapshot => {
           if (snapshot.exists()) {
             const data = snapshot.val();
-            // Convert the data back to the format used in the table
             const formattedData = data.map(item => [
               item.checked,
               item.price,
@@ -116,77 +86,67 @@ const Providers = (props) => {
               item.name
             ]);
             setTableData(formattedData);
-    
+
             const checkedData = formattedData.map(row => row[0]);
             setChecked(checkedData);
-          } else {
           }
         })
         .catch(error => {
           Alert.alert('שגיאה בקריאה', `אירעה שגיאה בעת קריאת הנתונים: ${error.message}`);
         });
-
-
-
     }
   };
-  
+
   useEffect(() => {
     fetchDataFromFirebase();
-    
   }, [user, id]);
+
+  const renderCheckBox = (index) => (
+    <TouchableOpacity
+      style={styles.checkbox}
+      onPress={() => handleCheckBoxChange(index)}
+    >
+      <Text style={styles.checkboxText}>
+        {checked[index] ? 'V' : ''}
+      </Text>
+    </TouchableOpacity>
+  );
 
   const renderItem = ({ item, index }) => (
     <View style={styles.row}>
       {renderCheckBox(index)}
-
       {item.slice(1).map((cell, colIndex) => (
         <TextInput
           key={`${index}-${colIndex}`}
           style={styles.cell}
           value={cell}
           onChangeText={(text) => {
-            // אם העמודה היא העמודה האחרונה (colIndex === 4)
             if (colIndex === 4) {
-              // בדוק אם הטקסט הוא מספר תקין
-              const numericValue = text.replace(/[^0-9]/g, ''); // סנן רק מספרים
+              const numericValue = text.replace(/[^0-9]/g, '');
               handleInputChange(numericValue, index, colIndex + 1);
             } else {
-              // אחרת, תקבל את הטקסט כפי שהוא
               handleInputChange(text, index, colIndex + 1);
             }
           }}
-          keyboardType={colIndex === 4 ? 'numeric' : 'default'} // הגדר keyboardType לתא האחרון בכל שורה
+          keyboardType={colIndex === 4 ? 'numeric' : 'default'}
         />
-        
       ))}
-      <TouchableOpacity
-        style={styles.customAction}
-        onPress={() => {
-          console.log('Custom action button pressed');
-          handleCustomAction(index);
-        }}
-      >
-        <Text style={styles.customActionText}>פעולה מותאמת אישית</Text>
-      </TouchableOpacity>
+ 
     </View>
   );
-  
+
   const handleRemoveLastRow = () => {
     if (tableData.length === 0) {
       Alert.alert('שגיאה', 'אין שורות להסרה.');
       return;
     }
-  
-    // הסרת השורה האחרונה מהטבלה
+
     const newTableData = tableData.slice(0, -1);
     setTableData(newTableData);
-  
-    // עדכון ה-checked לאחר הסרת השורה האחרונה
+
     const newChecked = checked.slice(0, -1);
     setChecked(newChecked);
-  
-    // שמירה בבסיס הנתונים
+
     const databaseRef = ref(database, `Events/${user.uid}/${id}/Providers`);
     set(databaseRef, newTableData.map(row => ({
       checked: row[0],
@@ -194,26 +154,17 @@ const Providers = (props) => {
       content: row[2],
       date: row[3],
       name: row[4]
-    })))
-    .then(() => {
-    })
-    .catch(error => {
-    });
+    }))).catch(error => {});
   };
-  
-  
 
   const handleAddRow = () => {
-    // יצירת שורה חדשה עם ערכי ברירת מחדל
     const newRow = [false, '', '', '', ''];
     const newTableData = [...tableData, newRow];
     setTableData(newTableData);
-  
-    // עדכון ה-checked עבור השורה החדשה
+
     const newChecked = [...checked, false];
     setChecked(newChecked);
-  
-    // שמירה בבסיס הנתונים
+
     const databaseRef = ref(database, `Events/${user.uid}/${id}/Providers`);
     set(databaseRef, newTableData.map(row => ({
       checked: row[0],
@@ -221,16 +172,10 @@ const Providers = (props) => {
       content: row[2],
       date: row[3],
       name: row[4]
-    })))
-    .then(() => {
-    })
-    .catch(error => {
-    });
+    }))).catch(error => {});
   };
-  
 
   const handleSaveToFirebase = () => {
-    // Prepare data to be saved
     const dataToSave = tableData.map(row => ({
       checked: row[0],
       price: row[1],
@@ -239,289 +184,190 @@ const Providers = (props) => {
       name: row[4]
     }));
 
-    // Save data to Firebase
     if (user) {
-
       const databaseRef = ref(database, `Events/${user.uid}/${id}/Providers`);
       set(databaseRef, dataToSave)
         .then(() => {
-          Alert.alert('נשמר בהצלחה!', 'הנתונים נשמרו בבסיס הנתונים של Firebase.');
+          Alert.alert('נשמר בהצלחה!', 'הנתונים נשמרו ב-Firebase.');
         })
         .catch(error => {
           Alert.alert('שגיאה בשמירה', `אירעה שגיאה בעת שמירת הנתונים: ${error.message}`);
         });
-
     }
   };
 
-
-  
   return (
-    
-    <View style={styles.container}>
+    <ImageBackground source={require('../assets/backgruond_pro.png')} style={styles.background}>
+      <View style={styles.container}>
+        <StatusBar backgroundColor="#FFC0CB" barStyle="dark-content" />
+        <View style={[styles.topBar, { paddingTop: insets.top }]}>
+          <Text style={styles.title}>ניהול ספקים</Text>
+        </View>
 
-      <StatusBar backgroundColor="#FFC0CB" barStyle="dark-content" />
-      <View style={[styles.topBar, { paddingTop: insets.top }]}>
-        <Text style={styles.title}>ניהול ספקים</Text>
-      </View>
+        <View style={styles.moreContainer}>
+          <TouchableOpacity
+            style={styles.showPasswordButton}
+            onPress={handleDeleteBudgetItems}
+          >
+            <Image source={require('../assets/delete.png')} style={styles.icon} />
+          </TouchableOpacity>
 
-      <View style={styles.moreContainer}>
-      <TouchableOpacity
-          style={styles.showPasswordButton}
-          onPress={handleDeleteBudgetItems}>
-          <Image source={require('../assets/delete.png')} style={styles.icon} />
+          <View style={styles.leftIcons}>
+            <TouchableOpacity onPress={handleAddRow} style={styles.removeButton}>
+              <Image source={require('../assets/plus.png')} style={styles.icon2} />
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={handleRemoveLastRow} style={styles.removeButton}>
+              <Image source={require('../assets/minus-sign.png')} style={styles.icon2} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.tableContainer}>
+          <FlatList
+            data={tableData}
+            renderItem={renderItem}
+            keyExtractor={(item, index) => index.toString()}
+            contentContainerStyle={styles.table}
+          />
+        </View>
+
+        <TouchableOpacity style={styles.largeButton} onPress={handleSaveToFirebase}>
+          <Text style={styles.title3}>שמור נתונים</Text>
         </TouchableOpacity>
 
-        <View style={styles.leftIcons}>
-          <TouchableOpacity
-            onPress={handleAddRow}
-            style={styles.removeButton}>
-            <Image source={require('../assets/plus.png')} style={styles.icon2} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={handleRemoveLastRow}
-            style={styles.removeButton}>
-            <Image source={require('../assets/minus-sign.png')} style={styles.icon2} />
-          </TouchableOpacity>
-        </View>
-    </View>
-
-
-      <View style={styles.tableContainer}>
-        <FlatList
-          data={tableData}
-          renderItem={renderItem}
-          keyExtractor={(item, index) => index.toString()}
-          contentContainerStyle={styles.table}/> 
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('ListItem', { id })}
+          style={[styles.showPasswordButton, { position: 'absolute', top: '7%', left: '4%' }]}
+        >
+          <Image source={require('../assets/back_icon2.png')} style={styles.backIcon} />
+        </TouchableOpacity>
       </View>
-
-
-    <TouchableOpacity
-        style={styles.largeButton}
-        onPress={() => handleSaveToFirebase()} >
-          <Text style={styles.title3}>שמור נתונים</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity 
-        onPress={() => props.navigation.navigate('ListItem', { id })}
-        style={[styles.showPasswordButton, { position: 'absolute', top: '92%', left: '4%' }]}
-      >
-        <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
-      </TouchableOpacity>
-    </View>
+    </ImageBackground>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    paddingHorizontal: 10,
   },
-  table: {
-    borderWidth: 1,
-    borderColor: '#000',
-    width: '100%',
+  background: {
+    flex: 1,
+    resizeMode: 'cover',
+    justifyContent: 'center',
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    justifyContent: 'center',
+    marginTop: 20,
 
   },
   moreContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 15,
-    marginTop: 20,
-
-  },
-  leftIcons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    
-  },
-  addButton: {
-    marginRight: 20, // מרווח גדול יותר בין האייקונים
-  },
-  removeButton: {
-    marginRight: 10, // מרווח גדול יותר בין האייקונים
-  },
-
-  showPasswordButton: {
-    marginRight: 295,
-  },
-  icon: {
-    width: 24,
-    height: 24,
-  },
-  icon2: {
-    width: 18,
-    height: 18,
+    marginVertical: 15,
   },
   tableContainer: {
-    borderColor: '#000',
-    width: '98%',
-    marginTop: 0,
-    height: 530, // גובה קבוע לפריים
+    flex: 1,
+    marginTop: -10,
+  },
+  table: {
+    paddingBottom: 10,
 
   },
-  text: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-
-  },
-
+ 
   row: {
     flexDirection: 'row',
-  },
-  cell: {
-    borderWidth: 1,
-    borderColor: '#000',
-    padding: 10,
-    width: 90, // Adjust width as needed
-    textAlign: 'center',
-  },
-  headerText: {
-    fontWeight: 'bold',
-  },
-
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderWidth: 1,
-    borderColor: '#000',
-    justifyContent: 'center',
     alignItems: 'center',
-    margin: 8,
+    paddingVertical: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: '#C0C0C0',
   },
-
-  title2: {
-    fontSize: 12,
-    marginBottom: 200,
-  },
-  backIcon: {
-    width: 50,
-    height: 50,
-
-  },
-
-  customActionText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  deleteButton: {
-    backgroundColor: 'red',
-    padding: 10,
-    margin: 5,
-    borderRadius: 5,
-  },
-  deleteButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  refreshButton: {
-    backgroundColor: 'blue',
-    padding: 10,
-    borderRadius: 5,
-    marginTop: 20,
-  },
-  refreshButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  currencySymbol: {
-    fontSize: 24, // Smaller font size for the currency symbol
-    color: '#ff69b4', // White color for the currency symbol
-    fontWeight: 'bold',
-  },
-    addButton: {
-    backgroundColor: '#2196F3',
-    padding: 10,
-    borderRadius: 5,
-
-  },
-  addButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  icon: {
+  checkbox: {
     width: 30,
     height: 30,
-
-
-  },
-  topBar: {
-    backgroundColor: '#ff69b4',
-    width: '100%',
-    alignItems: 'center',
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#FFC0CB',
     justifyContent: 'center',
-    paddingVertical: 10,
-  },
-  title: {
-    fontSize: 24,
-    color: '#000',
-    marginTop: 15,
+    alignItems: 'center',
+    textAlign: 'center',
 
+    marginRight: 10,
   },
-  title3: {
-    fontSize: 20,
-    color: '#000',
-
+  checkboxText: {
+    fontSize: 18,
+    color: '#FFC0CB',
   },
-
+  cell: {
+    flex: 1,
+    height: 30,
+    borderColor: '#C0C0C0',
+    borderWidth: 1,
+    paddingHorizontal: 5,
+    borderRadius: 4,
+    marginRight: 10,
+  },
+  customAction: {
+    backgroundColor: '#FFC0CB',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 4,
+  },
+  customActionText: {
+    color: '#fff',
+  },
   largeButton: {
     width: '40%',
     height: 40,
-    backgroundColor: '#ff69b4',
+    backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
     marginVertical: 20,
     alignSelf: 'center',
     padding: 10,
     borderRadius: 10,
-    marginTop: 75,
+    marginTop: 70,
 
   },
-
-
-  roundedBackground: {
-    borderRadius: 150, // Adjust this to make the background round
-    paddingVertical: 70, // Adjust the vertical padding
-    paddingHorizontal: 70, // Adjust the horizontal padding
-    alignItems: 'center', // Center the text within the background
-    justifyContent: 'center',
-    marginTop: 40,
-    borderWidth: 5, // Width of the border
-    borderColor: '#ff69b4', // Color of the border
-    borderStyle: 'solid', // Solid border style
-  },
-  sumText: {
-    fontSize: 40, // Adjust the font size as needed
-    fontWeight: 'bold', // Make the text bold
-    color: '#ff69b4', // Set the text color to white for better contrast
-    marginTop: -95,
-
-  },
-
-  currencySymbol: {
-    fontSize: 24, // Smaller font size for the currency symbol
-    color: '#ff69b4', // White color for the currency symbol
+  title: {
+    fontSize: 22,
     fontWeight: 'bold',
+    color: '#000',
   },
-  
-  roundedBackground2: {
-    alignItems: 'center', // Center the text within the background
-    justifyContent: 'center',
-    marginTop: 5,
-    marginRight: 210, // מרווח גדול יותר בין האייקונים
+  title3: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  showPasswordButton: {
+    padding: 5,
+  },
+  icon: {
+    width: 30,
+    height: 30,
+  },
+  leftIcons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  removeButton: {
+    marginLeft: 10,
+    padding: 5,
+  },
+  icon2: {
+    width: 20,
+    height: 20,
 
   },
-
-  sumText2: {
-    fontSize: 20, // Adjust the font size as needed
-    color: 'black', // Set the text color to white for better contrast
+  backIcon: {
+    width: 40,
+    height: 40,
   },
 });
 
