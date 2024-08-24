@@ -39,13 +39,14 @@ const ContactsList = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
+      <Text style={styles.title}>האנשי קשר שלי:</Text>
+
       <TextInput
         style={styles.searchInput}
         placeholder="חיפוש איש קשר..."
         value={searchQuery}
         onChangeText={(text) => setSearchQuery(text)}
       />
-      <Text style={styles.title}>האנשי קשר שלי:</Text>
       <FlatList
         data={filteredContacts}
         keyExtractor={(item) => item.id}
@@ -66,7 +67,7 @@ const ContactsList = ({ route, navigation }) => {
       </TouchableOpacity>
       <TouchableOpacity 
         onPress={navigateBack}
-        style={[styles.showPasswordButton, { position: 'absolute', top: '90%', left: '1%' }]}
+        style={[styles.showPasswordButton, { position: 'absolute', top: '6%', left: '3%' }]}
       >
         <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
       </TouchableOpacity>
@@ -92,8 +93,10 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
+    marginTop: 40,
+
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: -15,
   },
   contactItem: {
     padding: 10,
@@ -116,18 +119,19 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   button: {
-    backgroundColor: '#ff69b4',
-    padding: 15,
-    borderRadius: 10,
+    backgroundColor: '#000',
+    padding: 5,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 20,
-    width: '90%',
+    width: '45%',
+    height: 40,
 
   },
   buttonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     justifyContent: 'center',
     alignItems: 'center',

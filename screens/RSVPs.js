@@ -399,8 +399,8 @@ const RSVPs = (props) => {
         />   
 
           <TouchableOpacity onPress={() => props.navigation.navigate('ListItem', { id })}>
-        <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
-      </TouchableOpacity>
+            <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
+          </TouchableOpacity>
 
       <Text style={styles.header2}>שליחת הודעות</Text>
 

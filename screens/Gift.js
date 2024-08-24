@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, Alert, TextInput, Modal, PermissionsAndroid, StatusBar, Platform } from 'react-native';
+import { View, Text,ImageBackground, FlatList, StyleSheet, TouchableOpacity, Image, Alert, TextInput, Modal, PermissionsAndroid, StatusBar, Platform } from 'react-native';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue } from 'firebase/database';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
@@ -9,8 +9,11 @@ import 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
+import * as FileSystem from 'expo-file-system';
 import XLSX from 'xlsx';
-//import RNFS from 'react-native-fs';
+import * as MediaLibrary from 'expo-media-library';
+import * as Sharing from 'expo-sharing';
+
 
 
 const firebaseConfig = {
@@ -91,34 +94,58 @@ const Gift = (props) => {
     requestPermissions();
   }, []);
 
-  const exportToExcel = async () => {
+
+
+
+const arrayBufferToBase64 = (buffer) => {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return window.btoa(binary);
+};
+
+const exportToExcel = async () => {
+  try {
+    // המרת אנשי הקשר למבנה המתאים לייצוא
     const data = contacts.map(contact => ({
       Name: contact.displayName,
       Phone: contact.phoneNumbers,
       Price: contact.newPrice || 0,
     }));
 
-    // יצירת גליון עבודה
+    // יצירת דף עבודה וחוברת עבודה
     const ws = XLSX.utils.json_to_sheet(data);
-
-    // יצירת חוברת עבודה
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Contacts");
 
-    // יצירת קובץ אקסל בפורמט array
+    // המרת חוברת העבודה למערך של bytes
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
 
-    // שמירת הקובץ במכשיר
-    const path = `${RNFS.DocumentDirectoryPath}/Contacts.xlsx`;
-    
-    try {
-      await RNFS.writeFile(path, Buffer.from(excelBuffer).toString('base64'), 'base64');
-      Alert.alert('הצלחה', `קובץ אקסל נשמר בהצלחה ב-${path}`);
-    } catch (error) {
-      console.error('Error saving file:', error);
-      Alert.alert('שגיאה', 'הייתה בעיה בשמירת הקובץ');
+    // המרת buffer ל-base64
+    const base64 = arrayBufferToBase64(excelBuffer);
+    const fileName = 'Contacts.xlsx';
+    const path = FileSystem.documentDirectory + fileName; // השתמש ב-documentDirectory
+
+    // שמירה כקובץ ב-documentDirectory
+    await FileSystem.writeAsStringAsync(path, base64, { encoding: FileSystem.EncodingType.Base64 });
+
+    // בדוק אם שיתוף אפשרי
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(path);
+    } else {
+      Alert.alert('Sharing not available', 'Sharing is not available on this device');
     }
-  };
+
+    Alert.alert('Success', `Excel file saved successfully at ${path}`);
+  } catch (error) {
+    console.error('Error saving file:', error);
+    Alert.alert('Error', 'There was a problem saving the file');
+  }
+};
+
 
   const updatePrice = (recordID, price) => {
     const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordID}`);
@@ -160,10 +187,17 @@ const Gift = (props) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar backgroundColor="#FFC0CB" barStyle="dark-content" />
+          <ImageBackground
+          source={require('../assets/backgruond_gift.png')} // טוען את ה-GIF מהתיקייה המקומית
+          style={styles.gif}
+          resizeMode="cover" // כדי שה-GIF יכסה את כל המסך
+        />    
       <View style={[styles.topBar, { paddingTop: insets.top }]}>
-        <Text style={styles.title}>רשומת מתנות</Text>
+        <Text style={styles.title}>רשימת מתנות</Text>
       </View>
+      <TouchableOpacity onPress={() => props.navigation.navigate('ListItem', { id })}>
+        <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
+      </TouchableOpacity>
 
       {contacts.length === 0 ? (
         <View style={styles.noItemsContainer}>
@@ -187,52 +221,67 @@ const Gift = (props) => {
         </View>
       )}
 
-      <Text style={styles.contactCount}>כמות אנשי קשר: {contacts.length}</Text>
-      <Text style={styles.totalPriceText}>סכום כולל: {totalPrice} ₪</Text>
+      <View style={styles.backgroundContainer}>
+        <View style={styles.row}>
+          <View style={styles.section}>
+            <Text style={styles.header}>כמות מוזמנים</Text>
+            <View style={styles.priceContainer}>
+              <Text style={styles.textPrice}> {contacts.length}</Text>
+            </View>
+          </View>
+          <View style={styles.section}>
+            <Text style={styles.header}>סך הכל</Text>
+            <View style={styles.priceContainer}>
+              <Text style={styles.textPrice}>{totalPrice}₪</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+
 
       <TouchableOpacity onPress={exportToExcel} style={styles.exportButton}>
-    <Text style={styles.exportButtonText}>ייצא לאקסל</Text>
-  </TouchableOpacity>
+        <Image source={require('../assets/excel.png')} style={styles.backIcon2} />
+        <Text style={styles.exportButtonText}>ייצא לקובץ אקסל</Text>
 
-      <TouchableOpacity
-        onPress={() => props.navigation.navigate('ListItem', { id })}
-        style={[styles.showPasswordButton, { position: 'absolute', top: '92%', left: '4%' }]}
-      >
-        <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
       </TouchableOpacity>
+
+
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
     backgroundColor: 'white',
   },
   topBar: {
     width: '120%',
-    backgroundColor: '#ff69b4',
     alignItems: 'center',
     paddingVertical: 10,
+ 
     position: 'absolute',
-    top: 0,
+    top: 10, 
+    zIndex: 1000, 
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
   },
   tableContainer: {
-    flex: 1,
     width: '100%',
     maxHeight: '50%',
     marginVertical: 20,
+
+    alignItems: 'center', // למרכז את התוכן אופקית
+    position: 'absolute',
+    top: 130, 
+    zIndex: 1000, 
   },
   list: {
     width: '100%',
-    backgroundColor: 'white',
     borderRadius: 10,
     overflow: 'hidden',
     padding: 10,
@@ -246,19 +295,23 @@ const styles = StyleSheet.create({
     borderBottomColor: '#ccc',
     borderRadius: 10,
     overflow: 'hidden',
+    
   },
   itemInput: {
-    flex: 1,
     fontSize: 16,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: '#000',
     borderRadius: 5,
     marginRight: 10,
+    fontWeight: 'bold',
+
   },
   itemText: {
     fontSize: 16,
+    fontWeight: 'bold',
+
   },
   separator: {
     height: 2,
@@ -266,9 +319,14 @@ const styles = StyleSheet.create({
     marginVertical: 5,
   },
   noItemsContainer: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    fontSize: 16,
+    color: '#000',
+    position: 'absolute',
+    top: 200, 
+    zIndex: 1000, 
+
   },
   noItemsText: {
     fontSize: 18,
@@ -326,6 +384,14 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
   },
+  imageback: {
+    width: 40,
+    height: 40,
+    position: 'absolute',
+    top: -760, 
+    left: -170, 
+    zIndex: 1000, 
+  },
   buttonContainer3: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -341,6 +407,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   searchInput: {
+    width: '90%', // רוחב 80% מהמסך
     height: 40, // גובה הקלט
     borderColor: '#ccc', // צבע הגבול
     borderWidth: 1, // עובי הגבול
@@ -350,6 +417,7 @@ const styles = StyleSheet.create({
     color: '#333', // צבע הטקסט
     backgroundColor: '#fff', // צבע הרקע
     textAlign: 'right', // יישור הטקסט לימין
+    marginBottom: 20, // מרווח תחתון
   },
   buttonContainer: {
     flexDirection: 'row',
@@ -362,28 +430,85 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
+    
   },
   backIcon: {
     width: 30,
     height: 30,
   },
   backIcon2: {
-    width: 50,
-    height: 50,
+    width: 30,
+    height: 30,
+    marginRight: 8, // Small space between the image and text
+
   },
   exportButton: {
-    backgroundColor: '#4CAF50',
-    padding: 15,
+    flexDirection: 'row', // Make sure items are aligned horizontally
+    alignItems: 'center', // Center items vertically
+    backgroundColor: '#4CAF50', // Background color for the button
+    padding: 10,
     borderRadius: 10,
-    alignItems: 'center',
-    marginVertical: 10,
+    position: 'absolute',
+    top: 750, 
+    zIndex: 1000,     paddingHorizontal: 95, // Increase horizontal padding for wider button
+
+  },
+  icon2: {
+    width: 24, // Size of the image
+    height: 24,
+    marginRight: 8, // Small space between the image and text
   },
   exportButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  
+  backgroundContainer: {
+    backgroundColor: '#ff69b4', // Background color for the whole row
+    padding: 10,
+    borderRadius: 10,
+    width: '90%',
+    position: 'absolute',
+    top: 650, 
+    zIndex: 1000, 
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20, // Add padding to create space between the sections
+  },
+  section: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 10,
+  },
+  header: {
+    fontSize: 18,
+    color: '#000000',
+    marginBottom: 5,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  priceContainer: {
+    backgroundColor: '#ffffff',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#cccccc',
+    width: '100%',
+    alignItems: 'center',
+
+  },
+  textPrice: {
+    fontSize: 16,
+    color: '#000000',
+  },
+  gif: {
+    width: '100%',
+    height: '100%',
+
+  },
 });
 
 export default Gift;

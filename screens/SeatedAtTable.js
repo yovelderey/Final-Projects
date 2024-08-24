@@ -134,12 +134,12 @@ const uploadImage = async (uri, imageName, index) => {
         });
       },
       (error) => {
-        console.error("Image upload failed:", error.message);
+        console.error("כשל בטעינת התמונה:", error.message);
         Alert.alert("Image upload failed:", error.message);
       }
     );
     if (!alertShown) {
-      Alert.alert("Image uploaded successfully!");
+      Alert.alert("התמונה נטענה בהצלחה!");
       alertShown = true;
     }
   } catch (error) {
@@ -215,9 +215,13 @@ const uploadImage = async (uri, imageName, index) => {
   
       <StatusBar backgroundColor="#FFC0CB" barStyle="dark-content" />
       <View style={[styles.topBar, { paddingTop: insets.top }]}>
-        <Text style={styles.title}>ניהול אנשי קשר</Text>
+        <Text style={styles.title}>ניהול שולחנות</Text>
       </View>
   
+      <TouchableOpacity onPress={() => props.navigation.navigate('ListItem', { id })}>
+        <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
+      </TouchableOpacity>
+
       {selectedImage ? (
         <TouchableOpacity onPress={() => handleButtonPress(0)} style={styles.imagePlaceholder}>
           <Image source={{ uri: selectedImage }} style={styles.imageBackground2} />
@@ -245,7 +249,7 @@ const uploadImage = async (uri, imageName, index) => {
       <TouchableOpacity
         onPress={() => setModalVisible(true)}
         style={styles.addButton} >
-        <Text style={styles.addButtonText}>הוסף שולחן</Text>        
+        <Text style={styles.addButtonText}>הוסף שולחן +</Text>        
       </TouchableOpacity>
   
       <Text style={styles.contactCount}>מספר שולחנות: {contacts.length}</Text>
@@ -285,12 +289,7 @@ const uploadImage = async (uri, imageName, index) => {
         </View>
       </Modal>
   
-      <TouchableOpacity 
-        onPress={() => props.navigation.navigate('ListItem', { id })}
-        style={[styles.showPasswordButton, { position: 'absolute', top: '93%', left: '5%' }]}
-      >
-        <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
-      </TouchableOpacity>
+
     </View>
   );
 };
@@ -334,9 +333,9 @@ const styles = StyleSheet.create({
   imagePlaceholder: {
     width: '100%',
     height: '30%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 5,
+    marginTop: 100, // Adjust margin to position correctly
+
+    marginBottom: -80,
   },
   noItemsText: {
     fontSize: 16,
@@ -352,7 +351,6 @@ const styles = StyleSheet.create({
   },
   topBar: {
     width: '100%',
-    backgroundColor: '#ff69b4',
     alignItems: 'center',
     paddingVertical: 10,
     position: 'absolute',
@@ -361,7 +359,7 @@ const styles = StyleSheet.create({
   tableContainer: {
     flex: 1,
     width: '100%',
-    maxHeight: '50%',
+    maxHeight: '37%',
     marginVertical: 20,
   },
   list: {
@@ -375,10 +373,12 @@ const styles = StyleSheet.create({
   itemContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 2,
-    borderBottomColor: '#ccc',
-    borderRadius: 5,
+    padding: 10,
+    borderRadius: 18,
+    marginBottom: 8,
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#ddd',
   },
   itemText: {
     fontSize: 18,
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     position: 'absolute',
-    bottom: 120,
+    bottom: 80,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 10,
@@ -400,6 +400,14 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  imageback: {
+    width: 40,
+    height: 40,
+    marginTop: 70,
+    marginBottom: -90,
+
+    marginRight: 300,
   },
   modalTitle: {
     fontSize: 24,
@@ -458,19 +466,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   addButton: {
-    padding: 10,
-    width: '90%',
-    height: 50,
-    backgroundColor: '#ff69b4',
-    borderRadius: 5,
+    padding: 6,
+    width: '40%',
+    height: 40,
+    backgroundColor: '#000',
+    borderRadius: 15,
     position: 'absolute',
-    bottom: 70,
+    bottom: 30,
     justifyContent: 'center',
     alignItems: 'center',
+
   },
   addButtonText: {
     color: 'white',
     fontWeight: 'bold',
+    fontSize: 18,
+
   },
   backIcon: {
     width: 50,

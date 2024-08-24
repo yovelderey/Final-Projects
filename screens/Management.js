@@ -1,19 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList,ImageBackground, StyleSheet, TouchableOpacity, Image, Alert, TextInput, Modal, Button, PermissionsAndroid, StatusBar,Platform } from 'react-native';
+import { View, Text, FlatList, ImageBackground, StyleSheet, TouchableOpacity, Image, Alert, TextInput, Modal, Button, PermissionsAndroid, StatusBar, Platform } from 'react-native';
 import { getDatabase, ref, push, remove, set } from 'firebase/database';
 import { getAuth, onAuthStateChanged } from 'firebase/auth'; // Import auth methods
 import { onValue } from 'firebase/database';
 import { initializeApp, getApps } from 'firebase/app';
-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Contacts from 'expo-contacts';
 import { useNavigation } from '@react-navigation/native';
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-
 import 'firebase/database'; // Import the Realtime Database module
-import  firebase from 'firebase/compat/app';
+import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 
@@ -27,8 +24,8 @@ const firebaseConfig = {
   measurementId: "G-LD61QH3VVP"
 };
 
-if (!firebase.apps.length){
-      firebase.initializeApp(firebaseConfig);
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
 }
 
 if (!getApps().length) {
@@ -39,13 +36,11 @@ if (!getApps().length) {
 const database = getDatabase();
 
 const Management = (props) => {
-
   const [contacts, setContacts] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
-  const [newPrice, setnewPrice] = useState('');
-
+  const [newPrice, setNewPrice] = useState('');
   const [user, setUser] = useState(null); // State to hold user info
   const id = props.route.params.id; // Accessing the passed id
   const insets = useSafeAreaInsets();
@@ -53,20 +48,17 @@ const Management = (props) => {
   const navigation = useNavigation();
   const [searchQuery, setSearchQuery] = useState('');
   const auth = getAuth();
-
+  const [modalVisible2, setModalVisible2] = useState(false);
 
   useEffect(() => {
     const requestPermissions = async () => {
       if (Platform.OS === 'android') {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
-          {
-            title: 'Contacts Permission',
-            message: 'This app needs access to your contacts.',
-            buttonPositive: 'OK',
-            buttonNegative: 'Cancel',
-          }
-        );
+        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CONTACTS, {
+          title: 'Contacts Permission',
+          message: 'This app needs access to your contacts.',
+          buttonPositive: 'OK',
+          buttonNegative: 'Cancel',
+        });
       }
 
       onAuthStateChanged(auth, async (currentUser) => {
@@ -79,7 +71,6 @@ const Management = (props) => {
             if (data) {
               const contactsArray = Object.values(data);
               setContacts(contactsArray);
-              
             } else {
               setContacts([]);
             }
@@ -94,11 +85,16 @@ const Management = (props) => {
     requestPermissions();
   }, []);
 
-  const addContact = () => {
 
+
+  const handleImportContacts = () => {
+    // כאן תוסיף את הפונקציה שלך לייבוא אנשי קשר
+    console.log('ייבא אנשי קשר');
+    setModalVisible2(false);
+  };
+  const addContact = () => {
     const recordidd = String(new Date().getTime());
     const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordidd}`);
-  
 
     if (newContactName.trim() && newContactPhone.trim()) {
       const newContact = {
@@ -106,19 +102,17 @@ const Management = (props) => {
         displayName: newContactName,
         phoneNumbers: newContactPhone,
         price: newPrice,
-
       };
       set(databaseRef, newContact); // שימור האיש קשר במסד הנתונים כאיבר חדש
       setContacts([...contacts, newContact]);
       setModalVisible(false);
       setNewContactName('');
       setNewContactPhone('');
-      setnewPrice('');
+      setNewPrice('');
 
-    // Update the counter_contacts field
+      // Update the counter_contacts field
       const databaseRef3 = ref(database, `Events/${user.uid}/${id}/counter_contacts`);
       set(databaseRef3, contacts.length + 1);
-
     } else {
       Alert.alert('Error', 'Please fill in both fields');
     }
@@ -126,14 +120,12 @@ const Management = (props) => {
 
   const deleteContact = async (contactId) => {
     if (user) {
-
       const contactRef = ref(database, `Events/${user.uid}/${id}/contacts/${contactId}`);
       try {
-        
         await remove(contactRef);
         setContacts((prevContacts) => prevContacts.filter((contact) => contact.recordID !== contactId));
         const databaseRef3 = ref(database, `Events/${user.uid}/${id}/counter_contacts`);
-        set(databaseRef3, contacts.length -1);
+        set(databaseRef3, contacts.length - 1);
       } catch (error) {
         console.error('Error deleting contact from Firebase:', error);
         Alert.alert('Error', 'Failed to delete contact. Please try again.');
@@ -142,7 +134,6 @@ const Management = (props) => {
       Alert.alert('Error', 'User not authenticated. Please log in.');
     }
   };
-  
 
   const pickContacts = async () => {
     const { status } = await Contacts.requestPermissionsAsync();
@@ -156,7 +147,6 @@ const Management = (props) => {
           contacts: data,
           selectedContacts,
           onSelectContacts: handleSelectContacts, // Ensure this function is defined in the parent component
-
         });
       }
     } else {
@@ -168,7 +158,6 @@ const Management = (props) => {
     setSelectedContacts(contacts);
 
     contacts.forEach((contact, index) => {
-      
       const recordid = String(new Date().getTime()) + index;
       const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordid}`);
 
@@ -180,11 +169,10 @@ const Management = (props) => {
       };
       set(databaseRef, newContact); // שימור האיש קשר במסד הנתונים כאיבר חדש
     });
-      // Update the counter_contacts field
-      const databaseRef3 = ref(database, `Events/${user.uid}/${id}/counter_contacts`);
-      set(databaseRef3, contacts.length);
+    // Update the counter_contacts field
+    const databaseRef3 = ref(database, `Events/${user.uid}/${id}/counter_contacts`);
+    set(databaseRef3, contacts.length);
   };
-
 
   const deleteAllContacts = async () => {
     if (user) {
@@ -202,348 +190,462 @@ const Management = (props) => {
       Alert.alert('Error', 'User not authenticated. Please log in.');
     }
   };
-  
+
   const showAlert = () => {
     Alert.alert(
-      'Delete',
-      'Are you sure you want to delete??',
+      'הסר הכל', // כותרת ההודעה
+      'האם אתה בטוח שברצונך להסיר את כל המוזמנים?', // תוכן ההודעה
       [
-        { text: 'Delete', onPress: () => deleteAllContacts() },
-        { text: 'Cancel', onPress: () => console.log('cacnel') }
-      ]
+        { 
+          text: 'הסר', 
+          onPress: () => deleteAllContacts(), // פעולה שמתבצעת כאשר לוחצים על 'הסר'
+          style: 'destructive', // עיצוב כפתור שלילי (מסומן באדום ב-iOS)
+        },
+        { 
+          text: 'ביטול', 
+          onPress: () => console.log('cancel'), // פעולה שמתבצעת כאשר לוחצים על 'ביטול'
+          style: 'cancel', // עיצוב כפתור ביטול (מסומן בהדגשה ב-iOS)
+        },
+      ],
+      { cancelable: true } // מאפשר לבטל את הדיאלוג על ידי לחיצה מחוץ לדיאלוג (באנדרואיד)
     );
   };
+  
 
-  const filteredContacts = contacts.filter(contact =>
+  const filteredContacts = contacts.filter((contact) =>
     contact.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     contact.phoneNumbers.toLowerCase().includes(searchQuery.toLowerCase())
   );
-  
+
   const renderItem = ({ item, index }) => (
     <View style={[styles.itemContainer, { backgroundColor: index % 2 === 0 ? '#f5f5f5' : '#ffffff' }]}>
-  <TouchableOpacity onPress={() => deleteContact(item.recordID)}>
-    <Image source={require('../assets/delete.png')} style={styles.deleteIcon} />
-  </TouchableOpacity>
-
-  <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between' }}>
-    <View>
+      <TouchableOpacity onPress={() => deleteContact(item.recordID)}>
+        <Image source={require('../assets/delete.png')} style={styles.deleteIcon} />
+      </TouchableOpacity>
+      <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between' }}>
+        <View>
+          <Text style={styles.itemText}>{item.displayName}</Text>
+          <Text style={styles.itemText}>{item.phoneNumbers}</Text>
+        </View>
+      </View>
     </View>
-    <View style={{ alignItems: 'flex-end' }}>
-      <Text style={styles.itemText}>{item.displayName}</Text>
-      <Text style={styles.itemText}>{item.phoneNumbers}</Text>
-    </View>
-  </View>
-</View>
-
   );
 
   return (
-   
-      <View style={styles.container}>
-        <StatusBar backgroundColor="#FFC0CB" barStyle="dark-content" />
-        <View style={[styles.topBar, { paddingTop: insets.top }]}>
-          <Text style={styles.title}>ניהול אנשי קשר</Text>
-        </View>
+    <ImageBackground source={require('../assets/backgruondcontact.png')} style={styles.background}>
+      <StatusBar backgroundColor="#FFC0CB" barStyle="dark-content" />
+      <View style={styles.topBar}>
+        <Text style={styles.title}>ניהול אורחים</Text>
+      </View>
 
-  
-        {contacts.length === 0 ? (
-          <View style={styles.noItemsContainer}>
-            <Text style={styles.noItemsText}>אין פריטים להצגה</Text>
-         </View>  
-           ) : (
-      <View style={styles.tableContainer}>
-      <TextInput
+      <TouchableOpacity onPress={() => props.navigation.navigate('ListItem', { id })}>
+        <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
+      </TouchableOpacity>
+
+      {contacts.length === 0 ? (
+        <View style={styles.noItemsContainer}>
+          <Text style={styles.noItemsText}>אין פריטים להצגה</Text>
+        </View>
+      ) : (
+        <View style={styles.tableContainer}>
+          <TextInput
             style={styles.searchInput}
             placeholder="חפש מוזמנים"
             value={searchQuery}
-            onChangeText={text => setSearchQuery(text)}
+            onChangeText={(text) => setSearchQuery(text)}
           />
-        <TouchableOpacity style={styles.deleteAllButton} onPress={showAlert}>
-          <Text style={styles.deleteText}>מחק הכל</Text>
-        </TouchableOpacity>
+          <View style={styles.rowContainer}>
+            <Text style={styles.textPrice}>מספר מוזמנים {contacts.length}</Text>
 
-        <FlatList
-          data={filteredContacts}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.recordID}
-          style={styles.list}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-        />
+            <TouchableOpacity style={styles.deleteAllButton} onPress={showAlert}>
+              <Text style={styles.deleteAllButtonText}>הסר הכל</Text>
+            </TouchableOpacity>
+          </View>
 
-      </View>
-    )}
-        <TouchableOpacity
-          onPress={() => setModalVisible(true)}
-          style={styles.addButton} >
-          <Text style={styles.addButtonText}>הוסף אנשי קשר</Text>        
-        </TouchableOpacity>
+          <FlatList
+            data={filteredContacts}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.recordID}
+            contentContainerStyle={styles.listContent}
+          />
+        </View>
+      )}
+      <View style={styles.topB}>
 
-        <TouchableOpacity style={styles.button_contact} onPress={pickContacts}>
-        <Text style={styles.buttonText}>Open Contacts</Text>
+      <TouchableOpacity style={styles.mainButton} onPress={() => setModalVisible2(true)}>
+        <Text style={styles.mainButtonText}>הוסף מוזמנים +</Text>
       </TouchableOpacity>
+      </View>
 
-
-        <Text style={styles.contactCount}>כמות אנשי קשר: {contacts.length}</Text>
-  
-        <Modal visible={modalVisible} animationType="slide">
-        <Image source={require('../assets/Signbac.png')} style={styles.backIcon2} />
-
+      <Modal
+        visible={modalVisible2}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setModalVisible2(false)}
+      >
+        <View style={styles.modalBackground}>
           <View style={styles.modalContainer}>
-            <View style={styles.buttonContainer3}>
-            <Text style={styles.modalTitle}>הוסף איש קשר חדש</Text>
+            <Text style={styles.modalTitle}>בחר אפשרות</Text>
 
+            <TouchableOpacity style={styles.optionButton} onPress={() => {
+              setModalVisible2(false);
+              setModalVisible(true)            }}>
+              <Text style={styles.optionButtonText}>הוסף מספר ידני</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.optionButton} onPress={() => {
+              setModalVisible2(false);
+              pickContacts(); // פתח את פונקציית ייבוא אנשי קשר
+            }}>
+              <Text style={styles.optionButtonText}>ייבא אנשי קשר</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible2(false)}>
+              <Text style={styles.closeButtonText}>סגור</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalBackground2}>
+          <View style={styles.modalContent2}>
+            <Text style={styles.modalTitle2}>הוסף איש קשר חדש</Text>
             <TextInput
-              style={styles.input}
+              style={styles.modalInput2}
               placeholder="שם"
               value={newContactName}
-              onChangeText={setNewContactName}
+              onChangeText={(text) => setNewContactName(text)}
             />
-            </View>
-
-            <View style={styles.buttonContainer2}>
-
             <TextInput
-              style={styles.input2}
-              placeholder="מספר טלפון"
+              style={styles.modalInput2}
+              placeholder="טלפון"
               value={newContactPhone}
-              onChangeText={setNewContactPhone}
-              keyboardType="phone-pad"
+              onChangeText={(text) => setNewContactPhone(text)}
             />
-              </View>
 
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.modalButton} onPress={addContact}>
-                <Text style={styles.modalButtonText}>הוסף</Text>
+            <View style={styles.modalButtonsContainer2}>
+              <TouchableOpacity style={styles.modalButtonCancel2} onPress={() => setModalVisible(false)}>
+                <Text style={styles.modalButtonText2}>ביטול</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setModalVisible(false)}>
-                <Text style={styles.modalButtonText}>ביטול</Text>
+              <TouchableOpacity style={styles.modalButtonSave2} onPress={addContact}>
+                <Text style={styles.modalButtonText2}>שמור</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </Modal>
+        </View>
+      </Modal>
+    </ImageBackground>
+  );
+};
 
-      <TouchableOpacity 
-        onPress={() => props.navigation.navigate('ListItem', { id })}
-        style={[styles.showPasswordButton, { position: 'absolute', top: '92%', left: '4%' }]}
-      >
-        <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
-      </TouchableOpacity>
-      </View>
-    );
-  };
+const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+    resizeMode: 'cover',
+    padding: 16,
 
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingHorizontal: 20,
-      backgroundColor: 'white',
-    },
-    topBar: {
-      width: '120%',
-      backgroundColor: '#ff69b4',
-      alignItems: 'center',
-      paddingVertical: 10,
-      position: 'absolute',
-       top: 0,
-    },
-    title: {
-      fontSize: 24,
-      fontWeight: 'bold',
-    },
-    tableContainer: {
-      flex: 1,
-      width: '100%',
-      maxHeight: '50%',
-      marginVertical: 20,
-    },
-    list: {
-      width: '100%',
-      backgroundColor: 'white',
-      borderRadius: 10,
-      overflow: 'hidden',
-      padding: 10,
-      boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)',
-    },
-    itemContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 10,
-      borderBottomWidth: 2,
-      borderBottomColor: '#ccc',
-      borderRadius: 5, // עיגול פינות ברדיוס 10 פיקסלים
-      
-    },
-    itemText: {
-      fontSize: 18,
-      
-    },
-    deleteIcon: {
-      width: 24,
-      height: 24,
-    },
+  },
+  topBar: {
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 15,
+    marginTop: 30,
 
-    contactCount: {
-      fontSize: 18,
-      fontWeight: 'bold',
-      borderRadius: 5,
-      position: 'absolute',
-      bottom: 130,
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: 10,
-    },
-    modalContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    modalTitle: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      marginBottom: 20,
-      color: '#333',
-    },
+  },
+  topB: {
 
+    alignItems: 'center',
+    marginBottom: 20,
+    marginTop: 20,
 
-    input: {
-      width: '80%',
-      height: 40, // גובה המרווח בין השורות
-      padding: 10,
-      borderWidth: 1,
-      borderRadius: 5,
-      marginBottom: 800,
-      backgroundColor: '#fff',
-    },
-    input2: {
-      width: '80%',
-      height: 40, // גובה המרווח בין השורות
-      padding: 10,
-      borderWidth: 1,
-      borderRadius: 5,
-      marginBottom: 400,
-      backgroundColor: '#fff',
-    },
-    separator: {
-      height: 10, // גובה המרווח בין השורות
-    },
-    noItemsContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    buttonContainer: {
-      position: 'absolute',
-      bottom: 20,
-      width: '100%',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    buttonContainer2: {
-      position: 'absolute',
-      bottom: 20,
-      width: '100%',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-
-    buttonContainer3: {
-      position: 'absolute',
-      bottom: -320,
-      width: '100%',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-      icon: {
+  },
+  title: {
+    fontSize: 24,
+    color: '#333',
+    fontWeight: 'bold',
+    Color: '#ff69b4',
+  },
+  noItemsContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noItemsText: {
+    fontSize: 20,
+    color: '#000',
+  },
+  tableContainer: {
+    flex: 1,
+  },
+  listContent: {
+    paddingBottom: 20,
+  },
+  itemContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 18,
+    marginBottom: 8,
+    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    
+  },
+  deleteIcon: {
     width: 24,
     height: 24,
+    marginRight: 12,
   },
-    modalButton: {
-      backgroundColor: '#4CAF50',
-      padding: 10,
-      borderRadius: 5,
-      marginVertical: 10,
-      width: '80%',
-      alignItems: 'center',
-    },
-    noItemsText: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      color: '#555',
-      textAlign: 'center',
-      marginTop: '-50%', // יותר קרוב למעלה
-    },
-    addButton: {
-      padding: 10,
-      width: '90%',
-      height: 50,
-      backgroundColor: '#ff69b4',
+  itemText: {
+    fontSize: 16,
+    color: '#333',
 
-      borderRadius: 5,
-      position: 'absolute',
-      bottom: 80,
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: 10,
-
-    },
-    
-    addButtonText: {
-      color: 'white',
-      fontWeight: 'bold',
-      
-    },
-    button_contact: {
-      fontWeight: 'bold',
-      marginTop: -40, // יותר קרוב למעלה
-      marginBottom: 180,
-
-    },
-    backIcon: {
-      width: 50,
-      height: 50,
+  },
+  addButton: {
+    backgroundColor: '#000',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginVertical: 10,
+  },
+  addButtonText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  pickContactsButton: {
+    backgroundColor: '#000',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginVertical: 10,
+  },
+  pickContactsButtonText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between', // מיקומים בקצוות השורה
+    marginVertical: 20,
+    paddingHorizontal: 20, // רווח פנימי מכל צד
+  },
   
-    },
-    backIcon2: {
-      width: 400,
-      height: 850,
   
-    },
-    cancelButton: {
-      backgroundColor: '#f44336',
-    },
-    modalButtonText: {
-      color: 'white',
-      fontWeight: 'bold',
-    },
-    searchInput: {
-      width: '100%',
-      height: 40,
-      paddingHorizontal: 10,
-      borderWidth: 1,
-      borderRadius: 5,
-      borderColor: '#ccc',
-      marginBottom: 60,
-      marginTop: -50, // יותר קרוב למעלה
-    },
-    
+  
+  deleteAllButton: {
+    position: 'absolute',
+    paddingHorizontal: 10, 
+    paddingVertical: 5,
+    backgroundColor: 'red', // צבע רקע אדום לכפתור
+    borderRadius: 5,
+  },
+  deleteAllButtonText: {
+    color: '#fff',
+    fontSize: 12,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContainer2: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 20,
+    elevation: 10,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  modalInput: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
+    backgroundColor: '#f5f5f5',
+  },
+  modalButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  searchInput: {
+    backgroundColor: '#FFFFFF',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  imageback: {
+    width: 40,
+    height: 40,
+    marginTop: -50,
+    marginBottom: 20,
 
-    deleteAllButton: {
-      position: 'absolute',
-      top: 10,
-      right: 0,
-      width: '25%',
-      backgroundColor: 'red',
-      paddingVertical: 5,
-      paddingHorizontal: 15,
-      borderRadius: 10,
-      marginRight: 260,
-    },
-    deleteText: {
-      color: 'white',
-      fontWeight: 'bold',
-    },
-  });
+    marginRight: 300,
+  },
+  textPrice: {
+    position: 'absolute',
+    right: 0, // מיקום קבוע מצד ימין
+    fontSize: 16,
+    color: 'black', // צבע הטקסט
+    fontWeight: 'bold', // משקל הטקסט (מודגש)
+    textAlign: 'right', // יישור הטקסט לימין
+    paddingHorizontal: 10, // מרווח אופקי
+    paddingVertical: 5, // מרווח אנכי
+    borderRadius: 5, // פינות מעוגלות
+  },
+  mainButton: {
+    backgroundColor: '#28A745', // צבע ירוק יפה
+
+    borderRadius: 20,
+    paddingHorizontal: 15, // מרחקים מצדדים
+    paddingVertical: 8,    // מרחק מלמעלה ומלמטה
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '40%',
+
+  },
+  mainButtonText: {
+    color: '#FFFFFF', // צבע טקסט לבן
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalBackground: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContainer: {
+    width: '80%',
+    padding: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalContainer2: {
+    width: '80%',
+    padding: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  optionButton: {
+    padding: 10,
+    backgroundColor: '#28A745', // צבע כפתור אופציה
+    borderRadius: 5,
+    marginVertical: 5,
+    width: '100%',
+  },
+  optionButtonText: {
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontSize: 16,
+  },
+  closeButton: {
+    marginTop: 15,
+    padding: 10,
+    backgroundColor: '#DC3545', // צבע כפתור סגירה
+    borderRadius: 5,
+    width: '100%',
+  },
+  closeButtonText: {
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontSize: 16,
+  },
+  modalBackground2: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', // צבע רקע כהה עם שקיפות
+  },
+  modalContent2: {
+    width: '85%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    padding: 20,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5, // עבור אנדרואיד כדי להוסיף צל
+    alignItems: 'center',
+  },
+  modalTitle2: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#333333', // צבע טקסט כהה
+  },
+  modalInput2: {
+    width: '100%',
+    height: 40,
+    borderColor: '#DDDDDD',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    marginBottom: 15,
+    fontSize: 16,
+    color: '#333333',
+  },
+  modalButtonsContainer2: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  modalButtonCancel2: {
+    flex: 1,
+    backgroundColor: '#FF6F61', // צבע אדום מותאם
+    borderRadius: 8,
+    paddingVertical: 10,
+    marginRight: 5,
+    alignItems: 'center',
+  },
+  modalButtonSave2: {
+    flex: 1,
+    backgroundColor: '#4CAF50', // צבע ירוק מותאם
+    borderRadius: 8,
+    paddingVertical: 10,
+    marginLeft: 5,
+    alignItems: 'center',
+  },
+  modalButtonText2: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+});
+
   
+
+
 export default Management;
