@@ -8,7 +8,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Contacts from 'expo-contacts';
 import { useNavigation } from '@react-navigation/native';
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import 'firebase/database'; // Import the Realtime Database module
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
