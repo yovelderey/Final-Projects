@@ -147,7 +147,7 @@ import React, { useEffect, useState } from 'react';
   const selectImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      alert('Permission to access media library is required!');
+      alert('נדרש הסכמה להרשאות!');
       return;
     }
   
@@ -367,11 +367,11 @@ import React, { useEffect, useState } from 'react';
 
           <TouchableOpacity 
           onPress={() => props.navigation.navigate('Main')}
-              style={[styles.showPasswordButton, { position: 'absolute', top: '97%', left: '3%' }]}>
-              <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
+              style={[styles.showPasswordButton, { position: 'absolute', top: '95%', left: '3%' }]}>
+              <Image source={require('../assets/back_icon2.png')} style={styles.backIcon} />
           </TouchableOpacity>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center',    marginBottom: 250,}}>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center',    marginBottom: 300,}}>
                   <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
                     <Image source={ require('../assets/icons8-facebook-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
                   </TouchableOpacity>

@@ -135,45 +135,48 @@ const Providers = ({ route, navigation }) => {
     </View>
   );
 
-  const handleRemoveLastRow = () => {
-    if (tableData.length === 0) {
-      Alert.alert('שגיאה', 'אין שורות להסרה.');
-      return;
-    }
 
-    const newTableData = tableData.slice(0, -1);
-    setTableData(newTableData);
-
-    const newChecked = checked.slice(0, -1);
-    setChecked(newChecked);
-
-    const databaseRef = ref(database, `Events/${user.uid}/${id}/Providers`);
-    set(databaseRef, newTableData.map(row => ({
-      checked: row[0],
-      price: row[1],
-      content: row[2],
-      date: row[3],
-      name: row[4]
-    }))).catch(error => {});
-  };
 
   const handleAddRow = () => {
     const newRow = [false, '', '', '', ''];
     const newTableData = [...tableData, newRow];
     setTableData(newTableData);
-
+  
     const newChecked = [...checked, false];
     setChecked(newChecked);
-
+  
     const databaseRef = ref(database, `Events/${user.uid}/${id}/Providers`);
     set(databaseRef, newTableData.map(row => ({
-      checked: row[0],
-      price: row[1],
-      content: row[2],
-      date: row[3],
-      name: row[4]
+      checked: row[0] !== undefined ? row[0] : false, // טיפול ב-undefined
+      price: row[1] !== undefined ? row[1] : '',
+      content: row[2] !== undefined ? row[2] : '',
+      date: row[3] !== undefined ? row[3] : '',
+      name: row[4] !== undefined ? row[4] : ''
     }))).catch(error => {});
   };
+  
+  const handleRemoveLastRow = () => {
+    if (tableData.length === 0) {
+      Alert.alert('שגיאה', 'אין שורות להסרה.');
+      return;
+    }
+  
+    const newTableData = tableData.slice(0, -1);
+    setTableData(newTableData);
+  
+    const newChecked = checked.slice(0, -1);
+    setChecked(newChecked);
+  
+    const databaseRef = ref(database, `Events/${user.uid}/${id}/Providers`);
+    set(databaseRef, newTableData.map(row => ({
+      checked: row[0] !== undefined ? row[0] : false, // טיפול ב-undefined
+      price: row[1] !== undefined ? row[1] : '',
+      content: row[2] !== undefined ? row[2] : '',
+      date: row[3] !== undefined ? row[3] : '',
+      name: row[4] !== undefined ? row[4] : ''
+    }))).catch(error => {});
+  };
+  
 
   const handleSaveToFirebase = () => {
     const dataToSave = tableData.map(row => ({

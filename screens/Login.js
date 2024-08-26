@@ -49,7 +49,7 @@ function Login(props) {
       })
       .catch((error) => {
         console.error('Error sending verification code:', error.message);
-        Alert.alert('Error', 'Failed to send verification code. ' + error.message);
+        Alert.alert('שגיאה', 'Failed to send verification code. ' + error.message);
       });
   };
 

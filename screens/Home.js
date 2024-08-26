@@ -189,7 +189,6 @@ const Home = (props) => {
         value={eventTime}
         onChangeText={(text) => setEventTime(text)}
         keyboardType="numeric" // מקלדת מספרים בלבד
-        maxLength={4} // הגבלת האורך ל-4 תווים (לדוגמה: שעה בפורמט 24 שעות)
       />
 
 
