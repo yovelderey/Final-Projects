@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
   },
   topBar: {
-    width: '120%',
+    width: '70%',
     alignItems: 'center',
     paddingVertical: 10,
  
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   tableContainer: {
     width: '100%',
     maxHeight: '50%',
-    marginVertical: 20,
+    marginVertical: 70,
 
     alignItems: 'center', // למרכז את התוכן אופקית
     position: 'absolute',
@@ -388,9 +388,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     position: 'absolute',
-    top: -760, 
-    left: -170, 
-    zIndex: 1000, 
+    top: -800, 
+    left: -190, 
+    zIndex: 0, 
   },
   buttonContainer3: {
     flexDirection: 'row',

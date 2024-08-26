@@ -182,7 +182,9 @@ const styles = StyleSheet.create({
   },
 
   showPasswordButton: {
-    marginLeft: -345,
+    padding: 0,
+    position: 'absolute',  // שימוש במיקום אבסולוטי
+    left: 10,  // הצמדה לצד שמאל של הקונטיינר
   },
   eyeIcon: {
     width: 20,

@@ -11,6 +11,7 @@ import { getDatabase, ref, remove,get } from 'firebase/database';
 import 'firebase/database'; // Import the Realtime Database module
 import { useNavigation } from '@react-navigation/native';
 import NetInfo from '@react-native-community/netinfo';
+const { width, height } = Dimensions.get('window');
 
 
 function Main(props) {
@@ -272,7 +273,7 @@ const handleSignOut = () => {
 
               {!isCreate && (
 
-              <TouchableOpacity onPress={() => props.navigation.navigate('Setting')} style={[styles.toolbar_down, { marginHorizontal: 317,marginTop:60 }]}>
+              <TouchableOpacity onPress={() => props.navigation.navigate('Setting')} style={[styles.toolbar_down]}>
                   <Image source={ require('../assets/user.png')}  style={[styles.img,{width: 30,height: 30,}]}/>
               </TouchableOpacity>             
               )}
@@ -362,12 +363,14 @@ const handleSignOut = () => {
     
     const styles = StyleSheet.create({
       container: {
-        flex: 0,
-        alignItems: 'center',
-        justifyContent: 'center',
-        left: -150,
-        top: -300,
-
+        position: 'absolute', // מאפשר מיקום קבוע
+        left: width / 2, // מרכז הקונטיינר אופקית
+        top: height-550, // מרכז הקונטיינר אנכית
+        transform: [{ translateX: -100 }, { translateY: -50 }], // תזוזה חזרה לפי גודל הקונטיינר
+        width: 200, // רוחב קבוע של הקונטיינר
+        height: 100, // גובה קבוע של הקונטיינר
+        alignItems: 'center', // יישור התוכן במרכז האופקי בתוך הקונטיינר
+        justifyContent: 'center', // יישור התוכן במרכז האנכי בתוך הקונטיינר
       },
       toolbar_bag: {
         position: 'absolute',
@@ -415,13 +418,13 @@ const handleSignOut = () => {
 
       },
       loginBtn2: {
-
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 70,
-        marginBottom: 320,
-        left: -150,
-
+        position: 'absolute', // מיקום אבסולוטי כדי לשלוט במיקום של הכפתור
+        left: width / 2 - 25, // מרכז הכפתור ביחס לרוחב המסך (50/2 = 25)
+        top: height-700, // מרכז הכפתור ביחס לגובה המסך (50/2 = 25)
+        width: 50, // רוחב הכפתור
+        height: 50, // גובה הכפתור
+        justifyContent: 'center', // יישור התוכן במרכז האנכי
+        alignItems: 'center', // יישור התוכן במרכז האופקי
       },
       loginText: {
         color: 'black',
@@ -441,8 +444,10 @@ const handleSignOut = () => {
         height: 50,
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: 50,
+        marginTop: height * 0.08,  // הצמדה 8% מהחלק העליון של המסך
         marginBottom: 0,
+        position: 'absolute',  // מיקום אבסולוטי
+        left: width * 0.80,  // הצמדה 85% מהשמאל של המסך
       },
       img2: {
 
@@ -568,17 +573,15 @@ const handleSignOut = () => {
 
       footerText2: {
         position: 'absolute',
-        bottom: 740, // מרחק מהתחתית, ייתכן שתצטרך להתאים אותו לפי גודל המסך שלך
+        bottom: height * 0.87, // הצמדה 10% מהחלק התחתון של המסך, להתאמה אוטומטית לגודל המסך
         fontSize: 40, // גודל גופן גדול לכותרת
         color: 'black', // צבע הטקסט שחור
-        marginTop: 10, // מרווח מהחלק העליון, לשמירת מראה מאוזן
         alignSelf: 'center', // יישור הטקסט במרכז האופקי
         fontWeight: 'bold', // הפיכת הכותרת ליותר בולטת עם גופן מודגש
         textShadowColor: 'rgba(0, 0, 0, 0.75)', // צל לתלת מימדיות קלה
         textShadowOffset: { width: -1, height: 1 }, // מיקום הצל
         textShadowRadius: 10, // רדיוס הצל
-      }
-      
+      },
       
     });
     export default Main;
