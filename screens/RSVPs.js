@@ -266,7 +266,7 @@ const RSVPs = (props) => {
     try {
       setModalVisible(true);
       startTimer_2();
-      const apiUrl = 'http://77.137.76.253:5000/trigger-wait-for-response';
+      const apiUrl = 'http://192.168.1.213:5000/trigger-wait-for-response';
       //const apiUrl = 'http://172.20.10.2:5000/trigger-wait-for-response';
       //telephone ^^^
       const recipients = contacts.map(contact => contact.phoneNumbers).filter(num => num.trim() !== '');
