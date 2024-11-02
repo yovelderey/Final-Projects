@@ -51,6 +51,12 @@ function Main(props) {
     props.navigation.navigate('ListItem', { id });
   };
 
+  const handleEditHome = async (id) => {
+  
+    //console.log('Navigate to home screen',id);
+    props.navigation.navigate('EditHome', { id });
+  };
+
   const handlePressRefresh = () => {
     props.navigation.navigate('Home');
     //fetchData(); // Refresh data
@@ -64,6 +70,11 @@ function Main(props) {
           text: 'מחק', // כפתור מחיקה
           onPress: () => deleteAlert(idToDelete), // פונקציה שמבצעת את המחיקה
           style: 'destructive', // עיצוב אדום ובולט למחיקה
+        },
+        {
+          text: 'ערוך', // כפתור מחיקה
+          onPress: () => handleEditHome(idToDelete), // פונקציה שמבצעת את המחיקה
+          style: 'cancel', // עיצוב אדום ובולט למחיקה
         },
         {
           text: 'ביטול', // כפתור ביטול
@@ -215,33 +226,45 @@ const handleSignOut = () => {
         return (
           <View style={styles.container}>
             <Text style={styles.errorText}>בעיית אינטרנט</Text>
-            <Text style={styles.errorSubText}>נא בדוק חיבור לרשת ה - wifi או בדוק עם ספק התקשורת שלך, תודה רבה.</Text>
-            <TouchableOpacity style={styles.button} onPress={() => {
-              // נסה לטעון מחדש את האפליקציה
-              navigation.replace('Main');
-            }}>
+            <Text style={styles.errorSubText}>
+              נא בדוק חיבור לרשת ה - wifi או בדוק עם ספק התקשורת שלך, תודה רבה.
+            </Text>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => {
+                // נסה לטעון מחדש את האפליקציה
+                navigation.replace('Main');
+              }}
+            >
               <Text style={styles.buttonText}>טען מחדש</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.button} onPress={() => {
-              // סגור את האפליקציה
-              Alert.alert(
-                "יציאה",
-                "האם אתה בטוח שברצונך לצאת מהאפליקציה?",
-                [
-                  {
-                    text: "ביטול",
-                    style: "cancel"
-                  },
-                  {
-                    text: "יציאה", 
-                    onPress: () => {
-                      // יציאה מהאפליקציה (פועל רק על אנדרואיד)
-                      BackHandler.exitApp();
-                    }
-                  }
-                ]
-              );
-            }}>
+            <TouchableOpacity
+              style={styles.button}
+              onPress={() => {
+                // סגור את האפליקציה
+                if (Platform.OS === 'android') {
+                  Alert.alert(
+                    "יציאה",
+                    "האם אתה בטוח שברצונך לצאת מהאפליקציה?",
+                    [
+                      {
+                        text: "ביטול",
+                        style: "cancel"
+                      },
+                      {
+                        text: "יציאה",
+                        onPress: () => BackHandler.exitApp()
+                      }
+                    ]
+                  );
+                } else {
+                  Alert.alert(
+                    "הודעה",
+                    "סגור את האפליקציה ידנית במכשיר ה-iOS שלך."
+                  );
+                }
+              }}
+            >
               <Text style={styles.buttonText}>יציאה</Text>
             </TouchableOpacity>
           </View>
@@ -288,7 +311,7 @@ const handleSignOut = () => {
 
                {!isCreate && (
               <View style={styles.container}>
-                  <Text style={[styles.titleEvent, { marginTop: 15 }]}>- האירועים שלי -</Text>
+                  <Text style={[styles.titleEvent, { marginTop: 65 }]}>- האירועים שלי -</Text>
 
                   {data.length === 0 ? (
                     <Text>אין כרגע אירועים, צור אירוע חדש</Text>
@@ -298,7 +321,7 @@ const handleSignOut = () => {
                         <Text style={styles.eventTitle}>{event.id}</Text>
 
                         <TouchableOpacity onPress={() => handleDeleteData(event.id)} style={styles.deleteButton}>
-                          <Image source={require('../assets/delete.png')} style={styles.icon} />
+                          <Image source={require('../assets/edit.png')} style={styles.icon} />
 
                         </TouchableOpacity>
 
@@ -425,6 +448,7 @@ const handleSignOut = () => {
         height: 50, // גובה הכפתור
         justifyContent: 'center', // יישור התוכן במרכז האנכי
         alignItems: 'center', // יישור התוכן במרכז האופקי
+
       },
       loginText: {
         color: 'black',
@@ -472,9 +496,9 @@ const handleSignOut = () => {
         marginBottom: 20,
       },
       titleEvent: {
-        fontSize: 30,
+        fontSize: 27,
         fontWeight: 'bold',
-        marginBottom: 25,
+        marginBottom: 0,
       },
       eventContainer: {
         marginBottom: 20,
@@ -557,8 +581,8 @@ const handleSignOut = () => {
 
       },
       icon: {
-        width: 28,
-        height: 28,
+        width: 25,
+        height: 25,
       },
       newevent: {
         width: 210,

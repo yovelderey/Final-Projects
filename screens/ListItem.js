@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-  import { View, ImageBackground,Text, TouchableOpacity,Image,ScrollView, StyleSheet,Dimensions,Animated } from 'react-native';
+import React, { useEffect, useRef,useState } from 'react';
+  import { View, ImageBackground,Text,FlatList,Easing, TouchableOpacity,Image,ScrollView, StyleSheet,Dimensions,Animated } from 'react-native';
   import { useNavigation } from '@react-navigation/native';
   import { NavigationContainer } from '@react-navigation/native';
   import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -10,6 +10,8 @@ import React, { useEffect, useState } from 'react';
   import 'firebase/compat/firestore';
   import * as ImagePicker from 'expo-image-picker';
   import * as FileSystem from 'expo-file-system';
+  import { StatusBar } from 'expo-status-bar';
+  import * as Progress from 'react-native-progress';
 
   const { width } = Dimensions.get('window');
   const images = [
@@ -17,6 +19,7 @@ import React, { useEffect, useState } from 'react';
     require('../assets/imgmaintwo.png'),
     require('../assets/imagmaintree.png'),
     require('../assets/imagemainfour.png'),
+    require('../assets/addpic.png'),
   ];
 
   const firebaseConfig = {
@@ -41,9 +44,7 @@ import React, { useEffect, useState } from 'react';
   const user = firebase.auth().currentUser;
   const id = props.route.params.id; // Accessing the passed id
   const [eventDetails, setEventDetails] = useState({});
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const animatedValue = useState(new Animated.Value(0))[0];
+
   const [inputDate, setInputDate] = useState('');
   const [daysLeft, setDaysLeft] = useState(null);
   const [eventDetailsspend, setEventDetailsspend] = useState({});
@@ -61,43 +62,66 @@ import React, { useEffect, useState } from 'react';
             setEventDetails(fetchedData); // Set the fetched event details
           }
 
-          const intervalId = setInterval(() => {
-            setCurrentIndex((prevIndex) => (prevIndex + 1) % images.length);
-            animate();
-          }, 5000); // Change image every 5 seconds
-      
-
-          
           return () => clearInterval(intervalId);
 
         } catch (error) {
-          console.error("Error fetching data: ", error);
+         // console.error("Error fetching data: ", error);
         }
       }
     };
-    
+
 
     fetchData();
   }, [user, id]);
 
   useEffect(() => {
-    console.log("eventDetails.eventDate55555  ", eventDetails.eventDate);
 
     if (eventDetails.eventDate) {
-      console.log("eventDetails.eventDate111  ", eventDetails.eventDate);
 
       calculateDaysLeft();
     }
   }, [eventDetails.eventDate]);
 
-  const animate = () => {
-    animatedValue.setValue(0);
-    Animated.timing(animatedValue, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
+  // הפונקציה שמבצעת את האנימציה
+
+
+  
+  const scrollX = useRef(new Animated.Value(0)).current;
+  const flatListRef = useRef(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedImage, setSelectedImage] = useState(null); // ניהול מצב התמונה שנבחרה
+
+  useEffect(() => {
+    if (!selectedImage) {
+      const interval = setInterval(() => {
+        setCurrentIndex(prevIndex => (prevIndex + 1) % images.length);
+        flatListRef.current.scrollToIndex({ index: currentIndex, animated: true });
+      }, 5000);
+
+      return () => clearInterval(interval);
+    }
+  }, [currentIndex, images.length, selectedImage]);
+
+  // פונקציה לפתיחת הגלריה ובחירת תמונה
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setSelectedImage(result.assets[0].uri); // שמירת נתיב התמונה שנבחרה
+    }
   };
+
+  // פונקציה למחיקת התמונה שנבחרה
+  const removeImage = () => {
+    setSelectedImage(null); // איפוס התמונה והחזרת הקרוסלה
+  };
+
+
 
   useEffect(() => {
     if (user) {
@@ -121,60 +145,49 @@ import React, { useEffect, useState } from 'react';
   }, [user, id]);
   
   
-  const translateX = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [width, 0],
-  });
 
-  const rotate = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
+  const animation = useRef(new Animated.Value(0)).current;
 
-  const scale = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.5, 1.5],
-  });
+  const targetDate = new Date(eventDetails.eventDate);
+  useEffect(() => {
+    // חישוב הימים שנותרו עד לתאריך היעד
+    const interval = setInterval(() => {
+      const currentDate = new Date();
+      const timeDiff = targetDate.getTime() - currentDate.getTime();
+      const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+
+      if (daysDiff > 0) {
+        setDaysLeft(`🎉 עוד ${daysDiff} ימים לאירוע הגדול! 🎉`);
+      } else if (daysDiff === 0) {
+        setDaysLeft("🎉 בשעה טובה! 🎉");
+      } else {
+        setDaysLeft("🎉 האירוע מאחורינו 🎉");
+      }
+    }, 1000);
+
+    // אנימציה חד-פעמית שמופיעה עם טעינת המסך
+    Animated.timing(animation, {
+      toValue: 1,
+      duration: 4000, // זמן האנימציה
+      useNativeDriver: true,
+    }).start(); // מפעילים את האנימציה פעם אחת בלבד
+
+    return () => clearInterval(interval);
+  }, [eventDetails.eventDate]);
 
   const animatedStyle = {
+    opacity: animation, // האנימציה תשפיע רק על השקיפות
     transform: [
-      { translateX },
-      { rotate },
-      { scale },
+      {
+        scale: animation.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0.5, 1.2], // התרחבות מ-50% עד 120%
+        }),
+      },
     ],
   };
 
-  const selectImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      alert('נדרש הסכמה להרשאות!');
-      return;
-    }
-  
-    const pickerResult = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
-  
-    if (!pickerResult.canceled && pickerResult.assets && pickerResult.assets.length > 0) {
-      try {
-        const selectedAsset = pickerResult.assets[0];
-        const fileName = selectedAsset.uri.split('/').pop();
-        const destinationUri = `${FileSystem.documentDirectory}${fileName}`;
-  
-        await FileSystem.copyAsync({
-          from: selectedAsset.uri,
-          to: destinationUri,
-        });
-  
-        setSelectedImage(destinationUri);
-      } catch (error) {
-        console.error("Error copying image: ", error);
-      }
-    }
-  };
   
   const handleButton1Press = () => {
     // Add your code here for Button 1 תקציב
@@ -225,27 +238,42 @@ import React, { useEffect, useState } from 'react';
 
   const calculateDaysLeft = () => {
 
-    const currentDate = new Date();
-    const targetDate = new Date(eventDetails.eventDate);
-    
-    // Calculate the difference in time
-    const timeDiff = targetDate.getTime() - currentDate.getTime();
-    // Calculate the difference in days
-    const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
-
-    console.log("eventDetails.eventDate2222  ", eventDetails.eventDate);
-
-    if(daysDiff>0)
-      setDaysLeft("עוד "+ daysDiff + " ימים");
-    else if(daysDiff == 0)
-      setDaysLeft("בשעה טובה!");
-    else
-      setDaysLeft("האירוע מאחורינו");
-    
-
   };
 
-  //console.log("eventDetails.ddd  ", eventDetails.eventDate);
+  let fileCount = eventDetails.Numberofimage; // מספר הקבצים
+  if (!(eventDetails && eventDetails.Numberofimage)) {
+    fileCount = 0;
+  }
+  let fileSizeMB = eventDetails.NumberofSizeimage; // מספר הקבצים
+  if (!(eventDetails && eventDetails.NumberofSizeimage)) {
+    fileSizeMB = 0;
+  }
+  //const fileSizeMB = 10; // משקל של כל קובץ ב-מ"ב
+  const maxStorage = 55; // מגבלת אחסון ב-מ"ב
+  const [progress] = useState(new Animated.Value(0));
+  const [storageUsed, setStorageUsed] = useState(0);
+
+  useEffect(() => {
+    const totalStorageUsed = Math.max(1,fileSizeMB); // סך השימוש באחסון
+    setStorageUsed(totalStorageUsed); // עדכון השימוש באחסון
+    const progressValue = Math.min(totalStorageUsed / maxStorage, 1); // חישוב ההתקדמות, מקסימום 1 (100%)
+
+    // עצירה של אנימציה קודמת והתחלת אנימציה חדשה
+    progress.stopAnimation();
+
+    Animated.timing(progress, {
+      toValue: progressValue, // יעד האנימציה
+      duration: 1500,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: false,
+    }).start();
+  }, [fileCount]);
+
+  const progressValue = progress.__getValue();
+  const progressColor = progressValue > 0.8 ? 'red' : '#3498db'; // צבע דינמי לפי שימוש
+
+  const screenWidth = Dimensions.get('window').width * 0.9; // 90% מרוחב המסך
+
 
   return (
   <ScrollView contentContainerStyle={styles.scrollViewContainer}>
@@ -260,34 +288,87 @@ import React, { useEffect, useState } from 'react';
             <Text style={styles.title}> {eventDetails.eventLocation}</Text>
           </View>
 
-        {selectedImage ? (
-          <Image source={{ uri: selectedImage }} style={styles.imageBackground} />
-        ) : (
+          <View style={styles.container1}>
+            <FlatList
+              data={selectedImage ? [selectedImage] : images} // אם נבחרה תמונה, מציגים רק אותה
+              horizontal
+              ref={flatListRef}
+              keyExtractor={(item, index) => index.toString()}
+              renderItem={({ item }) => (
+                <View style={styles.imageContainer}>
+                  <TouchableOpacity onPress={pickImage}> 
+                    <Image source={selectedImage ? { uri: selectedImage } : item} style={styles.image} />
+                  </TouchableOpacity>
+                  {selectedImage && (
+                    <TouchableOpacity style={styles.removeButton} onPress={removeImage}>
+                      <Text style={styles.removeButtonText}>×</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+              showsHorizontalScrollIndicator={false}
+              pagingEnabled
+              onScroll={Animated.event(
+                [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+                { useNativeDriver: false }
+              )}
+              scrollEventThrottle={16}
+            />
+            <StatusBar style="auto" />
 
-          <TouchableOpacity onPress={selectImage} style={styles.imagePlaceholder}>
-          <Animated.Image
-            source={images[currentIndex]}
-            style={[styles.imageBackgroundcarusel,{transform: [{ translateX: animatedValue }],},]}
-          />
-          </TouchableOpacity>
-
-        )}
+    </View>
         <View style={styles.backgroundContainer}>
         <View style={styles.row}>
           <View style={styles.section}>
-            <Text style={styles.header}>מוזמנים</Text>
+            <Text style={styles.header}>מוזמנים🙎🏻‍♂️</Text>
             <View style={styles.priceContainer}>
               <Text style={styles.textPrice}> {eventDetails.counter_contacts} / {eventDetails.Numberofguests}</Text>
             </View>
           </View>
           <View style={styles.section}>
-            <Text style={styles.header}>תקציב</Text>
+            <Text style={styles.header}>תקציב 💵</Text>
             <View style={styles.priceContainer}>
-              <Text style={styles.textPrice}>{eventDetails.spend}₪ / {eventDetails.budget}₪</Text>
+              <Text style={styles.textPrice}>{eventDetails.spend}₪ /{eventDetails.budget}₪</Text>
             </View>
           </View>
         </View>
       </View>
+
+      
+      <View style={styles.backgroundContainer}>
+      <View style={styles.shadowContainer}>
+        <View style={styles.row}>
+          {/* חלק המידע */}
+          <View style={styles.infoContainer}>
+            <Text style={styles.header}>מסמכים</Text>
+            <Text style={[styles.textInfo, { width: screenWidth }]}>
+              {storageUsed.toFixed(2)}MB / {maxStorage}MB
+            </Text>
+            <Text style={[styles.textLimit, { width: screenWidth }]}>
+              מספר הקבצים: {fileCount}
+            </Text>
+            <Text style={[styles.textLimit, { width: screenWidth }]}>עד 55MB של מסמכים</Text>
+          </View>
+
+          {/* חלק מעגל ההתקדמות */}
+          <View style={styles.progressContainer}>
+            <Progress.Circle
+              size={120}
+              progress={progressValue}
+              showsText
+              formatText={() => `${Math.round(progressValue * 100)}%`}
+              thickness={8}
+              color={progressColor} // צבע דינמי לפי שימוש
+              borderWidth={3}
+              animated={true}
+            />
+          </View>
+        </View>
+      </View>
+    </View>
+
+      <Animated.Text style={[styles.countdownText, animatedStyle]}>{daysLeft}</Animated.Text>
+
 
       <View style={styles.rectangle}>
       <View style={styles.imageContainer}>
@@ -357,9 +438,7 @@ import React, { useEffect, useState } from 'react';
       </TouchableOpacity>
     </View>
 
-          <TouchableOpacity  style={styles.largeButton}>
-              <Text style={styles.largeButtonText}> {daysLeft} </Text>
-          </TouchableOpacity>
+
 
           <Text style={styles.text2}> חפשו אותנו ברשתות החברתיות</Text>
                
@@ -402,6 +481,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 50,
   },
+  container1: {
+    flex: 1,
+    alignItems: 'center',
+    marginBottom: 25,
+  },
   title: {
     fontSize: 21,
     marginBottom: 20,
@@ -434,10 +518,11 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     alignItems: 'center',
+
   },
   imagePlaceholder: {
     width: '100%',
-    height: '20%',
+    height: '17.5%',
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
@@ -482,6 +567,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: -20,
+
   },
   text: {
     fontSize: 18,
@@ -500,6 +587,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#000000',
     fontWeight: 'bold',
+    right: -39,
+
     marginTop: -10, // Adjust as needed
   },
   buttonText: {
@@ -523,7 +612,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#cccccc',
-    width: '100%',
+    width: '110%',
     alignItems: 'center',
 
   },
@@ -599,13 +688,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20, // Add padding to create space between the sections
+    paddingHorizontal: 0, // Add padding to create space between the sections
   },
   backgroundContainer: {
-    backgroundColor: '#ff69b4', // Background color for the whole row
-    padding: 10,
-    borderRadius: 10,
-    width: '90%',
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
   },
   icon: {
     width: 50,
@@ -613,6 +702,100 @@ const styles = StyleSheet.create({
     marginTop: 5,
     marginBottom: 10, // email password log in is down
 
+  },
+
+  imageContainer: {
+    position: 'absolute',
+    width: width,
+    height: '100%',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  imageContainer: {
+    position: 'relative', // מאפשר למקם את כפתור ה-X בתוך התמונה
+  },
+  image: {
+    width,
+    height: 280,
+    resizeMode: 'cover',
+  },
+  removeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'red',
+    borderRadius: 15,
+    width: 25,
+    height: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeButtonText: {
+    color: 'white',
+    fontSize: 24,
+    lineHeight: 24,
+  },
+  countdownText: {
+    fontSize: 21, // טקסט גדול יותר
+    fontWeight: 'bold',
+    color: '#ff1493', // צבע ורוד עז לטקסט
+    textAlign: 'center',
+    padding: 8,
+    backgroundColor: '#fff0f5', // רקע נוסף מסביב לטקסט בצבע ורוד בהיר מאוד
+    borderRadius: 50, // פינות עגולות לטקסט
+    shadowColor: '#ff69b4', // צל בצבע ורוד
+    shadowOpacity: 0.8,
+    shadowRadius: 30,
+    elevation: 10, // הצללה קלה לטקסט
+    marginTop: 25, // email password log in is down
+    marginBottom: 5, // email password log in is down
+
+  },
+  shadowContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    elevation: 5, // עבור אנדרואיד
+    shadowColor: '#000', // עבור iOS
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    width: '90%', // רוחב מלא
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%', // 100% רוחב של ה-shadow container
+  },
+  infoContainer: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  header: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#2c3e50',
+  },
+  progressContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 20,
+  },
+  textInfo: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#34495e',
+    textAlign: 'right',
+  },
+  textLimit: {
+    fontSize: 14,
+    color: '#95a5a6',
+    textAlign: 'right',
   },
 });
 

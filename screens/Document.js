@@ -7,14 +7,22 @@ import 'firebase/compat/storage';
 import 'firebase/compat/auth';
 import 'firebase/compat/database'; // Import the Realtime Database module
 import * as Progress from 'react-native-progress';
+import 'firebase/database'; // Import the Realtime Database module
+
 import { getDatabase, ref, set, onValue } from 'firebase/database';
 
 const firebaseConfig = {
-  // Config here
+  apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
+  authDomain: "final-project-d6ce7.firebaseapp.com",
+  projectId: "final-project-d6ce7",
+  storageBucket: "final-project-d6ce7.appspot.com",
+  messagingSenderId: "1056060530572",
+  appId: "1:1056060530572:web:d08d859ca2d25c46d340a9",
+  measurementId: "G-LD61QH3VVP"
 };
 
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
+if (!firebase.apps.length){
+      firebase.initializeApp(firebaseConfig);
 }
 
 const storage = firebase.storage();
@@ -30,6 +38,9 @@ const Document = (props) => {
   const navigation = useNavigation();
   const id = props.route.params.id; // Accessing the passed id
   const database = getDatabase();
+  const user = firebase.auth().currentUser;
+  const [eventDetails, setEventDetails] = useState({});
+  const [sizeOfimage, setsizeOfimage] = useState(null);
 
   useEffect(() => {
     const fetchUserId = async () => {
@@ -40,12 +51,18 @@ const Document = (props) => {
         loadSavedData(user.uid);
         // Load images from Firebase Storage
         loadImagesFromStorage(user.uid);
+
+        if(eventDetails.eventName && imageUrls.length !== eventDetails.Numberofimage ){
+          const databaseRefNumberofimag = ref(database, `Events/${user.uid}/${eventDetails.eventName}/Numberofimage/`);
+          set(databaseRefNumberofimag, imageUrls.length)
+        }
+
       } else {
         Alert.alert("משתמש לא מחובר");
       }
     };
     fetchUserId();
-  }, []);
+  }, [imageUrls,imageUrls.length]);
 
   const loadSavedData = async (userId) => {
     try {
@@ -65,6 +82,7 @@ const Document = (props) => {
       setNames(names);
       setImages(images);
       setProgress(progress);
+
     } catch (error) {
     }
   };
@@ -75,6 +93,7 @@ const Document = (props) => {
       const res = await listRef.listAll();
       const urls = await Promise.all(res.items.map(itemRef => itemRef.getDownloadURL()));
       setImageUrls(urls);
+
     } catch (error) {
       console.error("Failed to load images:", error.message);
     }
@@ -99,6 +118,21 @@ const Document = (props) => {
       const timestamp = new Date().getTime(); // Unique timestamp
       const imageName = `image_${timestamp}.jpg`;
       uploadImage(result.assets[0].uri, imageName, index);
+
+      let sizeOfimageMB = sizeOfimage / 1048576;  
+      let temp = (eventDetails.NumberofSizeimage + sizeOfimageMB);
+      const databaseRefNumberofSizeimag = ref(database, `Events/${user.uid}/${eventDetails.eventName}/NumberofSizeimage/`);
+      set(databaseRefNumberofSizeimag,temp)
+     // console.log("temp2:",temp);
+      console.log("sizeOfimage2:",sizeOfimage);
+     // console.log("sizeOfimageMB2:",sizeOfimageMB);
+
+      const userId = firebase.auth().currentUser.uid;
+      const imageDetails = await getAllImagesAndSizes(userId);
+    
+      imageDetails.forEach(image => {
+        console.log(`Image Name: ${image.name}, Size: ${image.sizeMB} MB`);
+      });
     }
   };
 
@@ -121,6 +155,8 @@ const Document = (props) => {
           const newProgress = [...progress];
           newProgress[index] = progressValue / 100; // Convert to a value between 0 and 1
           setProgress(newProgress);
+          console.log(`Image ${index + 1} size: ${snapshot.totalBytes} bytes`);
+          setsizeOfimage(snapshot.totalBytes);
         },
         error => {
           Alert.alert("Image upload failed:", error.message);
@@ -132,9 +168,14 @@ const Document = (props) => {
             setImages(newImages);
             Alert.alert("התמונה עלתה בהצלחה");
             saveData(); // Ensure to save data after upload
+
+
+
           });
         }
       );
+
+
     } catch (error) {
       console.error("Image upload failed:", error.message);
       Alert.alert("התמונה נכשלה:", error.message);
@@ -204,6 +245,8 @@ const Document = (props) => {
       await database.ref().update(updates);
       
       Alert.alert("התמונה נמחקה!");
+
+
     } catch (error) {
       console.error("שגיאה בעת מחיקה:", error.message);
       Alert.alert("Image delete failed:", error.message);
@@ -215,7 +258,7 @@ const Document = (props) => {
       Alert.alert("User ID not found. Please log in.");
       return;
     }
-    
+
     try {
       // Extract image name from URL
       const imageName = url.split('%2F').pop().split('?')[0];
@@ -238,6 +281,71 @@ const Document = (props) => {
   const navigateBack = () => {
     navigation.goBack();
   };
+
+  useEffect(() => {
+
+    if (user) {
+      const eventRef = ref(database, `Events/${user.uid}/${id}/`);
+      
+      const handleValueChange = (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          setEventDetails(data);
+
+
+        }
+      };
+      
+      // Attach listener
+      const unsubscribe = onValue(eventRef, handleValueChange);
+      
+      // Cleanup function
+      return () => {
+        unsubscribe(); // Call unsubscribe to remove the listener
+      };
+    }
+
+  }, [user, id]);
+
+  const getAllImagesAndSizes = async (userId, id) => {
+    try {
+      // הפניה לתיקיית התמונות של המשתמש ב-Firebase Storage
+      const storageRef = firebase.storage().ref(); 
+      const imagesRef = storageRef.child(`users/${userId}/${id}/images/`);
+  
+  
+      
+      const result = await imagesRef.listAll(); 
+      const imagesData = [];
+
+      const db = getDatabase();
+      const docRef = ref(db, `users/${userId}/${id}/images/`);
+      console.log("docRef",docRef);
+
+      for (const itemRef of result.items) {
+        const metadata = await itemRef.getMetadata(); 
+        const imageSizeInBytes = metadata.size;
+  
+        // המרה למגה-בייט
+        const imageSizeInMB = (imageSizeInBytes / (1024 * 1024)).toFixed(2);
+  
+        // הוספת שם הקובץ והמשקל שלו למערך
+        imagesData.push({
+          name: metadata.name,
+          sizeMB: imageSizeInMB,
+        });
+
+      }
+  
+      // החזרת המידע על כל התמונות
+      return imagesData;
+  
+    } catch (error) {
+      console.error('Error fetching image metadata:', error);
+      return [];
+    }
+  };
+  
   
     return (
         <View style={styles.container}>

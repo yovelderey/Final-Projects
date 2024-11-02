@@ -126,7 +126,7 @@ const RSVPs = (props) => {
   }, [isRunning, timer]);
 
   const startTimer = () => {
-    setTimer(eventDetails.counter_contacts*40);
+    setTimer(eventDetails.counter_contacts*25);
     setIsRunning(true);
   };
 
@@ -208,7 +208,6 @@ const RSVPs = (props) => {
     return phoneNumber;
   }
   
-
   
   const sendMessageToRecipients = async () => {
     try {
@@ -217,6 +216,9 @@ const RSVPs = (props) => {
       const apiUrl = 'http://192.168.1.213:5000/send-messages';
       //const apiUrl = 'http://172.20.10.2:5000/send-messages';
       //telephone ^^^
+
+
+
       const recipients = contacts.map(contact => contact.phoneNumbers).filter(num => num.trim() !== '');
       const formattedContacts = recipients.map(formatPhoneNumber);
       const response = await fetch(apiUrl, {
@@ -267,8 +269,10 @@ const RSVPs = (props) => {
       setModalVisible(true);
       startTimer_2();
       const apiUrl = 'http://192.168.1.213:5000/trigger-wait-for-response';
+
       //const apiUrl = 'http://172.20.10.2:5000/trigger-wait-for-response';
       //telephone ^^^
+
       const recipients = contacts.map(contact => contact.phoneNumbers).filter(num => num.trim() !== '');
       const formattedContacts = recipients.map(formatPhoneNumber);
       const response = await fetch(apiUrl, {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef,useState } from 'react';
 import { TouchableOpacity, Image, Text, TextInput, ImageBackground, StyleSheet, ScrollView, View, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -9,7 +9,7 @@ import 'firebase/database'; // Import the Realtime Database module
 import  firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
-import { getDatabase, ref, set } from 'firebase/database';
+import { getDatabase, ref,set, remove,get,onValue } from 'firebase/database';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
@@ -25,7 +25,7 @@ if (!firebase.apps.length){
       firebase.initializeApp(firebaseConfig);
 }
 
-const Home = (props) => {
+const EditHome = (props) => {
   const [eventName, setEventName] = useState('');
   const [eventCategory, setEventCategory] = useState('');
   const [eventDate, setEventDate] = useState(new Date());
@@ -33,80 +33,48 @@ const Home = (props) => {
   const [Numberofguests, setNumberofguests] = useState('');
   const [budget, setBudget] = useState('');
   const [eventLocation, setEventLocation] = useState('');
+  const [Spend, setSpend] = useState('');
+
   const [eventDescription, setEventDescription] = useState('');
   const [secondOwnerName, setSecondOwnerName] = useState(''); // new state for the second owner name
   const [firstOwnerName, setfirstOwnerName] = useState(''); // new state for the second owner name
-
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const user = firebase.auth().currentUser;
   const database = getDatabase();
+  const [eventDetails, setEventDetails] = useState({});
+  const id = props.route.params.id; // Accessing the passed id
 
   const formatDate = (date) => format(date, "dd MMMM yyyy", { locale: he });
 
   const navigation = useNavigation();
 
   const handleCreateEvent = () => {
-    // בדיקת שכל השדות הנדרשים מלאים
-    if (
-      !eventName ||
-      !eventCategory ||
-      !eventDate ||
-      !eventTime ||
-      !Numberofguests ||
-      !budget ||
-      !eventLocation ||
-      (eventCategory === 'חתונה' && !secondOwnerName) // לוודא שמולא השם השני אם קטגוריה היא חתונה
-    ) {
-      Alert.alert('Error', 'Please fill all fields before creating the event.');
-      return;
-    }
-  
+
     // חיבור השמות במידה והקטגוריה היא "חתונה"
-    let finalEventName = eventName;
-    if (eventCategory === 'חתונה') {
-      finalEventName = eventName + " & " + secondOwnerName;
-    }
+
   
     if (!user) {
       Alert.alert('Error', 'User is not logged in.');
       return;
     }
   
-    const databaseRef = ref(database, `Events/${user.uid}/${finalEventName}/`);
-    const userData = {
-      eventName: finalEventName,
-      eventCategory: eventCategory,
-      eventDate: eventDate.toISOString().split('T')[0],
-      eventTime: eventTime,
-      budget: budget,
-      Numberofguests: Numberofguests,
-      eventLocation: eventLocation,
-      eventDescription: eventDescription,
-      secondOwnerName: secondOwnerName, // include second owner name
-      firstOwnerName: eventName, // include second owner name
+    const databaseRefeventLocation = ref(database, `Events/${user.uid}/${eventDetails.eventName}/eventLocation/`);
+    const databaseRefeventCategory = ref(database, `Events/${user.uid}/${eventDetails.eventName}/eventCategory/`);
+    const databaseRefeventDate = ref(database, `Events/${user.uid}/${eventDetails.eventName}/eventDate/`);
+    const databaseRefeventTime = ref(database, `Events/${user.uid}/${eventDetails.eventName}/eventTime/`);
+    const databaseRefbudget = ref(database, `Events/${user.uid}/${eventDetails.eventName}/budget/`);
+    const databaseRefNumberofguests = ref(database, `Events/${user.uid}/${eventDetails.eventName}/Numberofguests/`);
 
-      spend: ""
-    };
+
   
-    set(databaseRef, userData)
-      .then(() => {
-        console.log('Data written to the database successfully');
-        props.navigation.navigate('Main');
-      })
-      .catch((error) => {
-        console.error('Error writing data to the database:', error);
-      });
-  
-    set(ref(database, `Events/${user.uid}/${finalEventName}/yes_caming`), 0);
-    set(ref(database, `Events/${user.uid}/${finalEventName}/maybe`), 0);
-    set(ref(database, `Events/${user.uid}/${finalEventName}/no_cuming`), 0);
+    set(databaseRefeventLocation, eventLocation)
+    set(databaseRefeventCategory, eventCategory)
+    set(databaseRefeventDate, eventDate.toISOString().split('T')[0])
+    set(databaseRefeventTime, eventTime)
+    set(databaseRefbudget, budget)
+    set(databaseRefNumberofguests, Numberofguests)
 
-    const databaseRefNumberofimag = ref(database, `Events/${user.uid}/${finalEventName}/Numberofimage/`);
-    set(databaseRefNumberofimag,0)
-
-    const databaseRefNumberofSizeimag = ref(database, `Events/${user.uid}/${finalEventName}/NumberofSizeimage/`);
-    set(databaseRefNumberofSizeimag,0)
   };
   
 
@@ -117,6 +85,57 @@ const Home = (props) => {
     }
   };
 
+
+
+  useEffect(() => {
+    if (user) {
+      const eventRef = ref(database, `Events/${user.uid}/${id}/`);
+      
+      const handleValueChange = (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          setEventDetails(data);
+
+        }
+      };
+      
+      // Attach listener
+      const unsubscribe = onValue(eventRef, handleValueChange);
+      
+      // Cleanup function
+      return () => {
+        unsubscribe(); // Call unsubscribe to remove the listener
+      };
+    }
+
+  }, [user, id]);
+
+
+  useEffect(() => {
+    if (eventDetails.eventLocation) {
+      setEventLocation(eventDetails.eventLocation);
+    }
+    if (eventDetails.eventCategory) {
+        setEventCategory(eventDetails.eventCategory);
+    }
+
+    if (eventDetails.eventTime) {
+        setEventTime(eventDetails.eventTime);
+    }
+    if (eventDetails.Numberofguests) {
+        setNumberofguests(eventDetails.Numberofguests);
+      }
+      if (eventDetails.budget) {
+        setBudget(eventDetails.budget);
+      }
+      if (eventDetails.spend) {
+        setSpend(eventDetails.spend);
+      }
+      console.log('formatDate(eventDate)1',eventDate.toISOString().split('T')[0]);
+
+     
+  }, [eventDetails]);
+
   return (
     
     <ScrollView contentContainerStyle={styles.container}>
@@ -125,7 +144,7 @@ const Home = (props) => {
         style={styles.gif}
         resizeMode="cover" // כדי שה-GIF יכסה את כל המסך
       />      
-      <Text style={[styles.title, { marginTop: -780 }]}>אירוע חדש</Text>
+      <Text style={[styles.title, { marginTop: -780 }]}>ערוך אירוע</Text>
 
       <TouchableOpacity onPress={() => navigation.navigate('Main')}>
         <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
@@ -157,22 +176,7 @@ const Home = (props) => {
         </Picker>
       )}
 
-      <TextInput
-        style={styles.input}
-        placeholder="שם בעל האירוע 1"
-        value={eventName}
-        onChangeText={(text) => setEventName(text)}
-      />
 
-      {/* Only show this TextInput if the eventCategory is "חתונה" */}
-      {eventCategory === 'חתונה' && (
-        <TextInput
-          style={styles.input}
-          placeholder="שם בעל האירוע 2"
-          value={secondOwnerName}
-          onChangeText={(text) => setSecondOwnerName(text)}
-        />
-      )}
 
       <TouchableOpacity 
         style={styles.dateButton}
@@ -185,7 +189,7 @@ const Home = (props) => {
 
       {showDatePicker && (
         <DateTimePicker
-          value={eventDate}
+          value={eventDate || eventDetails.eventTime || 'תאריך'}
           mode="date"
           display="default"
           onChange={handleDateChange}
@@ -195,8 +199,7 @@ const Home = (props) => {
 
       <TextInput
         style={styles.input}
-        placeholder="שעה"
-        value={eventTime}
+        value={eventTime || eventDetails.eventTime || 'שעה'}
         onChangeText={(text) => setEventTime(text)}
         keyboardType="numeric" // מקלדת מספרים בלבד
       />
@@ -204,38 +207,24 @@ const Home = (props) => {
 
       <TextInput
         style={styles.input}
-        placeholder="מיקום"
-        value={eventLocation}
+        value={eventLocation || eventDetails.eventLocation || 'מקום האירוע'}
         onChangeText={(text) => setEventLocation(text)}
       />
 
-      <TextInput
+        <TextInput
         style={styles.input}
-        placeholder="מספר מוסמנים"
-        value={Numberofguests}
+        value={Numberofguests || eventDetails.Numberofguests || 'מספר מוזמנים'}
         onChangeText={(text) => setNumberofguests(text)}
-        keyboardType="numeric" // מקלדת מספרים בלבד
+        keyboardType="numeric"
+        />
 
-      />
-
-      <TextInput
+        <TextInput
         style={styles.input}
-        placeholder="תקציב"
-        value={budget}
+        value={budget || eventDetails.budget || 'תקציב'}
         onChangeText={(text) => setBudget(text)}
-        keyboardType="numeric" // מקלדת מספרים בלבד
+        keyboardType="numeric"
+        />
 
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="הערות"
-        multiline
-        numberOfLines={4}
-        value={eventDescription}
-        onChangeText={(text) => setEventDescription(text)}
-      />
-      <Text style={styles.textnew}>אנא הקפידו למלא את כל השדות באופן מדוייק להמשך תהליך יצירת האירוע, לאחר יצירת האירוע לא ניתן לערוך אותו</Text>
 
       <TouchableOpacity onPress={handleCreateEvent} style={styles.phoneButton}>
         <Image source={require('../assets/started.png')} />
@@ -364,4 +353,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default Home;
+export default EditHome;

@@ -23,6 +23,7 @@ import Document from './screens/Document';
 import Gift from './screens/Gift';
 import SplashScreen from './screens/SplashScreen';
 import ResponsesScreen from './screens/ResponsesScreen';
+import EditHome from './screens/EditHome';
 
 
 
@@ -52,8 +53,8 @@ const App = () => {
         <Stack.Screen name="Document" component={Document} />
         <Stack.Screen name="Gift" component={Gift} />
         <Stack.Screen name="ResponsesScreen" component={ResponsesScreen} />
+        <Stack.Screen name="EditHome" component={EditHome} />
 
-        
       </Stack.Navigator>
     </NavigationContainer>
   );
