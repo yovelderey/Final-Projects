@@ -22,6 +22,7 @@ const ContactsList = ({ route, navigation }) => {
       },
     });
   }, [navigation, localSelectedContacts]);
+  
   const navigateBackWithSelection = () => {
     onSelectContacts(localSelectedContacts);
     navigation.goBack();
@@ -39,7 +40,7 @@ const ContactsList = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>האנשי קשר שלי:</Text>
+<Text style={styles.title}>האנשי קשר שלי: ({contacts.length})</Text>
 
       <TextInput
         style={styles.searchInput}
@@ -47,29 +48,39 @@ const ContactsList = ({ route, navigation }) => {
         value={searchQuery}
         onChangeText={(text) => setSearchQuery(text)}
       />
-      <FlatList
-        data={filteredContacts}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.contactItem, localSelectedContacts.some((c) => c.id === item.id) ? styles.selectedContactItem : null]}
-            onPress={() => handleSelectContact(item)}
-          >
-            <Text style={styles.contactName}>{item.name}</Text>
-            {item.phoneNumbers && (
-              <Text style={styles.contactNumber}>{item.phoneNumbers[0].number}</Text>
-            )}
-          </TouchableOpacity>
-        )}
-      />
+<FlatList
+  data={filteredContacts}
+  keyExtractor={(item) => item.id}
+  renderItem={({ item }) => (
+    <TouchableOpacity
+      style={[
+        styles.contactItem,
+        Array.isArray(localSelectedContacts) && 
+        localSelectedContacts.some((c) => c.id === item.id) 
+          ? styles.selectedContactItem 
+          : null,
+      ]}
+      onPress={() => handleSelectContact(item)}
+    >
+      <Text style={styles.contactName}>{item.name || 'No Name'}</Text>
+      {item.phoneNumbers?.[0]?.number ? (
+        <Text style={styles.contactNumber}>{item.phoneNumbers[0].number}</Text>
+      ) : (
+        <Text style={styles.contactNumber}>No Phone Number</Text>
+      )}
+    </TouchableOpacity>
+  )}
+/>
+
+      
       <TouchableOpacity style={styles.button} onPress={navigateBackWithSelection}>
         <Text style={styles.buttonText}>הוסף אנשי קשר</Text>
       </TouchableOpacity>
       <TouchableOpacity 
         onPress={navigateBack}
-        style={[styles.showPasswordButton, { position: 'absolute', top: '6%', left: '3%' }]}
+        style={[styles.showPasswordButton, { position: 'absolute', top: '8%', left: '5%' }]}
       >
-        <Image source={require('../assets/backicon.png')} style={styles.backIcon} />
+        <Image source={require('../assets/back_icon2.png')} style={styles.backIcon} />
       </TouchableOpacity>
     </View>
   );
@@ -87,6 +98,8 @@ const styles = StyleSheet.create({
     padding: 10,
     borderWidth: 1,
     borderColor: '#ccc',
+    textAlign: 'right', // יישור טקסט לימין
+
     borderRadius: 5,
     marginBottom: 10,
     marginTop: 45, // הוסף שורה זו כדי להוריד את שדה החיפוש מעט למטה
@@ -137,8 +150,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   backIcon: {
-    width: 50,
-    height: 50,
+    width: 40,
+    height: 40,
 
   },
 });

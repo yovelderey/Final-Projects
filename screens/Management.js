@@ -60,10 +60,14 @@ const Management = (props) => {
         });
       }
 
+
       onAuthStateChanged(auth, async (currentUser) => {
         if (currentUser) {
           setUser(currentUser);
           const databaseRef = ref(database, `Events/${currentUser.uid}/${id}/contacts`);
+
+
+
 
           onValue(databaseRef, (snapshot) => {
             const data = snapshot.val();
@@ -84,17 +88,60 @@ const Management = (props) => {
     requestPermissions();
   }, []);
 
+  useEffect(() => {
+    if (user && id) {
+      const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts`);
+      let myVariable = 0;
+      let previousCounter = null; // משתנה לשמירת המצב האחרון
 
+      const unsubscribe = onValue(databaseRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+          console.log('Contacts 1:');
+          const contactsArray = Object.values(data);
+          setContacts(contactsArray);
+  
+          myVariable = contactsArray.length;
+          const currentCounter = contactsArray.length;
+          if (currentCounter !== previousCounter) {
+            console.log('Updating counter_contacts in database:', currentCounter);
+            const counterRef = ref(database, `Events/${user.uid}/${id}/counter_contacts`);
+            set(counterRef, currentCounter);
+            previousCounter = currentCounter; // עדכון המצב האחרון
+          }
+        } else {
+          console.log('No contacts found');
+          setContacts([]);
+          myVariable = 0;
+  
+          const counterRef = ref(database, `Events/${user.uid}/${id}/counter_contacts`);
+          set(counterRef, 0);
+        }
+      });
+  
+      // Cleanup logic
+      return () => {
+        const counterRef = ref(database, `Events/${user.uid}/${id}/counter_contacts`);
+        set(counterRef, myVariable); // עדכון הערך האחרון של מספר אנשי הקשר
+        console.log('Contacts 2:');
+        unsubscribe();
+      };
+    }
+  }, [user, id]);
+  
+  
+  
 
   const handleImportContacts = () => {
     // כאן תוסיף את הפונקציה שלך לייבוא אנשי קשר
     console.log('ייבא אנשי קשר');
     setModalVisible2(false);
   };
+
   const addContact = () => {
     const recordidd = String(new Date().getTime());
     const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordidd}`);
-
+  
     if (newContactName.trim() && newContactPhone.trim()) {
       const newContact = {
         recordID: recordidd,
@@ -108,14 +155,14 @@ const Management = (props) => {
       setNewContactName('');
       setNewContactPhone('');
       setNewPrice('');
-
-      // Update the counter_contacts field
-      const databaseRef3 = ref(database, `Events/${user.uid}/${id}/counter_contacts`);
-      set(databaseRef3, contacts.length + 1);
+  
+      // עדכון מספר המוזמנים
+      updateCounterContacts();
     } else {
       Alert.alert('Error', 'Please fill in both fields');
     }
   };
+  
 
   const deleteContact = async (contactId) => {
     if (user) {
@@ -123,8 +170,9 @@ const Management = (props) => {
       try {
         await remove(contactRef);
         setContacts((prevContacts) => prevContacts.filter((contact) => contact.recordID !== contactId));
-        const databaseRef3 = ref(database, `Events/${user.uid}/${id}/counter_contacts`);
-        set(databaseRef3, contacts.length - 1);
+  
+        // עדכון מספר המוזמנים
+        updateCounterContacts();
       } catch (error) {
         console.error('Error deleting contact from Firebase:', error);
         Alert.alert('Error', 'Failed to delete contact. Please try again.');
@@ -133,6 +181,7 @@ const Management = (props) => {
       Alert.alert('Error', 'User not authenticated. Please log in.');
     }
   };
+  
 
   const pickContacts = async () => {
     const { status } = await Contacts.requestPermissionsAsync();
@@ -155,23 +204,32 @@ const Management = (props) => {
 
   const handleSelectContacts = (contacts) => {
     setSelectedContacts(contacts);
-
+  
     contacts.forEach((contact, index) => {
       const recordid = String(new Date().getTime()) + index;
       const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordid}`);
-
+  
       const newContact = {
         recordID: recordid,
         displayName: contact.name,
         phoneNumbers: contact.phoneNumbers ? contact.phoneNumbers[0].number : 'No phone number',
         newPrice: newPrice,
       };
-      set(databaseRef, newContact); // שימור האיש קשר במסד הנתונים כאיבר חדש
+      set(databaseRef, newContact);
     });
-    // Update the counter_contacts field
-    const databaseRef3 = ref(database, `Events/${user.uid}/${id}/counter_contacts`);
-    set(databaseRef3, contacts.length);
+  
+    // עדכון מספר המוזמנים
+    updateCounterContacts();
   };
+  
+
+  const updateCounterContacts = () => {
+    const databaseRef = ref(database, `Events/${user.uid}/${id}/counter_contacts`);
+    set(databaseRef, contacts.length);
+  };
+
+  
+  
 
   const deleteAllContacts = async () => {
     if (user) {
@@ -179,8 +237,9 @@ const Management = (props) => {
       try {
         await remove(databaseRef);
         setContacts([]);
-        const databaseRef3 = ref(database, `Events/${user.uid}/${id}/counter_contacts`);
-        set(databaseRef3, 0);
+  
+        // עדכון מספר המוזמנים
+        updateCounterContacts();
       } catch (error) {
         console.error('Error deleting all contacts from Firebase:', error);
         Alert.alert('Error', 'Failed to delete all contacts. Please try again.');
@@ -189,6 +248,7 @@ const Management = (props) => {
       Alert.alert('Error', 'User not authenticated. Please log in.');
     }
   };
+  
 
   const showAlert = () => {
     Alert.alert(
@@ -385,6 +445,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 20,
+    
   },
   itemContainer: {
     flexDirection: 'row',
@@ -396,6 +457,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     
+    
   },
   deleteIcon: {
     width: 24,
@@ -405,7 +467,7 @@ const styles = StyleSheet.create({
   itemText: {
     fontSize: 16,
     color: '#333',
-
+    textAlign: 'right',
   },
   addButton: {
     backgroundColor: '#000',
@@ -492,6 +554,8 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
     marginBottom: 12,
+    textAlign: 'right', // יישור טקסט לימין
+
     borderWidth: 1,
     borderColor: '#ddd',
   },
@@ -615,6 +679,8 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     fontSize: 16,
     color: '#333333',
+    textAlign: 'right', // יישור טקסט לימין
+
   },
   modalButtonsContainer2: {
     flexDirection: 'row',

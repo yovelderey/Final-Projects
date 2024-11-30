@@ -256,7 +256,7 @@ import React, { useEffect, useRef,useState } from 'react';
   useEffect(() => {
     const totalStorageUsed = Math.max(1,fileSizeMB); // סך השימוש באחסון
     setStorageUsed(totalStorageUsed); // עדכון השימוש באחסון
-    const progressValue = Math.min(totalStorageUsed / maxStorage, 1); // חישוב ההתקדמות, מקסימום 1 (100%)
+    const progressValue = Math.min(fileCount / 10, 1); // חישוב ההתקדמות, מקסימום 1 (100%)
 
     // עצירה של אנימציה קודמת והתחלת אנימציה חדשה
     progress.stopAnimation();
@@ -317,55 +317,87 @@ import React, { useEffect, useRef,useState } from 'react';
             <StatusBar style="auto" />
 
     </View>
-        <View style={styles.backgroundContainer}>
+
+          <View style={styles.backgroundContainer}>
         <View style={styles.row}>
-          <View style={styles.section}>
-            <Text style={styles.header}>מוזמנים🙎🏻‍♂️</Text>
-            <View style={styles.priceContainer}>
-              <Text style={styles.textPrice}> {eventDetails.counter_contacts} / {eventDetails.Numberofguests}</Text>
+          {/* אובייקט ראשון - מסמכים */}
+          <View style={styles.documentContainer}>
+            <View style={styles.infoContainer}>
+              <Text style={styles.header}>מסמכים</Text>
+              <Text style={[styles.textInfo, { width: screenWidth }]}>
+                {fileCount} / 10
+              </Text>
+
+            </View>
+            <View style={styles.progressContainer}>
+              <Progress.Circle
+                size={120}
+                progress={progressValue}
+                showsText
+                formatText={() => `${Math.round(progressValue * 100)}%`}
+                thickness={8}
+                color={'#3498db'}
+                borderWidth={3}
+                animated={true}
+              />
             </View>
           </View>
-          <View style={styles.section}>
-            <Text style={styles.header}>תקציב 💵</Text>
-            <View style={styles.priceContainer}>
-              <Text style={styles.textPrice}>{eventDetails.spend}₪ /{eventDetails.budget}₪</Text>
+
+          {/* אובייקט שני - מוזמנים */}
+          <View style={styles.documentContainer}>
+            <View style={styles.infoContainer}>
+              <Text style={styles.header}>מוזמנים</Text>
+              <Text style={[styles.textInfo, { width: screenWidth }]}>
+                {eventDetails.counter_contacts} / {eventDetails.Numberofguests}
+              </Text>
+
+            </View>
+            <View style={styles.progressContainer}>
+              <Progress.Circle
+                size={120}
+                progress={eventDetails.Numberofguests ? eventDetails.counter_contacts / eventDetails.Numberofguests : 0}
+                showsText
+                formatText={() =>
+                  `${Math.round(
+                    (eventDetails.counter_contacts / eventDetails.Numberofguests) * 100
+                  )}%`
+                }
+                thickness={10}
+                color={'#e74c3c'}
+                borderWidth={4}
+                animated={true}
+              />
+            </View>
+          </View>
+
+          {/* אובייקט שלישי - תקציב */}
+          <View style={styles.documentContainer}>
+            <View style={styles.infoContainer}>
+              <Text style={styles.header}>תקציב</Text>
+              <Text style={[styles.textInfo, { width: screenWidth }]}>
+                {eventDetails.spend} / {eventDetails.budget}
+              </Text>
+
+            </View>
+            <View style={styles.progressContainer}>
+              <Progress.Circle
+                size={120}
+                progress={eventDetails.budget ? eventDetails.spend / eventDetails.budget : 0}
+                showsText
+                formatText={() =>
+                  `${Math.round((eventDetails.spend / eventDetails.budget) * 100)}%`
+                }
+                thickness={12}
+                color={'#000'}
+                borderWidth={2}
+                animated={true}
+              />
             </View>
           </View>
         </View>
       </View>
 
-      
-      <View style={styles.backgroundContainer}>
-      <View style={styles.shadowContainer}>
-        <View style={styles.row}>
-          {/* חלק המידע */}
-          <View style={styles.infoContainer}>
-            <Text style={styles.header}>מסמכים</Text>
-            <Text style={[styles.textInfo, { width: screenWidth }]}>
-              {storageUsed.toFixed(2)}MB / {maxStorage}MB
-            </Text>
-            <Text style={[styles.textLimit, { width: screenWidth }]}>
-              מספר הקבצים: {fileCount}
-            </Text>
-            <Text style={[styles.textLimit, { width: screenWidth }]}>עד 55MB של מסמכים</Text>
-          </View>
 
-          {/* חלק מעגל ההתקדמות */}
-          <View style={styles.progressContainer}>
-            <Progress.Circle
-              size={120}
-              progress={progressValue}
-              showsText
-              formatText={() => `${Math.round(progressValue * 100)}%`}
-              thickness={8}
-              color={progressColor} // צבע דינמי לפי שימוש
-              borderWidth={3}
-              animated={true}
-            />
-          </View>
-        </View>
-      </View>
-    </View>
 
       <Animated.Text style={[styles.countdownText, animatedStyle]}>{daysLeft}</Animated.Text>
 
@@ -438,19 +470,15 @@ import React, { useEffect, useRef,useState } from 'react';
       </TouchableOpacity>
     </View>
 
-
-
           <Text style={styles.text2}> חפשו אותנו ברשתות החברתיות</Text>
                
-                 
-
           <TouchableOpacity 
           onPress={() => props.navigation.navigate('Main')}
               style={[styles.showPasswordButton, { position: 'absolute', top: '95%', left: '3%' }]}>
               <Image source={require('../assets/back_icon2.png')} style={styles.backIcon} />
           </TouchableOpacity>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center',    marginBottom: 300,}}>
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center',    marginBottom: 120,}}>
                   <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
                     <Image source={ require('../assets/icons8-facebook-48.png')}  style={[styles.img,{width: 40,height: 40,}]}/>
                   </TouchableOpacity>
@@ -534,7 +562,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     paddingHorizontal: 10,  // הוספת שוליים פנימיים לקונטיינר של הכפתורים
-    marginBottom: -140,
+    marginBottom: -160,
   },
   button: {
     width: '45%',
@@ -559,7 +587,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 45,
   },
   maintext: {
     width: 200,
@@ -569,6 +597,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: -20,
 
+  },
+  documentContainer: {
+    flex: 1,
+    flexDirection: 'column', // מסדר את התוכן בתוך המסמכים לאורך
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    marginHorizontal: 5,
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   text: {
     fontSize: 18,
@@ -679,7 +722,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 50,
-    marginBottom: 5,
+    marginBottom: -100,
   },
   scrollViewContainer: {
     flexGrow: 1 // עשוי להיות חשוב לגליל בתוך ScrollView
@@ -766,14 +809,15 @@ const styles = StyleSheet.create({
     width: '90%', // רוחב מלא
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row', // כל הקונטיינרים של המסמכים יוצגו אחד ליד השני
     justifyContent: 'space-between',
-    width: '100%', // 100% רוחב של ה-shadow container
+    alignItems: 'flex-start', // מיקוד האובייקטים לאורך
+    width: '100%',
+    paddingHorizontal: 10, // רווח בין העמודות
   },
   infoContainer: {
-    flex: 1,
-    alignItems: 'flex-end',
+    marginBottom: 10, // רווח בין הטקסט למעגל
+    alignItems: 'center',
   },
   header: {
     fontSize: 22,
@@ -784,18 +828,16 @@ const styles = StyleSheet.create({
   progressContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 20,
   },
   textInfo: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
     color: '#34495e',
-    textAlign: 'right',
+    textAlign: 'center',
   },
   textLimit: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#95a5a6',
-    textAlign: 'right',
+    textAlign: 'center',
   },
 });
 
