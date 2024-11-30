@@ -2623,10 +2623,10 @@
   dependencies:
     plist "^3.0.5"
 
-"@react-native-picker/picker@^2.7.7":
-  version "2.7.7"
-  resolved "https://registry.npmjs.org/@react-native-picker/picker/-/picker-2.7.7.tgz"
-  integrity sha512-CTHthVmx8ujlH/u5AnxLQfsheh/DoEbo+Kbx0HGTlbKVLC1eZ4Kr9jXIIUcwB7JEgOXifdZIPQCsoTc/7GQ0ag==
+"@react-native-picker/picker@^2.10.1":
+  version "2.10.1"
+  resolved "https://registry.npmjs.org/@react-native-picker/picker/-/picker-2.10.1.tgz"
+  integrity sha512-OOcvPl+JrvobwjNREO1A9gxc+5mD74gp2ZcUJf/wcKtgNByS6XBxwiOwaCRvVbIcb6NQN06bMVVqjJEA0X+Tlg==
 
 "@react-native/assets-registry@0.74.87":
   version "0.74.87"

@@ -12,6 +12,7 @@ import 'firebase/database'; // Import the Realtime Database module
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
+import { Picker } from '@react-native-picker/picker';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
@@ -48,6 +49,7 @@ const Management = (props) => {
   const [searchQuery, setSearchQuery] = useState('');
   const auth = getAuth();
   const [modalVisible2, setModalVisible2] = useState(false);
+  const [selectedPrefix, setSelectedPrefix] = useState(''); // ברירת מחדל לקידומת
 
   useEffect(() => {
     const requestPermissions = async () => {
@@ -141,12 +143,13 @@ const Management = (props) => {
   const addContact = () => {
     const recordidd = String(new Date().getTime());
     const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordidd}`);
-  
-    if (newContactName.trim() && newContactPhone.trim()) {
+    const fullPhoneNumber = `${selectedPrefix}${newContactPhone}`; // יצירת מספר מלא
+
+    if (newContactName.trim() && newContactPhone.trim()&& selectedPrefix.trim()) {
       const newContact = {
         recordID: recordidd,
         displayName: newContactName,
-        phoneNumbers: newContactPhone,
+        phoneNumbers: fullPhoneNumber,
         price: newPrice,
       };
       set(databaseRef, newContact); // שימור האיש קשר במסד הנתונים כאיבר חדש
@@ -159,8 +162,14 @@ const Management = (props) => {
       // עדכון מספר המוזמנים
       updateCounterContacts();
     } else {
-      Alert.alert('Error', 'Please fill in both fields');
-    }
+      Alert.alert('שגיאה', 'נא למלא את כל השדות', [
+        {
+          text: 'הבנתי',
+          onPress: () => {}, // פעולה לאחר לחיצה
+        },
+      ]);
+      return;
+        }
   };
   
 
@@ -281,7 +290,7 @@ const Management = (props) => {
       <TouchableOpacity onPress={() => deleteContact(item.recordID)}>
         <Image source={require('../assets/delete.png')} style={styles.deleteIcon} />
       </TouchableOpacity>
-      <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between' }}>
+      <View style={{ flex: 1, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
         <View>
           <Text style={styles.itemText}>{item.displayName}</Text>
           <Text style={styles.itemText}>{item.phoneNumbers}</Text>
@@ -367,38 +376,58 @@ const Management = (props) => {
       </Modal>
 
       <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalBackground2}>
-          <View style={styles.modalContent2}>
-            <Text style={styles.modalTitle2}>הוסף איש קשר חדש</Text>
-            <TextInput
-              style={styles.modalInput2}
-              placeholder="שם"
-              value={newContactName}
-              onChangeText={(text) => setNewContactName(text)}
-            />
-            <TextInput
-              style={styles.modalInput2}
-              placeholder="טלפון"
-              value={newContactPhone}
-              onChangeText={(text) => setNewContactPhone(text)}
-            />
+  visible={modalVisible}
+  animationType="slide"
+  transparent={true}
+  onRequestClose={() => setModalVisible(false)}
+>
+  <View style={styles.modalBackground2}>
+    <View style={styles.modalContent2}>
+      <Text style={styles.modalTitle2}>הוסף איש קשר חדש</Text>
+      <TextInput
+        style={styles.modalInput2}
+        placeholder="שם"
+        value={newContactName}
+        onChangeText={(text) => setNewContactName(text)}
+      />
+      <View style={styles.phoneInputContainer}>
+      <View style={styles.pickerWrapper}>
+      <TextInput
+        style={styles.prefixInput}
+        placeholder="קידומת"
+        value={selectedPrefix} // ערך הקידומת
+        keyboardType="numeric" // רק מספרים
+        maxLength={3} // הגבלת הקלט ל-3 ספרות
+        onChangeText={(text) => setSelectedPrefix(text)} // עדכון הקידומת
+      />
+      </View>
+      
+        <TextInput
+          style={styles.phoneInput}
+          placeholder="טלפון"
+          value={newContactPhone}
+          onChangeText={(text) => setNewContactPhone(text)}
+        />
+      </View>
+      <View style={styles.modalButtonsContainer2}>
+        <TouchableOpacity style={styles.modalButtonCancel2} onPress={() => setModalVisible(false)}>
+          <Text style={styles.modalButtonText2}>ביטול</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.modalButtonSave2}
+          onPress={() => {
+            const fullPhoneNumber = `${selectedPrefix}${newContactPhone}`;
+            setNewContactPhone(fullPhoneNumber);
+            addContact();
+          }}
+        >
+          <Text style={styles.modalButtonText2}>שמור</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+</Modal>
 
-            <View style={styles.modalButtonsContainer2}>
-              <TouchableOpacity style={styles.modalButtonCancel2} onPress={() => setModalVisible(false)}>
-                <Text style={styles.modalButtonText2}>ביטול</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalButtonSave2} onPress={addContact}>
-                <Text style={styles.modalButtonText2}>שמור</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </ImageBackground>
   );
 };
@@ -663,6 +692,7 @@ const styles = StyleSheet.create({
     elevation: 5, // עבור אנדרואיד כדי להוסיף צל
     alignItems: 'center',
   },
+
   modalTitle2: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -685,11 +715,10 @@ const styles = StyleSheet.create({
   modalButtonsContainer2: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    width: '100%',
   },
   modalButtonCancel2: {
     flex: 1,
-    backgroundColor: '#FF6F61', // צבע אדום מותאם
+    backgroundColor: '#FF6F61',
     borderRadius: 8,
     paddingVertical: 10,
     marginRight: 5,
@@ -697,7 +726,7 @@ const styles = StyleSheet.create({
   },
   modalButtonSave2: {
     flex: 1,
-    backgroundColor: '#4CAF50', // צבע ירוק מותאם
+    backgroundColor: '#4CAF50',
     borderRadius: 8,
     paddingVertical: 10,
     marginLeft: 5,
@@ -707,6 +736,45 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  phoneInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+
+  },
+  
+  picker: {
+    height: 100,
+    width: 100,
+
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    marginRight: 10,
+  },
+  phoneInput: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    backgroundColor: '#f5f5f5',
+    textAlign: 'right', // יישור לימין
+
+  },
+
+  prefixInput: {
+    width: 70, // רוחב מתאים לקידומת
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    marginRight: 10, // רווח בין הקידומת לשדה הטלפון
+    backgroundColor: '#f5f5f5',
+    textAlign: 'center', // יישור מרכזי
+    
   },
 });
 

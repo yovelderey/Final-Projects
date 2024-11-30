@@ -40,7 +40,7 @@ const ContactsList = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
-<Text style={styles.title}>האנשי קשר שלי: ({contacts.length})</Text>
+<Text style={styles.title}>האנשי קשר שלי ({contacts.length})</Text>
 
       <TextInput
         style={styles.searchInput}
