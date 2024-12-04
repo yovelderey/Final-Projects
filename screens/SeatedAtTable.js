@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getAuth, onAuthStateChanged } from 'firebase/auth'; // Import auth methods
 import { onValue } from 'firebase/database';
 import 'firebase/compat/storage';
+import * as Print from 'expo-print';
 
 import 'firebase/database'; // Import the Realtime Database module
 import  firebase from 'firebase/compat/app';
@@ -45,6 +46,21 @@ const SeatedAtTable = (props) => {
   const storage = firebase.storage();
   const [images, setImages] = useState(Array(1).fill(null));
   const [userId2, setUserId2] = useState(null);
+  const [allContacts, setAllContacts] = useState([]); // כל אנשי הקשר שנמצאים בנתיב
+  const [selectedContacts, setSelectedContacts] = useState([]); // אנשי קשר שנבחרו
+  const [searchText, setSearchText] = useState('');
+  const filteredContacts = contacts.filter((item) => {
+    const tableNameMatches = item.displayName.toLowerCase().includes(searchText.toLowerCase());
+  
+    const guestNameMatches =
+      item.guests &&
+      item.guests.some((guest) =>
+        guest.displayName.toLowerCase().includes(searchText.toLowerCase())
+      );
+  
+    return tableNameMatches || guestNameMatches;
+  });
+  
 
 
   useEffect(() => {
@@ -149,66 +165,206 @@ const uploadImage = async (uri, imageName, index) => {
 };
 
 
+useEffect(() => {
+  if (user) {
+    const contactsRef = ref(database, `Events/${user.uid}/${id}/contacts`);
+    onValue(contactsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        setAllContacts(Object.values(data)); // שמירת אנשי הקשר מהרשימה ב-state
+      } else {
+        setAllContacts([]);
+      }
+    });
+  }
+}, [user]);
+
+const handlePrint = async (content) => {
+  try {
+    await Print.printAsync({
+      html: `
+        <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 20px; }
+              h1 { color: #333; }
+              p { font-size: 14px; margin: 5px 0; }
+            </style>
+          </head>
+          <body>
+            <p>${content.replace(/\n/g, '<br/>')}</p>
+          </body>
+        </html>
+      `,
+    });
+  } catch (error) {
+    //Alert.alert('שגיאה בהדפסה', error.message);
+  }
+};
+const addContact = () => {
+  const recordidd = String(new Date().getTime());
+  const databaseRef = ref(database, `Events/${user.uid}/${id}/tables/${recordidd}`);
+  const tableNumber = contacts.length + 1;
+
+  if (newContactName.trim()) {
+    const newContact = {
+      recordID: recordidd,
+      numberTable: `שולחן ${tableNumber}`,
+      displayName: newContactName,
+      guests: selectedContacts.map((contactId) => {
+        return allContacts.find((contact) => contact.recordID === contactId);
+      }),
+    };
+    set(databaseRef, newContact);
+    setContacts([...contacts, newContact]);
+    setModalVisible(false);
+    setNewContactName('');
+    setSelectedContacts([]); // איפוס הבחירה
+  } else {
+    Alert.alert('Error', 'Please fill in the table name');
+  }
+};
+
+const printAllTables = async () => {
+  if (contacts.length === 0) {
+    Alert.alert("אין שולחנות להדפסה");
+    return;
+  }
+
+  const allTableData = contacts.map((item, index) => {
+    const guestNames = item.guests?.map((guest) => guest.displayName || 'ללא שם').join(', ') || 'אין אורחים';
+    return `
+      <div style="page-break-after: always;">
+        <h2>שולחן ${index + 1} - ${item.displayName || 'ללא שם'}</h2>
+        <p><strong>מספר אנשים:</strong> ${item.guests?.length || 0}</p>
+        <p><strong>אורחים:</strong> ${guestNames}</p>
+      </div>
+    `;
+  });
+
+  const printContent = `
+    <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          h2 { color: #333; margin-bottom: 10px; }
+          p { font-size: 14px; margin: 5px 0; }
+          div { margin-bottom: 20px; }
+        </style>
+      </head>
+      <body>
+        ${allTableData.join('')}
+      </body>
+    </html>
+  `;
+
+  await handlePrint(printContent);
+};
 
 
 
-  const addContact = () => {
-    const recordidd = String(new Date().getTime());
-    const databaseRef = ref(database, `Events/${user.uid}/${id}/tables/${recordidd}`);
 
-    if (newContactName.trim() && newContactPhone.trim()) {
-      const newContact = {
-        recordID: recordidd,
-        displayName: newContactName,
-        phoneNumbers: newContactPhone,
-      };
-      set(databaseRef, newContact); // שימור האיש קשר במסד הנתונים כאיבר חדש
-      setContacts([...contacts, newContact]);
-      setModalVisible(false);
-      setNewContactName('');
-      setNewContactPhone('');
-    } else {
-      Alert.alert('Error', 'Please fill in both fields');
-    }
+const deleteTable = (recordID) => {
+  const tableRef = ref(database, `Events/${user.uid}/${id}/tables/${recordID}`);
+  remove(tableRef)
+    .then(() => {
+      setContacts((prevContacts) =>
+        prevContacts.filter((contact) => contact.recordID !== recordID)
+      );
+      Alert.alert("השולחן נמחק בהצלחה!");
+    })
+    .catch((error) => {
+      console.error("Error deleting table:", error);
+      Alert.alert("שגיאה במחיקת שולחן:", error.message);
+    });
+};
+
+const deleteAllTables = () => {
+  const tablesRef = ref(database, `Events/${user.uid}/${id}/tables`);
+  remove(tablesRef)
+    .then(() => {
+      setContacts([]);
+      Alert.alert("כל השולחנות נמחקו בהצלחה!");
+    })
+    .catch((error) => {
+      console.error("Error deleting all tables:", error);
+      Alert.alert("שגיאה במחיקת כל השולחנות:", error.message);
+    });
+};
+
+
+
+  
+  const toggleContactSelection = (contactId) => {
+    setSelectedContacts((prevSelected) => {
+      if (prevSelected.includes(contactId)) {
+        return prevSelected.filter((id) => id !== contactId); // הסרת איש קשר מהרשימה
+      } else {
+        return [...prevSelected, contactId]; // הוספת איש קשר לרשימה
+      }
+    });
   };
 
-  const deleteContact = async (contactId) => {
-    if (user) {
+  const renderItem = ({ item, index }) => {
+    const backgroundColor = index % 2 === 0 ? '#f5f5f5' : '#ffffff';
+  
+    return (
+      <View style={[styles.itemContainer, { backgroundColor }]}>
+        {/* מספר השולחן */}
+        <Text style={styles.tableNumber}>{`שולחן ${index + 1}`}</Text>
+  
+        {/* שם השולחן */}
+        <Text style={styles.tableName}>{item.displayName || 'ללא שם'}</Text>
+  
+        {/* מספר האנשים בשולחן */}
+        <Text style={styles.guestCount}>
+          {item.guests && item.guests.length > 0
+            ? `מספר אנשים: ${item.guests.length}`
+            : 'אין אנשים בשולחן'}
+        </Text>
+  
+        {/* שמות האנשים לרוחב */}
+        {item.guests && item.guests.length > 0 ? (
+          <View style={styles.guestListHorizontal}>
+            {item.guests.map((guest, guestIndex) => (
+              <Text key={guestIndex} style={styles.guestName}>
+                {guest.displayName || 'ללא שם'}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+  
+        {/* כפתור מחיקה */}
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => deleteTable(item.recordID)}
+        >
+          <Text style={styles.deleteButtonText}>מחק</Text>
+        </TouchableOpacity>
+  
+        <TouchableOpacity
+          style={styles.printButton}
+          onPress={() => {
+            const content = `
+              שולחן ${index + 1} - ${item.displayName || 'ללא שם'}
+              מספר אנשים: ${item.guests?.length || 0}
+              אורחים: ${
+                item.guests?.map((guest) => guest.displayName || 'ללא שם').join(', ') || 'אין אורחים'
+              }
+            `;
+            handlePrint(content);
+          }}
+        >
+          <Text style={styles.printButtonText}>הדפס</Text>
+        </TouchableOpacity>
 
-      const contactRef = ref(database, `Events/${user.uid}/${id}/contacts/${contactId}`);
-      try {
-        
-        await remove(contactRef);
-        setContacts((prevContacts) => prevContacts.filter((contact) => contact.recordID !== contactId));
-      } catch (error) {
-        console.error('Error deleting contact from Firebase:', error);
-        Alert.alert('Error', 'Failed to delete contact. Please try again.');
-      }
-    } else {
-      Alert.alert('Error', 'User not authenticated. Please log in.');
-    }
+
+      </View>
+    );
   };
   
-
-
-  const renderItem = ({ item, index }) => (
-    <View style={[styles.itemContainer, { backgroundColor: index % 2 === 0 ? '#f5f5f5' : '#ffffff' }]}>
-  <TouchableOpacity onPress={() => deleteContact(item.recordID)}>
-    <Image source={require('../assets/delete.png')} style={styles.deleteIcon} />
-  </TouchableOpacity>
-
-
-  <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'space-between' }}>
-    <View>
-    </View>
-    <View style={{ alignItems: 'flex-end' }}>
-      <Text style={styles.itemText}>{item.displayName}</Text>
-      <Text style={styles.itemText}>{item.phoneNumbers}</Text>
-    </View>
-  </View>
-</View>
-
-  );
+  
+  
 
   return (
     <View style={styles.container}>
@@ -234,11 +390,37 @@ const uploadImage = async (uri, imageName, index) => {
 
       
       <Text style={styles.noItemsText}>לחץ על התמונה להעלות תרשים אולם</Text>
-      <Text style={styles.noItemsText2}>פורמט jpeg, png, jpg</Text>
-  
+      <View style={styles.buttonsContainer}>
+  {/* כפתור מחיקת כל השולחנות */}
+  <TouchableOpacity
+    style={styles.deleteAllButton}
+    onPress={deleteAllTables}
+  >
+    <Text style={styles.deleteAllButtonText}>מחק הכל</Text>
+  </TouchableOpacity>
+
+  <TouchableOpacity
+      style={styles.dummyButton}
+      onPress={printAllTables}
+    >
+      <Text style={styles.dummyButtonText}>הדפס הכל</Text>
+  </TouchableOpacity>
+
+  {/* מספר השולחנות */}
+  <Text style={styles.tableCountText}>({contacts.length})</Text>
+</View>
+
+      <TextInput
+        style={styles.searchInput}
+        placeholder="חפש שולחן..."
+        value={searchText}
+        onChangeText={setSearchText}
+      />
+
+
       <View style={styles.tableContainer}>
         <FlatList
-          data={contacts}
+          data={filteredContacts}
           renderItem={renderItem}
           keyExtractor={(item) => item.recordID}
           style={styles.list}
@@ -252,42 +434,40 @@ const uploadImage = async (uri, imageName, index) => {
         <Text style={styles.addButtonText}>הוסף שולחן +</Text>        
       </TouchableOpacity>
   
-      <Text style={styles.contactCount}>מספר שולחנות: {contacts.length}</Text>
     
       <Modal visible={modalVisible} animationType="slide">
-        <Image source={require('../assets/Signbac.png')} style={styles.backIcon2} />
-  
         <View style={styles.modalContainer}>
-          <View style={styles.buttonContainer3}>
-            <Text style={styles.modalTitle}>הוסף שולחן חדש</Text>
-  
-            <TextInput
-              style={styles.input}
-              placeholder=" שם שולחן"
-              value={newContactName}
-              onChangeText={setNewContactName}
-            />
-          </View>
-  
-          <View style={styles.buttonContainer2}>
-            <TextInput
-              style={styles.input2}
-              placeholder="שם אורח"
-              value={newContactPhone}
-              onChangeText={setNewContactPhone}
-            />
-          </View>
-  
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity style={styles.modalButton} onPress={addContact}>
-              <Text style={styles.modalButtonText}>הוסף</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setModalVisible(false)}>
-              <Text style={styles.modalButtonText}>ביטול</Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.modalTitle}>הוסף שולחן חדש</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="שם שולחן"
+            value={newContactName}
+            onChangeText={setNewContactName}
+          />
+          <FlatList
+            data={allContacts}
+            keyExtractor={(item) => item.recordID}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                onPress={() => toggleContactSelection(item.recordID)}
+                style={[
+                  styles.contactItem,
+                  selectedContacts.includes(item.recordID) && styles.contactItemSelected,
+                ]}
+              >
+                <Text style={styles.contactName}>{item.displayName}</Text>
+              </TouchableOpacity>
+            )}
+          />
+          <TouchableOpacity style={styles.modalButton} onPress={addContact}>
+            <Text style={styles.modalButtonText}>הוסף</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.modalButton, styles.cancelButton]} onPress={() => setModalVisible(false)}>
+            <Text style={styles.modalButtonText}>ביטול</Text>
+          </TouchableOpacity>
         </View>
       </Modal>
+
   
 
     </View>
@@ -311,6 +491,14 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
   },
+  tableNumber: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center', // יישור למרכז
+    marginBottom: 5,
+  },
+  
   backIcon: {
     width: 60,
     height: 60,
@@ -371,14 +559,14 @@ const styles = StyleSheet.create({
     boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)',
   },
   itemContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderRadius: 18,
-    marginBottom: 8,
+    flexDirection: 'column', // שורות במקום טורים
+    padding: 8,
+    borderRadius: 10,
+    marginBottom: 10,
     backgroundColor: '#f5f5f5',
     borderWidth: 1,
     borderColor: '#ddd',
+    position: 'relative', // מיקום יחסי לכפתור המחיקה
   },
   itemText: {
     fontSize: 18,
@@ -498,6 +686,137 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
   },
+  contactItem: {
+    padding: 10,
+    marginVertical: 5,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 5,
+  },
+  contactItemSelected: {
+    backgroundColor: '#d0f0c0',
+  },
+  contactName: {
+    fontSize: 16,
+    color: '#333',
+  },
+  deleteButton: {
+    position: 'absolute', // מיקום יחסי
+    top: 10,
+    right: 10, // בצד שמאל
+    padding: 8,
+    backgroundColor: '#f44336',
+    borderRadius: 5,
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  
+  deleteAllButton: {
+    padding: 10,
+    backgroundColor: '#f44336',
+    borderRadius: 5,
+    alignItems: 'center',
+    margin: 10,
+  },
+  deleteAllButton: {
+    padding: 10,
+    backgroundColor: '#f44336',
+    borderRadius: 5,
+    alignItems: 'center',
+    flex: 1, // כפתור בגודל יחסי
+    marginRight: 5, // מרווח בין הכפתורים
+  },
+  tableName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#555',
+    textAlign: 'center', // יישור למרכז
+    marginBottom: 5,
+  },
+  guestCount: {
+    fontSize: 14,
+    color: '#777',
+    textAlign: 'center', // יישור למרכז
+  },
+  guestList: {
+    marginTop: 10,
+  },
+  guestName: {
+    fontSize: 14,
+    color: '#555',
+    marginRight: 10, // מרווח בין שמות
+  },
+  guestListHorizontal: {
+    flexDirection: 'row', // הצגת שמות האורחים לרוחב
+    flexWrap: 'wrap', // מעבר לשורה חדשה אם השורה ארוכה מדי
+    marginTop: 5,
+  },
+  searchInput: {
+    width: '90%', // שורת החיפוש תתפרס על רוב הרוחב
+    alignSelf: 'center', // ממרכז את שורת החיפוש
+    margin: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 25, // פינות מעוגלות
+    backgroundColor: '#fff',
+    shadowColor: '#000', // אפקט צל קל
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2, // הצללה באנדרואיד
+  },
+  
+  dummyButton: {
+    padding: 10,
+    backgroundColor: '#2196F3',
+    borderRadius: 5,
+    alignItems: 'center',
+    flex: 1, // כפתור בגודל יחסי
+    marginRight: 5, // מרווח בין הכפתור לטקסט
+  },
+  dummyButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  tableCountText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'right',
+    flex: 1, // טקסט בגודל יחסי
+  },
+  buttonsContainer: {
+    flexDirection: 'row', // יישור אופקי של הכפתורים והטקסט
+    alignItems: 'center', // יישור אנכי של הכפתורים והטקסט
+    justifyContent: 'space-between', // מרווחים בין האלמנטים
+    marginVertical: 10,
+    width: '90%',
+    alignSelf: 'center',
+  },
+  tableCountText: {
+    fontSize: 16, // גודל טקסט מתאים
+    fontWeight: 'bold', // טקסט מודגש
+    color: '#333', // צבע כהה
+    textAlign: 'center', // מיושר למרכז
+    marginLeft: 10, // מרווח קטן מהכפתורים האחרים
+  },
+  printButton: {
+    padding: 8,
+    backgroundColor: '#4CAF50',
+    borderRadius: 5,
+    marginLeft: 10,
+  },
+  printButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  
+  
 });
 
 export default SeatedAtTable;

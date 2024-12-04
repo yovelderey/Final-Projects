@@ -213,7 +213,8 @@ const Management = (props) => {
 
   const handleSelectContacts = (contacts) => {
     setSelectedContacts(contacts);
-  
+    console.log('Selected contacts:', contacts);
+
     contacts.forEach((contact, index) => {
       const recordid = String(new Date().getTime()) + index;
       const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordid}`);
