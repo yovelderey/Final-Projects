@@ -305,11 +305,38 @@ const deleteAllTables = () => {
     });
   };
 
+
   const renderItem = ({ item, index }) => {
     const backgroundColor = index % 2 === 0 ? '#f5f5f5' : '#ffffff';
   
     return (
       <View style={[styles.itemContainer, { backgroundColor }]}>
+        {/* כפתורים למעלה בצד ימין */}
+        <View style={styles.topRightButtons}>
+          <TouchableOpacity
+            style={styles.smallButton}
+            onPress={() => deleteTable(item.recordID)}
+          >
+            <Text style={styles.smallButtonText}>מחק</Text>
+          </TouchableOpacity>
+  
+          <TouchableOpacity
+            style={styles.smallButton}
+            onPress={() => {
+              const content = `
+                שולחן ${index + 1} - ${item.displayName || 'ללא שם'}
+                מספר אנשים: ${item.guests?.length || 0}
+                אורחים: ${
+                  item.guests?.map((guest) => guest.displayName || 'ללא שם').join(', ') || 'אין אורחים'
+                }
+              `;
+              handlePrint(content);
+            }}
+          >
+            <Text style={styles.smallButtonText}>הדפס</Text>
+          </TouchableOpacity>
+        </View>
+  
         {/* מספר השולחן */}
         <Text style={styles.tableNumber}>{`שולחן ${index + 1}`}</Text>
   
@@ -333,32 +360,6 @@ const deleteAllTables = () => {
             ))}
           </View>
         ) : null}
-  
-        {/* כפתור מחיקה */}
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => deleteTable(item.recordID)}
-        >
-          <Text style={styles.deleteButtonText}>מחק</Text>
-        </TouchableOpacity>
-  
-        <TouchableOpacity
-          style={styles.printButton}
-          onPress={() => {
-            const content = `
-              שולחן ${index + 1} - ${item.displayName || 'ללא שם'}
-              מספר אנשים: ${item.guests?.length || 0}
-              אורחים: ${
-                item.guests?.map((guest) => guest.displayName || 'ללא שם').join(', ') || 'אין אורחים'
-              }
-            `;
-            handlePrint(content);
-          }}
-        >
-          <Text style={styles.printButtonText}>הדפס</Text>
-        </TouchableOpacity>
-
-
       </View>
     );
   };
@@ -815,7 +816,51 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
+  buttonRow: {
+    flexDirection: 'row', // מיישר את הכפתורים בשורה
+    justifyContent: 'space-between', // מרווח שווה בין הכפתורים
+    marginTop: 10, // מרווח מעל הכפתורים
+  },
+  actionButton: {
+    flex: 1, // נותן לכל כפתור גודל שווה
+    backgroundColor: '#f44336', // צבע רקע (כפתור אדום למחיקה)
+    borderRadius: 5,
+    padding: 10,
+    marginHorizontal: 5, // מרווח בין הכפתורים
+    alignItems: 'center',
+  },
   
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  topRightButtons: {
+    position: 'absolute', // ממקם את הכפתורים ביחס לקונטיינר
+    top: 5, // מרווח למעלה
+    right: 10, // מרווח מצד ימין
+    flexDirection: 'row', // מיישר את הכפתורים בשורה
+  },
+  
+  smallButton: {
+    backgroundColor: '#f44336', // צבע רקע למחיקה
+    borderRadius: 5,
+    paddingVertical: 10, // מרווח אנכי כדי להגדיל את אזור הלחיצה
+    paddingHorizontal: 5, // מרווח אופקי כדי להגדיל את אזור הלחיצה
+    marginLeft: 5, // מרווח בין הכפתורים
+    alignItems: 'center', // ממרכז את הטקסט בתוך הכפתור
+    justifyContent: 'center', // ממרכז את הטקסט אנכית
+    minWidth: 60, // גודל מינימלי לכפתור
+  },
+  
+  
+  smallButtonText: {
+    color: '#fff',
+    fontSize: 14, // גודל טקסט קטן יותר
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
   
 });
 
