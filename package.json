@@ -35,7 +35,7 @@
     "expo-contacts": "~13.0.5",
     "expo-file-system": "^17.0.1",
     "expo-firebase-recaptcha": "^1.4.4",
-    "expo-image-picker": "~15.0.7",
+    "expo-image-picker": "^16.0.3",
     "expo-media-library": "^16.0.4",
     "expo-modules-core": "^1.12.23",
     "expo-print": "^14.0.2",
