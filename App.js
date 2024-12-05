@@ -24,6 +24,7 @@ import Gift from './screens/Gift';
 import SplashScreen from './screens/SplashScreen';
 import ResponsesScreen from './screens/ResponsesScreen';
 import EditHome from './screens/EditHome';
+import TablePlanningScreen from './screens/TablePlanningScreen';
 
 
 
@@ -54,6 +55,7 @@ const App = () => {
         <Stack.Screen name="Gift" component={Gift} />
         <Stack.Screen name="ResponsesScreen" component={ResponsesScreen} />
         <Stack.Screen name="EditHome" component={EditHome} />
+        <Stack.Screen name="TablePlanningScreen" component={TablePlanningScreen} />
 
       </Stack.Navigator>
     </NavigationContainer>

@@ -684,7 +684,12 @@ const deleteAllTables = () => {
       <Text style={styles.dummyButtonText}>הדפס הכל</Text>
   </TouchableOpacity>
 
-  {/* מספר השולחנות */}
+  <TouchableOpacity
+    style={styles.dummyButton}
+    onPress={() => props.navigation.navigate('TablePlanningScreen', { id, selectedImage })}
+  >
+    <Text style={styles.dummyButtonText}>תכנון שולחנות</Text>
+  </TouchableOpacity>
 </View>
 
       <TextInput
