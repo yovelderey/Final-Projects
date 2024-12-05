@@ -357,8 +357,7 @@ const Management = (props) => {
             <Text style={styles.modalTitle}>בחר אפשרות</Text>
 
             <TouchableOpacity style={styles.optionButton} onPress={() => {
-              setModalVisible2(false);
-              setModalVisible(true)            }}>
+              setModalVisible(true)}}>
               <Text style={styles.optionButtonText}>הוסף מספר ידני</Text>
             </TouchableOpacity>
 
@@ -375,6 +374,9 @@ const Management = (props) => {
           </View>
         </View>
       </Modal>
+
+
+
 
       <Modal
   visible={modalVisible}

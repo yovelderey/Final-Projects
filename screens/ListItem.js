@@ -348,25 +348,24 @@ import React, { useEffect, useRef,useState } from 'react';
             <View style={styles.infoContainer}>
               <Text style={styles.header}>מוזמנים</Text>
               <Text style={[styles.textInfo, { width: screenWidth }]}>
-                {eventDetails.counter_contacts} / {eventDetails.Numberofguests}
+                {eventDetails.counter_contacts || 0} / {eventDetails.Numberofguests || 0}
               </Text>
 
             </View>
             <View style={styles.progressContainer}>
-              <Progress.Circle
-                size={120}
-                progress={eventDetails.Numberofguests ? eventDetails.counter_contacts / eventDetails.Numberofguests : 0}
-                showsText
-                formatText={() =>
-                  `${Math.round(
-                    (eventDetails.counter_contacts / eventDetails.Numberofguests) * 100
-                  )}%`
-                }
-                thickness={10}
-                color={'#e74c3c'}
-                borderWidth={4}
-                animated={true}
-              />
+            <Progress.Circle
+              size={120}
+              progress={(eventDetails.counter_contacts || 0) / (eventDetails.Numberofguests || 1)}
+              showsText
+              formatText={() =>
+                `${Math.round(((eventDetails.counter_contacts || 0) / (eventDetails.Numberofguests || 1)) * 100)}%`
+              }
+              thickness={10}
+              color={'#e74c3c'}
+              borderWidth={4}
+              animated={true}
+            />
+
             </View>
           </View>
 
@@ -401,32 +400,34 @@ import React, { useEffect, useRef,useState } from 'react';
 
       <Animated.Text style={[styles.countdownText, animatedStyle]}>{daysLeft}</Animated.Text>
 
-
-      <View style={styles.rectangle}>
-      <View style={styles.imageContainer}>
-        <ImageBackground
-          source={require('../assets/warning.png')}
-          style={styles.background}
-        />
-        <Text style={styles.imageText}>{eventDetails.no_cuming}</Text>
-      </View>
-
-      <View style={styles.imageContainer}>
-        <ImageBackground
-          source={require('../assets/warningy.png')}
-          style={styles.background}
-        />
-        <Text style={styles.imageText}>{eventDetails.maybe}</Text>
-      </View>
-
-      <View style={styles.imageContainer}>
-        <ImageBackground
-          source={require('../assets/checked.png')}
-          style={styles.background}
-        />
-        <Text style={styles.imageText}>{eventDetails.yes_caming}</Text>
-      </View>
+      <View style={styles.outerRectangle}>
+  <View style={styles.rectangle}>
+    <View style={styles.imageContainer}>
+      <ImageBackground
+        source={require('../assets/warning.png')}
+        style={styles.background}
+      />
+      <Text style={styles.imageText}>{eventDetails.no_cuming || 0}</Text>
     </View>
+
+    <View style={styles.imageContainer}>
+      <ImageBackground
+        source={require('../assets/warningy.png')}
+        style={styles.background}
+      />
+      <Text style={styles.imageText}>{eventDetails.maybe || 0}</Text>
+    </View>
+
+    <View style={styles.imageContainer}>
+      <ImageBackground
+        source={require('../assets/checked.png')}
+        style={styles.background}
+      />
+      <Text style={styles.imageText}>{eventDetails.yes_caming || 0}</Text>
+    </View>
+  </View>
+</View>
+
 
     <View style={styles.buttonContainer}>
       <TouchableOpacity onPress={handleButton1Press} style={styles.button}>
@@ -587,7 +588,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 45,
+    marginBottom: 25,
   },
   maintext: {
     width: 200,
@@ -782,18 +783,18 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   countdownText: {
-    fontSize: 21, // טקסט גדול יותר
+    fontSize: 20, // טקסט גדול יותר
     fontWeight: 'bold',
     color: '#ff1493', // צבע ורוד עז לטקסט
     textAlign: 'center',
     padding: 8,
     backgroundColor: '#fff0f5', // רקע נוסף מסביב לטקסט בצבע ורוד בהיר מאוד
-    borderRadius: 50, // פינות עגולות לטקסט
+    borderRadius: 7, // פינות עגולות לטקסט
     shadowColor: '#ff69b4', // צל בצבע ורוד
     shadowOpacity: 0.8,
     shadowRadius: 30,
     elevation: 10, // הצללה קלה לטקסט
-    marginTop: 25, // email password log in is down
+    marginTop: 15, // email password log in is down
     marginBottom: 5, // email password log in is down
 
   },
@@ -839,6 +840,7 @@ const styles = StyleSheet.create({
     color: '#95a5a6',
     textAlign: 'center',
   },
+  
 });
 
 
