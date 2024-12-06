@@ -685,11 +685,25 @@ const deleteAllTables = () => {
   </TouchableOpacity>
 
   <TouchableOpacity
-    style={styles.dummyButton}
-    onPress={() => props.navigation.navigate('TablePlanningScreen', { id, selectedImage })}
-  >
-    <Text style={styles.dummyButtonText}>תכנון שולחנות</Text>
-  </TouchableOpacity>
+  style={styles.dummyButton}
+  onPress={() => {
+    const tableData = contacts.map((contact) => ({
+      id: contact.recordID,
+      name: contact.displayName, // שליחת שם השולחן בלבד
+    }));
+
+    props.navigation.navigate('TablePlanningScreen', {
+      id,
+      selectedImage,
+      tableData,
+    });
+  }}
+>
+  <Text style={styles.dummyButtonText}>תכנון שולחנות</Text>
+</TouchableOpacity>
+
+
+
 </View>
 
       <TextInput

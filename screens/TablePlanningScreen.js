@@ -8,17 +8,24 @@ import {
   PanResponder,
   Alert,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { getDatabase, ref, set, onValue } from 'firebase/database';
 import firebase from 'firebase/compat/app';
 
 const TablePlanningScreen = ({ navigation, route }) => {
-  const { id, selectedImage } = route.params || {}; // מקבל את המידע מהמסך הקודם
-  const [tables, setTables] = useState([]);
+
   const database = getDatabase();
   const user = firebase.auth().currentUser?.uid; // מזהה המשתמש הנוכחי
+  const { id, selectedImage, tableData } = route.params || {}; // קבלת הנתונים
+  const [tables, setTables] = useState(
+    tableData.map((table) => ({
+      ...table,
+      x: Dimensions.get('window').width / 2 - 50, // מיקום ברירת מחדל
+      y: Dimensions.get('window').height / 2 - 50,
+    }))
+  );
   const [imageLoaded, setImageLoaded] = useState(false);
-
   // שמירת מיקומי השולחנות בפיירבייס
   const saveTablesToFirebase = () => {
     if (!user) {
@@ -32,22 +39,61 @@ const TablePlanningScreen = ({ navigation, route }) => {
       .catch((error) => Alert.alert('שגיאה בשמירת השולחנות:', error.message));
   };
 
+
   // טעינת מיקומי השולחנות מהפיירבייס
   useEffect(() => {
-    const fetchTables = async () => {
+    const fetchTablesData = async () => {
       if (!user) return;
-
-      const tablesRef = ref(database, `Events/${user}/${id}/tablesPlace`);
+  
+      const tablesPlaceRef = ref(database, `Events/${user}/${id}/tablesPlace`);
+      const tablesRef = ref(database, `Events/${user}/${id}/tables`);
+  
+      let tablePositions = [];
+      let tableNames = {};
+  
+      // פונקציה למיזוג הנתונים
+      const mergeData = () => {
+        if (tablePositions.length > 0) {
+          const mergedTables = tablePositions.map((table, index) => ({
+            ...table,
+            name: tableNames[table.id] || `שולחן ${index + 1} ללא שם`,
+          }));
+          setTables(mergedTables); // עדכון state
+        }
+      };
+  
+      // מאזין לנתוני המיקומים
+      onValue(tablesPlaceRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          tablePositions = data;
+          mergeData(); // קריאה לפונקציה למיזוג
+        }
+      });
+  
+      // מאזין לשמות השולחנות
       onValue(tablesRef, (snapshot) => {
         const data = snapshot.val();
         if (data) {
-          setTables(data); // טען את המיקומים השמורים מהפיירבייס
+          tableNames = Object.fromEntries(
+            Object.entries(data).map(([id, table]) => [
+              id,
+              table.displayName || "",
+            ])
+          );
+          mergeData(); // קריאה לפונקציה למיזוג
         }
       });
     };
+  
+    fetchTablesData();
+  }, [user, id]);
+  
+  
+  
 
-    fetchTables();
-  }, [user]);
+
+  
 
   // יצירת PanResponder לכל שולחן
   const panResponders = tables.map((table) =>
@@ -67,9 +113,37 @@ const TablePlanningScreen = ({ navigation, route }) => {
       },
     })
   );
+  const [selectedTableGuests, setSelectedTableGuests] = useState([]);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [maxTablesFromSeatedAtTable, setMaxTablesFromSeatedAtTable] = useState(0);
+
+useEffect(() => {
+  if (user) {
+    const maxTablesRef = ref(database, `Events/${user}/${id}/tables`);
+    onValue(maxTablesRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        setMaxTablesFromSeatedAtTable(Object.keys(data).length);
+      } else {
+        setMaxTablesFromSeatedAtTable(0);
+      }
+    });
+  }
+}, [user, id]);
+
+
+
 
   // הוספת שולחן חדש
   const addTable = () => {
+    if (tables.length >= maxTablesFromSeatedAtTable) {
+      Alert.alert(
+        'שגיאה',
+        `לא ניתן להוסיף שולחנות מעבר למספר הקיים בעמוד הקודם (${maxTablesFromSeatedAtTable}).`
+      );
+      return;
+    }
+  
     const newTableId = tables.length + 1;
     const newTable = {
       id: newTableId,
@@ -79,6 +153,7 @@ const TablePlanningScreen = ({ navigation, route }) => {
     };
     setTables([...tables, newTable]);
   };
+  
 
   // הסרת שולחן
   const removeLastTable = () => {
@@ -88,8 +163,20 @@ const TablePlanningScreen = ({ navigation, route }) => {
     saveTablesToFirebase();
   };
 
+
+  useEffect(() => {
+    //console.log('Table Data received22:', tableData);
+    
+    // מעבר על המערך והצגת כל שם
+    tableData.forEach((table, index) => {
+      console.log(`Table ${index + 1} name:`, table.name);
+    });
+  }, []);
+  
   return (
     <View style={styles.container}>
+
+    
       {/* תצוגת התמונה או הודעה במקרה שאין */}
       {selectedImage ? (
         <Image
@@ -100,27 +187,94 @@ const TablePlanningScreen = ({ navigation, route }) => {
       ) : (
         <Text style={styles.noImageText}>נא להעלות תמונה</Text>
       )}
+      <Text style={styles.limitText}>
+  {`שולחנות נוכחיים: ${tables.length}/${maxTablesFromSeatedAtTable}`}
+</Text>
 
-      {/* הצגת השולחנות */}
-      {imageLoaded &&
-        tables.map((table, index) => (
-          <View
-            key={table.id}
-            {...panResponders[index]?.panHandlers}
-            style={[
-              styles.table,
-              { transform: [{ translateX: table.x }, { translateY: table.y }] },
-            ]}
-          >
-            <Text style={styles.tableText}>{table.name}</Text>
-          </View>
-        ))}
+<Modal visible={modalVisible} transparent={true} animationType="slide">
+  <View style={styles.modalContainer}>
+    <View style={styles.modalContent}>
+      <Text style={styles.modalTitle}>אורחים בשולחן</Text>
+      {selectedTableGuests.length > 0 ? (
+        <FlatList
+          data={selectedTableGuests}
+          keyExtractor={(item, index) => index.toString()} // שימוש באינדקס כמפתח
+          renderItem={({ item }) => (
+            <View style={styles.guestContainer}>
+              <Text style={styles.guestName}>
+                שם: {item.displayName || 'ללא שם'}
+              </Text>
+              <Text style={styles.guestPhone}>
+                טלפון: {item.phoneNumbers || 'ללא מספר'}
+              </Text>
+              <Text style={styles.guestPrice}>
+                מחיר: {item.newPrice || 'לא נקבע'}
+              </Text>
+            </View>
+          )}
+        />
+      ) : (
+        <Text style={styles.noGuestsText}>אין אורחים בשולחן</Text>
+      )}
+      <TouchableOpacity
+        style={styles.closeButton}
+        onPress={() => setModalVisible(false)}
+      >
+        <Text style={styles.closeButtonText}>סגור</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
+
+
+{/* הצגת השולחנות */}
+{imageLoaded &&
+  tables.map((table, index) => {
+    const logName = table.name || `Table ${index + 1} name: לוג לא קיים`; // ברירת מחדל אם אין שם
+    return (
+      <View
+        key={table.id}
+        {...(panResponders[index]?.panHandlers || {})}
+        style={[
+          styles.table,
+          { transform: [{ translateX: table.x }, { translateY: table.y }] },
+        ]}
+      >
+        {/* הוספת מספר השולחן */}
+        <Text style={styles.tableText}>
+          {`שולחן ${index + 1}`}
+        </Text>
+
+        {/* שם השולחן */}
+        <Text style={styles.tableText}>
+          {table.name || `שולחן ${index + 1} ללא שם`}
+        </Text>
+
+
+      </View>
+    );
+  })}
+
+
+
+
+
+
+
 
       {/* כפתורי פעולה */}
       <View style={styles.buttonsContainer}>
-        <TouchableOpacity style={styles.button} onPress={addTable}>
-          <Text style={styles.buttonText}>+</Text>
-        </TouchableOpacity>
+      <TouchableOpacity
+  onPress={addTable}
+  style={[
+    styles.button,
+    tables.length >= maxTablesFromSeatedAtTable && { backgroundColor: '#ccc' },
+  ]}
+  disabled={tables.length >= maxTablesFromSeatedAtTable}
+>
+  <Text style={styles.buttonText}>+</Text>
+</TouchableOpacity>
+
         <TouchableOpacity style={styles.button} onPress={removeLastTable}>
           <Text style={styles.buttonText}>-</Text>
         </TouchableOpacity>
@@ -182,6 +336,65 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  guestContainer: {
+    padding: 10,
+    marginVertical: 5,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 5,
+  },
+  guestName: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  guestPhone: {
+    fontSize: 14,
+    color: '#555',
+  },
+  guestPrice: {
+    fontSize: 14,
+    color: '#777',
+  },
+  noGuestsText: {
+    fontSize: 16,
+    color: '#888',
+  },
+  closeButton: {
+    marginTop: 20,
+    backgroundColor: '#2196F3',
+    padding: 10,
+    borderRadius: 5,
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  subText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 5,
+  },
+  
 });
 
 export default TablePlanningScreen;
