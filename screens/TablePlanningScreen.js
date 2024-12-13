@@ -35,7 +35,7 @@ const TablePlanningScreen = ({ navigation, route }) => {
 
     const tablesRef = ref(database, `Events/${user}/${id}/tablesPlace`);
     set(tablesRef, tables)
-      .then(() => Alert.alert('השולחנות נשמרו בהצלחה!'))
+      
       .catch((error) => Alert.alert('שגיאה בשמירת השולחנות:', error.message));
   };
 
@@ -169,7 +169,7 @@ useEffect(() => {
     
     // מעבר על המערך והצגת כל שם
     tableData.forEach((table, index) => {
-      console.log(`Table ${index + 1} name:`, table.name);
+      console.log(`Tabl1111e ${index + 1} name:`, table.name);
     });
   }, []);
   
@@ -191,40 +191,6 @@ useEffect(() => {
   {`שולחנות נוכחיים: ${tables.length}/${maxTablesFromSeatedAtTable}`}
 </Text>
 
-<Modal visible={modalVisible} transparent={true} animationType="slide">
-  <View style={styles.modalContainer}>
-    <View style={styles.modalContent}>
-      <Text style={styles.modalTitle}>אורחים בשולחן</Text>
-      {selectedTableGuests.length > 0 ? (
-        <FlatList
-          data={selectedTableGuests}
-          keyExtractor={(item, index) => index.toString()} // שימוש באינדקס כמפתח
-          renderItem={({ item }) => (
-            <View style={styles.guestContainer}>
-              <Text style={styles.guestName}>
-                שם: {item.displayName || 'ללא שם'}
-              </Text>
-              <Text style={styles.guestPhone}>
-                טלפון: {item.phoneNumbers || 'ללא מספר'}
-              </Text>
-              <Text style={styles.guestPrice}>
-                מחיר: {item.newPrice || 'לא נקבע'}
-              </Text>
-            </View>
-          )}
-        />
-      ) : (
-        <Text style={styles.noGuestsText}>אין אורחים בשולחן</Text>
-      )}
-      <TouchableOpacity
-        style={styles.closeButton}
-        onPress={() => setModalVisible(false)}
-      >
-        <Text style={styles.closeButtonText}>סגור</Text>
-      </TouchableOpacity>
-    </View>
-  </View>
-</Modal>
 
 
 {/* הצגת השולחנות */}
@@ -310,8 +276,8 @@ const styles = StyleSheet.create({
   },
   table: {
     position: 'absolute',
-    width: 100,
-    height: 50,
+    width: 55,
+    height: 30,
     backgroundColor: '#4CAF50',
     justifyContent: 'center',
     alignItems: 'center',
@@ -319,6 +285,8 @@ const styles = StyleSheet.create({
   },
   tableText: {
     color: '#fff',
+    fontSize: 9,
+
     fontWeight: 'bold',
   },
   buttonsContainer: {

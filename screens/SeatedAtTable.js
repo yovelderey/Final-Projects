@@ -346,7 +346,7 @@ const addContact = () => {
     setNewContactName('');
     setSelectedContacts([]); // איפוס הבחירה
   } else {
-    Alert.alert('Error', 'Please fill in the table name');
+    Alert.alert('שגיאה', 'נא למלא את שם השולחן');
   }
 };
 
@@ -453,17 +453,41 @@ const deleteTable = (recordID) => {
 };
 
 const deleteAllTables = () => {
-  const tablesRef = ref(database, `Events/${user.uid}/${id}/tables`);
-  remove(tablesRef)
+  // הודעת אישור לפני המחיקה
+  Alert.alert(
+    "אישור מחיקה",
+    "האם אתה בטוח שברצונך למחוק את כל השולחנות?",
+    [
+      { text: "ביטול", style: "cancel" },
+      { 
+        text: "מחק", 
+        style: "destructive",
+        onPress: () => {
+          const tablesRef = ref(database, `Events/${user.uid}/${id}/tables`);
+          remove(tablesRef)
+            .then(() => {
+              setContacts([]); // איפוס ה-state של אנשי הקשר או השולחנות
+              deleteAllTablesview();            })
+            .catch((error) => {
+              console.error("Error deleting all tables:", error);
+              Alert.alert("שגיאה במחיקת כל השולחנות:", error.message);
+            });
+        }
+      }
+    ],
+    { cancelable: true } // מאפשר סגירת ההתראה בלחיצה מחוץ לחלון
+  );
+};
+const deleteAllTablesview = () => {
+  const tablesRef2 = ref(database, `Events/${user.uid}/${id}/tablesPlace`);
+  remove(tablesRef2)
     .then(() => {
-      setContacts([]);
-      Alert.alert("כל השולחנות נמחקו בהצלחה!");
+      setTables([]); // איפוס ה-state המקומי
     })
     .catch((error) => {
-      console.error("Error deleting all tables:", error);
-      Alert.alert("שגיאה במחיקת כל השולחנות:", error.message);
     });
-};
+}
+
 
 
 
@@ -515,7 +539,7 @@ const deleteAllTables = () => {
         <View style={styles.guestListHorizontal}>
           {item.guests.map((guest, guestIndex) => (
             <Text key={guestIndex} style={styles.guestName}>
-              {guest.displayName || 'ללא שם'}
+              {" ," + guest.displayName || 'ללא שם'}
             </Text>
           ))}
         </View>
@@ -552,157 +576,154 @@ const deleteAllTables = () => {
       
 
       <Modal visible={editModalVisible} animationType="fade" transparent={true}>
-  <View style={styles.modalContainer}>
-    <View style={styles.modalContent}>
-      <Text style={styles.modalTitle}>{selectedTable?.displayName || 'עריכת שולחן'}</Text>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>{selectedTable?.displayName || 'עריכת שולחן'}</Text>
 
-      {/* רשימת האנשים בשולחן */}
-      <FlatList
-        data={selectedTable?.guests || []}
-        keyExtractor={(item) => item.recordID}
-        style={styles.guestList}
-        contentContainerStyle={{ paddingBottom: 10 }}
-        renderItem={({ item }) => (
-          <View style={styles.guestContainer}>
-            <Text style={styles.guestName}>{item.displayName || 'ללא שם'}</Text>
+            {/* רשימת האנשים בשולחן */}
+            <FlatList
+              data={selectedTable?.guests || []}
+              keyExtractor={(item) => item.recordID}
+              style={styles.guestList}
+              contentContainerStyle={{ paddingBottom: 10 }}
+              renderItem={({ item }) => (
+                <View style={styles.guestContainer}>
+                  <Text style={styles.guestName}>{item.displayName || 'ללא שם'}</Text>
+                  <TouchableOpacity
+                    style={styles.deleteGuestButton}
+                    onPress={() => deleteSpecificGuest(item.recordID)}
+                  >
+                    <Text style={styles.deleteButtonText}>מחק</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            />
+
+            {/* כפתור להוספת אנשים */}
             <TouchableOpacity
-              style={styles.deleteGuestButton}
-              onPress={() => deleteSpecificGuest(item.recordID)}
+              style={styles.addGuestButton}
+              onPress={() => setAddGuestsModalVisible(true)}
             >
-              <Text style={styles.deleteButtonText}>מחק</Text>
+              <Text style={styles.addGuestButtonText}>הוסף אנשים לשולחן</Text>
+            </TouchableOpacity>
+
+            {/* כפתורי הדפסה ומחיקה */}
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => {
+                  const tableNumber = contacts.findIndex((contact) => contact.recordID === selectedTable?.recordID) + 1;
+                  const guestNames =
+                    selectedTable?.guests?.map((guest) => guest.displayName || 'ללא שם').join(', ') || 'אין אורחים';
+                  const guestCount = selectedTable?.guests?.length || 0;
+                  const tableName = selectedTable?.displayName || 'ללא שם';
+
+                  handlePrint(tableNumber, guestNames, guestCount,tableName);
+                }}
+              >
+                <Text style={styles.actionButtonText}>הדפס</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => deleteTable(selectedTable?.recordID)}
+              >
+                <Text style={styles.actionButtonText}>מחק שולחן</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* כפתור לסגירת המודל */}
+            <TouchableOpacity style={styles.cancelButton} onPress={closeEditModal}>
+              <Text style={styles.modalButtonText}>סגור</Text>
             </TouchableOpacity>
           </View>
-        )}
-      />
-
-      {/* כפתור להוספת אנשים */}
-      <TouchableOpacity
-        style={styles.addGuestButton}
-        onPress={() => setAddGuestsModalVisible(true)}
-      >
-        <Text style={styles.addGuestButtonText}>הוסף אנשים לשולחן</Text>
-      </TouchableOpacity>
-
-      {/* כפתורי הדפסה ומחיקה */}
-      <View style={styles.buttonRow}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => {
-            const tableNumber = contacts.findIndex((contact) => contact.recordID === selectedTable?.recordID) + 1;
-            const guestNames =
-              selectedTable?.guests?.map((guest) => guest.displayName || 'ללא שם').join(', ') || 'אין אורחים';
-            const guestCount = selectedTable?.guests?.length || 0;
-            const tableName = selectedTable?.displayName || 'ללא שם';
-
-            handlePrint(tableNumber, guestNames, guestCount,tableName);
-          }}
-        >
-          <Text style={styles.actionButtonText}>הדפס</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => deleteTable(selectedTable?.recordID)}
-        >
-          <Text style={styles.actionButtonText}>מחק שולחן</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* כפתור לסגירת המודל */}
-      <TouchableOpacity style={styles.cancelButton} onPress={closeEditModal}>
-        <Text style={styles.modalButtonText}>סגור</Text>
-      </TouchableOpacity>
-    </View>
-  </View>
-</Modal>
+        </View>
+      </Modal>
 
 
-<Modal visible={addGuestsModalVisible} animationType="fade" transparent={true}>
-  <View style={styles.modalContainer}>
-    <View style={styles.modalContent}>
-      <Text style={styles.modalTitle}>בחר אנשים להוספה</Text>
+    <Modal visible={addGuestsModalVisible} animationType="fade" transparent={true}>
+      <View style={styles.modalContainer}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>בחר אנשים להוספה</Text>
 
-      {/* חיפוש אנשים */}
-      <TextInput
-        style={styles.searchInput}
-        placeholder="חפש איש קשר..."
-        value={searchContactText}
-        onChangeText={setSearchContactText}
-      />
+          {/* חיפוש אנשים */}
+          <TextInput
+            style={styles.searchInput}
+            placeholder="חפש איש קשר..."
+            value={searchContactText}
+            onChangeText={setSearchContactText}
+          />
 
-      {/* רשימת האנשים שניתן להוסיף */}
-      <FlatList
-        data={filteredModalContacts}
-        keyExtractor={(item) => item.recordID}
-        style={styles.guestList}
-        contentContainerStyle={{ paddingBottom: 10 }}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[
-              styles.contactItem,
-              selectedContacts.includes(item.recordID) && styles.contactItemSelected,
-            ]}
-            onPress={() => toggleContactSelection(item.recordID)}
-          >
-            <Text style={styles.contactName}>{item.displayName}</Text>
+          {/* רשימת האנשים שניתן להוסיף */}
+          <FlatList
+            data={filteredModalContacts}
+            keyExtractor={(item) => item.recordID}
+            style={styles.guestList}
+            contentContainerStyle={{ paddingBottom: 10 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[
+                  styles.contactItem,
+                  selectedContacts.includes(item.recordID) && styles.contactItemSelected,
+                ]}
+                onPress={() => toggleContactSelection(item.recordID)}
+              >
+                <Text style={styles.contactName}>{item.displayName}</Text>
+              </TouchableOpacity>
+            )}
+          />
+
+          {/* כפתור להוספה */}
+          <TouchableOpacity style={styles.addGuestButton} onPress={addSelectedGuestsToTable}>
+            <Text style={styles.addGuestButtonText}>שמור</Text>
           </TouchableOpacity>
-        )}
-      />
 
-      {/* כפתור להוספה */}
-      <TouchableOpacity style={styles.addGuestButton} onPress={addSelectedGuestsToTable}>
-        <Text style={styles.addGuestButtonText}>שמור</Text>
-      </TouchableOpacity>
-
-      {/* כפתור לסגירת המודל */}
-      <TouchableOpacity style={styles.cancelButton} onPress={() => setAddGuestsModalVisible(false)}>
-        <Text style={styles.modalButtonText}>סגור</Text>
-      </TouchableOpacity>
-    </View>
-  </View>
-</Modal>
+          {/* כפתור לסגירת המודל */}
+          <TouchableOpacity style={styles.cancelButton} onPress={() => setAddGuestsModalVisible(false)}>
+            <Text style={styles.modalButtonText}>סגור</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
 
 
-      
       <Text style={styles.noItemsText}>לחץ על התמונה להעלות תרשים אולם</Text>
-      <View style={styles.buttonsContainer}>
+  <View style={styles.buttonsContainer}>
       
       <Text style={styles.tableCountText}>({contacts.length})</Text>
 
-  {/* כפתור מחיקת כל השולחנות */}
-  <TouchableOpacity
-    style={styles.deleteAllButton}
-    onPress={deleteAllTables}
-  >
-    <Text style={styles.dummyButtonText}>מחק הכל</Text>
-  </TouchableOpacity>
+      {/* כפתור מחיקת כל השולחנות */}
+      <TouchableOpacity
+        style={styles.deleteAllButton}
+        onPress={deleteAllTables}
+      >
+        <Text style={styles.dummyButtonText}>מחק הכל</Text>
+      </TouchableOpacity>
 
-  <TouchableOpacity
-      style={styles.dummyButton}
-      onPress={printAllTables}
+      <TouchableOpacity
+          style={styles.deleteAllButton2}
+          onPress={printAllTables}
+        >
+          <Text style={styles.dummyButtonText}>הדפס הכל</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+      style={styles.deleteAllButton2}
+      onPress={() => {
+        const tableData = contacts.map((contact) => ({
+          id: contact.recordID,
+          name: contact.displayName, // שליחת שם השולחן בלבד
+        }));
+
+        props.navigation.navigate('TablePlanningScreen', {
+          id,
+          selectedImage,
+          tableData,
+        });
+      }}
     >
-      <Text style={styles.dummyButtonText}>הדפס הכל</Text>
-  </TouchableOpacity>
-
-  <TouchableOpacity
-  style={styles.dummyButton}
-  onPress={() => {
-    const tableData = contacts.map((contact) => ({
-      id: contact.recordID,
-      name: contact.displayName, // שליחת שם השולחן בלבד
-    }));
-
-    props.navigation.navigate('TablePlanningScreen', {
-      id,
-      selectedImage,
-      tableData,
-    });
-  }}
->
-  <Text style={styles.dummyButtonText}>תכנון שולחנות</Text>
-</TouchableOpacity>
-
-
+      <Text style={styles.dummyButtonText}>תכנון שולחנות</Text>
+    </TouchableOpacity>
 
 </View>
 
@@ -1044,6 +1065,15 @@ const styles = StyleSheet.create({
     marginRight: 5, // מרווח בין הכפתורים
 
   },
+  deleteAllButton2: {
+    backgroundColor: '#000',
+    borderRadius: 5,
+    paddingVertical: 7, // גובה הכפתור
+    paddingHorizontal: 10, // מרווחים בצדדים
+    alignSelf: 'flex-start', // מתאים את גודל הכפתור לתוכן
+    marginRight: 5, // מרווח בין הכפתורים
+
+  },
   dynamicButtonText: {
     color: '#fff',
     fontSize: 14,
@@ -1111,7 +1141,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', // יישור אנכי של הכפתורים והטקסט
     justifyContent: 'flex-end', // מצמיד את התוכן לצד ימין
     marginVertical: 7,
-    width: '40%',
+    width: '50%',
     alignSelf: 'flex-end', // מצמיד את כל הקונטיינר לצד ימין
     marginRight: 20, // רווח קטן מצד ימין
 
@@ -1169,8 +1199,8 @@ const styles = StyleSheet.create({
     margin: 5, // מרווח חיצוני להגדלת הרווחים
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 40, // גודל מינימלי לכפתור
-    minHeight: 40, // גודל מינימלי לכפתור
+    minWidth: 50, // גודל מינימלי לכפתור
+    minHeight: 50, // גודל מינימלי לכפתור
   },
   smallButtonText: {
     color: '#fff',
