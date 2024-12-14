@@ -17,6 +17,11 @@ const TablePlanningScreen = ({ navigation, route }) => {
 
   const database = getDatabase();
   const user = firebase.auth().currentUser?.uid; // מזהה המשתמש הנוכחי
+  const [size, setSize] = useState(55);       // גודל ברירת מחדל של הכפתור
+  const [textSize, setTextSize] = useState(9); // גודל ברירת מחדל של הטקסט
+  const [color, setColor] = useState('#4CAF50'); // צבע ברירת מחדל ירוק
+  const [rotation, setRotation] = useState(0); // סיבוב ברירת מחדל של 0 מעלות
+  
   const { id, selectedImage, tableData } = route.params || {}; // קבלת הנתונים
   const [tables, setTables] = useState(
     tableData.map((table) => ({
@@ -27,6 +32,7 @@ const TablePlanningScreen = ({ navigation, route }) => {
   );
   const [imageLoaded, setImageLoaded] = useState(false);
   // שמירת מיקומי השולחנות בפיירבייס
+
   const saveTablesToFirebase = () => {
     if (!user) {
       Alert.alert('שגיאה', 'משתמש לא מחובר');
@@ -34,65 +40,124 @@ const TablePlanningScreen = ({ navigation, route }) => {
     }
 
     const tablesRef = ref(database, `Events/${user}/${id}/tablesPlace`);
-    set(tablesRef, tables)
-      
-      .catch((error) => Alert.alert('שגיאה בשמירת השולחנות:', error.message));
+    set(tablesRef, tables).catch((error) =>
+      Alert.alert('שגיאה בשמירת השולחנות:', error.message)
+    );
   };
 
+// פונקציה כללית לשמירת כל ההגדרות בפיירבייס
+const saveSettingsToFirebase = (updatedSettings) => {
+    if (!user) return;
+  
+    const settingsRef = ref(database, `Events/${user}/${id}/settings`);
+    set(settingsRef, {
+      ...updatedSettings,
+    }).catch((error) => Alert.alert('שגיאה בשמירת ההגדרות:', error.message));
+  };
+  
+  // פונקציה להגדלת גודל השולחנות
+  const increaseSize = () => {
+    const newSize = size + 10;
+    const newTextSize = textSize + 2;
+    setSize(newSize);
+    setTextSize(newTextSize);
+    saveSettingsToFirebase({ size: newSize, textSize: newTextSize, color, rotation });
+  };
+  
+  // פונקציה להקטנת גודל השולחנות
+  const decreaseSize = () => {
+    const newSize = size > 20 ? size - 10 : size;
+    const newTextSize = textSize > 8 ? textSize - 2 : textSize;
+    setSize(newSize);
+    setTextSize(newTextSize);
+    saveSettingsToFirebase({ size: newSize, textSize: newTextSize, color, rotation });
+  };
+  
+  // פונקציה לשינוי צבע השולחנות
+  const changeColor = () => {
+    const colors = ['red', 'green', 'black'];
+    const newColor = colors[(colors.indexOf(color) + 1) % colors.length];
+    setColor(newColor);
+    saveSettingsToFirebase({ size, textSize, color: newColor, rotation });
+  };
+  
+  // פונקציה לסיבוב השולחנות
+  const rotateTables = () => {
+    const newRotation = rotation + 90;
+    setRotation(newRotation);
+    saveSettingsToFirebase({ size, textSize, color, rotation: newRotation });
+  };
+  
+
+  useEffect(() => {
+    if (!user) return;
+  
+    const settingsRef = ref(database, `Events/${user}/${id}/settings`);
+    onValue(settingsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        setSize(data.size || 55);
+        setTextSize(data.textSize || 9);
+        setColor(data.color || '#4CAF50');
+        setRotation(data.rotation || 0); // טעינת הסיבוב
+      }
+    });
+  }, [user, id]);
+    
 
   // טעינת מיקומי השולחנות מהפיירבייס
   useEffect(() => {
-    const fetchTablesData = async () => {
-      if (!user) return;
+    if (!user) return;
   
-      const tablesPlaceRef = ref(database, `Events/${user}/${id}/tablesPlace`);
-      const tablesRef = ref(database, `Events/${user}/${id}/tables`);
+    const tablesPlaceRef = ref(database, `Events/${user}/${id}/tablesPlace`);
+    const tablesRef = ref(database, `Events/${user}/${id}/tables`);
   
-      let tablePositions = [];
-      let tableNames = {};
+    let tablePositions = [];
+    let tableNames = {};
   
-      // פונקציה למיזוג הנתונים
-      const mergeData = () => {
-        if (tablePositions.length > 0) {
-          const mergedTables = tablePositions.map((table, index) => ({
-            ...table,
-            name: tableNames[table.id] || `שולחן ${index + 1} ללא שם`,
-          }));
-          setTables(mergedTables); // עדכון state
-        }
-      };
+    // פונקציה למיזוג הנתונים
+    const mergeData = () => {
+      const mergedTables = tableNames
+        ? Object.entries(tableNames).map(([key, name], index) => {
+            const position = tablePositions.find((table) => table.id === key);
+            return {
+              id: key,
+              name,
+              x: position ? position.x : Dimensions.get('window').width / 2 - 50,
+              y: position ? position.y : Dimensions.get('window').height / 2 - 50,
+            };
+          })
+        : [];
   
-      // מאזין לנתוני המיקומים
-      onValue(tablesPlaceRef, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          tablePositions = data;
-          mergeData(); // קריאה לפונקציה למיזוג
-        }
-      });
-  
-      // מאזין לשמות השולחנות
-      onValue(tablesRef, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          tableNames = Object.fromEntries(
-            Object.entries(data).map(([id, table]) => [
-              id,
-              table.displayName || "",
-            ])
-          );
-          mergeData(); // קריאה לפונקציה למיזוג
-        }
-      });
+      setTables(mergedTables);
     };
+
+
+    // מאזין לנתוני המיקומים
+    onValue(tablesPlaceRef, (snapshot) => {
+      const data = snapshot.val();
+      tablePositions = data || [];
+      mergeData();
+    });
   
-    fetchTablesData();
+    // מאזין לשמות השולחנות ומעדכן אוטומטית בעת שינוי
+    onValue(tablesRef, (snapshot) => {
+      const data = snapshot.val();
+      tableNames = data
+        ? Object.fromEntries(
+            Object.entries(data).map(([key, table]) => [
+              key,
+              table.displayName || `שולחן ${key}`,
+            ])
+          )
+        : {};
+      mergeData();
+    });
   }, [user, id]);
   
   
+
   
-
-
   
 
   // יצירת PanResponder לכל שולחן
@@ -132,18 +197,10 @@ useEffect(() => {
 }, [user, id]);
 
 
-
+/////////////////////////////////////////////////
 
   // הוספת שולחן חדש
   const addTable = () => {
-    if (tables.length >= maxTablesFromSeatedAtTable) {
-      Alert.alert(
-        'שגיאה',
-        `לא ניתן להוסיף שולחנות מעבר למספר הקיים בעמוד הקודם (${maxTablesFromSeatedAtTable}).`
-      );
-      return;
-    }
-  
     const newTableId = tables.length + 1;
     const newTable = {
       id: newTableId,
@@ -169,7 +226,7 @@ useEffect(() => {
     
     // מעבר על המערך והצגת כל שם
     tableData.forEach((table, index) => {
-      console.log(`Tabl1111e ${index + 1} name:`, table.name);
+      console.log(`Table ${index + 1} name:`, table.name);
     });
   }, []);
   
@@ -191,69 +248,96 @@ useEffect(() => {
   {`שולחנות נוכחיים: ${tables.length}/${maxTablesFromSeatedAtTable}`}
 </Text>
 
+<Modal visible={modalVisible} transparent={true} animationType="slide">
+  <View style={styles.modalContainer}>
+    <View style={styles.modalContent}>
+      <Text style={styles.modalTitle}>אורחים בשולחן</Text>
+      {selectedTableGuests.length > 0 ? (
+        <FlatList
+          data={selectedTableGuests}
+          keyExtractor={(item, index) => index.toString()} // שימוש באינדקס כמפתח
+          renderItem={({ item }) => (
+            <View style={styles.guestContainer}>
+              <Text style={styles.guestName}>
+                שם: {item.displayName || 'ללא שם'}
+              </Text>
+              <Text style={styles.guestPhone}>
+                טלפון: {item.phoneNumbers || 'ללא מספר'}
+              </Text>
+              <Text style={styles.guestPrice}>
+                מחיר: {item.newPrice || 'לא נקבע'}
+              </Text>
+            </View>
+          )}
+        />
+      ) : (
+        <Text style={styles.noGuestsText}>אין אורחים בשולחן</Text>
+      )}
+      <TouchableOpacity
+        style={styles.closeButton}
+        onPress={() => setModalVisible(false)}
+      >
+        <Text style={styles.closeButtonText}>סגור</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
 
 
 {/* הצגת השולחנות */}
 {imageLoaded &&
   tables.map((table, index) => {
-    const logName = table.name || `Table ${index + 1} name: לוג לא קיים`; // ברירת מחדל אם אין שם
     return (
-      <View
-        key={table.id}
-        {...(panResponders[index]?.panHandlers || {})}
-        style={[
-          styles.table,
-          { transform: [{ translateX: table.x }, { translateY: table.y }] },
-        ]}
-      >
-        {/* הוספת מספר השולחן */}
-        <Text style={styles.tableText}>
-          {`שולחן ${index + 1}`}
-        </Text>
+        <View
+  key={table.id}
+  {...(panResponders[index]?.panHandlers || {})}
+  style={[
+    styles.table,
+    {
+      transform: [
+        { translateX: table.x },
+        { translateY: table.y },
+        { rotate: `${rotation}deg` }, // הוספת סיבוב
+      ],
+      width: size,               // הגדרת רוחב לפי ה-state של הגודל
+      height: size,              // הגדרת גובה לפי ה-state של הגודל
+      backgroundColor: color,    // הגדרת צבע לפי ה-state של הצבע
+    },
+  ]}
+>
+  <Text style={[styles.tableText, { fontSize: textSize }]}>
+    {`שולחן ${index + 1}`}
+  </Text>
+  <Text style={[styles.tableText, { fontSize: textSize }]}>
+    {table.name || `שולחן ${index + 1} ללא שם`}
+  </Text>
+</View>
 
-        {/* שם השולחן */}
-        <Text style={styles.tableText}>
-          {table.name || `שולחן ${index + 1} ללא שם`}
-        </Text>
-
-
-      </View>
     );
   })}
 
+  <View style={styles.buttonsContainer}>
+  <TouchableOpacity style={styles.button} onPress={increaseSize}>
+    <Text style={styles.buttonText}>הגדל</Text>
+  </TouchableOpacity>
 
+  <TouchableOpacity style={styles.button} onPress={decreaseSize}>
+    <Text style={styles.buttonText}>הקטן</Text>
+  </TouchableOpacity>
 
+  <TouchableOpacity style={styles.button} onPress={changeColor}>
+    <Text style={styles.buttonText}>שנה צבע</Text>
+  </TouchableOpacity>
 
+  <TouchableOpacity style={styles.button} onPress={rotateTables}>
+    <Text style={styles.buttonText}>סובב</Text>
+  </TouchableOpacity>
 
+  <TouchableOpacity style={styles.button} onPress={() => navigation.goBack()}>
+    <Text style={styles.buttonText}>חזור</Text>
+  </TouchableOpacity>
+</View>
 
-
-
-      {/* כפתורי פעולה */}
-      <View style={styles.buttonsContainer}>
-      <TouchableOpacity
-  onPress={addTable}
-  style={[
-    styles.button,
-    tables.length >= maxTablesFromSeatedAtTable && { backgroundColor: '#ccc' },
-  ]}
-  disabled={tables.length >= maxTablesFromSeatedAtTable}
->
-  <Text style={styles.buttonText}>+</Text>
-</TouchableOpacity>
-
-        <TouchableOpacity style={styles.button} onPress={removeLastTable}>
-          <Text style={styles.buttonText}>-</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={saveTablesToFirebase}>
-          <Text style={styles.buttonText}>שמור</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.button}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.buttonText}>חזור</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 };
