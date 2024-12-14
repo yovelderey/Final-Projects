@@ -8,6 +8,7 @@ import {
   PanResponder,
   Alert,
   Dimensions,
+  FlatList,
   Modal,
 } from 'react-native';
 import { getDatabase, ref, set, onValue } from 'firebase/database';
@@ -179,7 +180,6 @@ const saveSettingsToFirebase = (updatedSettings) => {
     })
   );
   const [selectedTableGuests, setSelectedTableGuests] = useState([]);
-  const [modalVisible, setModalVisible] = useState(false);
   const [maxTablesFromSeatedAtTable, setMaxTablesFromSeatedAtTable] = useState(0);
 
 useEffect(() => {
@@ -211,7 +211,37 @@ useEffect(() => {
     setTables([...tables, newTable]);
   };
   
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedTable, setSelectedTable] = useState(null);
+  const [guests, setGuests] = useState([]);
 
+// פונקציה לפתיחת ה-Modal עם המידע של השולחן שנבחר
+const openTableModal = (table) => {
+    if (!user) {
+      Alert.alert('שגיאה', 'משתמש לא מחובר');
+      return;
+    }
+
+    setSelectedTable(table);
+
+    const guestsRef = ref(database, `Events/${user}/${id}/tables/${table.id}/guests`);
+    onValue(guestsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        setGuests(Object.values(data));
+      } else {
+        setGuests([]);
+      }
+      setModalVisible(true);
+    });
+  };
+
+  // פונקציה לסגירת ה-Modal
+  const closeModal = () => {
+    setModalVisible(false);
+    setSelectedTable(null);
+    setGuests([]);
+  };
   // הסרת שולחן
   const removeLastTable = () => {
     if (tables.length === 0) return;
@@ -247,42 +277,35 @@ useEffect(() => {
       <Text style={styles.limitText}>
   {`שולחנות נוכחיים: ${tables.length}/${maxTablesFromSeatedAtTable}`}
 </Text>
+ {/* Modal להצגת האורחים בשולחן */}
+      <Modal visible={modalVisible} transparent={true} animationType="slide">
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            {selectedTable && (
+              <>
+                <Text style={styles.modalTitle}>{selectedTable.name || 'פרטי שולחן'}</Text>
+                <Text style={styles.modalSubTitle}>
+                  {`מספר אנשים: ${guests.length}`}
+                </Text>
 
-<Modal visible={modalVisible} transparent={true} animationType="slide">
-  <View style={styles.modalContainer}>
-    <View style={styles.modalContent}>
-      <Text style={styles.modalTitle}>אורחים בשולחן</Text>
-      {selectedTableGuests.length > 0 ? (
-        <FlatList
-          data={selectedTableGuests}
-          keyExtractor={(item, index) => index.toString()} // שימוש באינדקס כמפתח
-          renderItem={({ item }) => (
-            <View style={styles.guestContainer}>
-              <Text style={styles.guestName}>
-                שם: {item.displayName || 'ללא שם'}
-              </Text>
-              <Text style={styles.guestPhone}>
-                טלפון: {item.phoneNumbers || 'ללא מספר'}
-              </Text>
-              <Text style={styles.guestPrice}>
-                מחיר: {item.newPrice || 'לא נקבע'}
-              </Text>
-            </View>
-          )}
-        />
-      ) : (
-        <Text style={styles.noGuestsText}>אין אורחים בשולחן</Text>
-      )}
-      <TouchableOpacity
-        style={styles.closeButton}
-        onPress={() => setModalVisible(false)}
-      >
-        <Text style={styles.closeButtonText}>סגור</Text>
-      </TouchableOpacity>
-    </View>
-  </View>
-</Modal>
+                <FlatList
+                  data={guests}
+                  keyExtractor={(item, index) => index.toString()}
+                  renderItem={({ item }) => (
+                    <View style={styles.guestContainer}>
+                      <Text style={styles.guestName}>{item.displayName || 'ללא שם'}</Text>
+                    </View>
+                  )}
+                />
 
+                <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
+                  <Text style={styles.closeButtonText}>סגור</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
 
 {/* הצגת השולחנות */}
 {imageLoaded &&
@@ -311,6 +334,9 @@ useEffect(() => {
   <Text style={[styles.tableText, { fontSize: textSize }]}>
     {table.name || `שולחן ${index + 1} ללא שם`}
   </Text>
+  <TouchableOpacity style={styles.infoButton} onPress={() => openTableModal(table)}>
+            <Text style={styles.buttonText}>פרטים</Text>
+          </TouchableOpacity>
 </View>
 
     );
@@ -446,7 +472,75 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 5,
   },
-  
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)', // רקע כהה עם שקיפות
+    padding: 20,
+  },
+  modalContent: {
+    width: '90%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 25,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#333',
+  },
+  guestContainer: {
+    width: '100%',
+    padding: 15,
+    marginVertical: 5,
+    backgroundColor: '#f1f1f1',
+    borderRadius: 10,
+    shadowColor: '#aaa',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  guestName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 5,
+  },
+  guestPhone: {
+    fontSize: 16,
+    color: '#555',
+  },
+  guestPrice: {
+    fontSize: 16,
+    color: '#777',
+  },
+  noGuestsText: {
+    fontSize: 18,
+    color: '#999',
+    marginVertical: 20,
+  },
+  closeButton: {
+    marginTop: 25,
+    backgroundColor: '#ff4d4d',
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 8,
+  },
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
 });
 
 export default TablePlanningScreen;
