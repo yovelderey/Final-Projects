@@ -655,7 +655,7 @@ const styles = StyleSheet.create({
   },
   optionButton: {
     padding: 10,
-    backgroundColor: '#28A745', // צבע כפתור אופציה
+    backgroundColor: '#000', // צבע כפתור אופציה
     borderRadius: 5,
     marginVertical: 5,
     width: '100%',

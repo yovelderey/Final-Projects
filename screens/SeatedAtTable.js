@@ -144,6 +144,42 @@ const SeatedAtTable = (props) => {
     } catch (error) {
     }
   };
+
+  
+  const deleteImage = async (imageUrl) => {
+    if (!userId) {
+      Alert.alert("User ID not found. Please log in.");
+      return;
+    }
+    const currentUser = firebase.auth().currentUser;
+
+    if (!currentUser) {
+      Alert.alert("משתמש לא מחובר. יש להתחבר למערכת.");
+      return;
+    }
+  
+    try {
+      if (!imageUrl) {
+        Alert.alert("No image to delete.");
+        return;
+      }
+
+      // חילוץ שם התמונה מה-URL
+      const imageName = imageUrl.split('%2F').pop().split('?')[0];
+      const imageRef = storage.ref().child(`users/${currentUser.uid}/${id}/seatOnTables/${imageName}`);
+      
+      // מחיקת התמונה מ-Firebase Storage
+      await imageRef.delete();
+  
+      // איפוס התמונה מה-state
+      setSelectedImage(null);
+      Alert.alert("התמונה נמחקה בהצלחה!");
+    } catch (error) {
+      console.error("שגיאה בעת מחיקת התמונה:", error.message);
+      Alert.alert("Image delete failed:", error.message);
+    }
+  };
+  
   
   useEffect(() => {
     const requestPermissions = async () => {
@@ -326,6 +362,12 @@ const deleteSpecificGuest = (guestId) => {
     });
 };
 
+const openAddGuestsModal = () => {
+  console.log("Attempting to open add guests modal");
+  setAddGuestsModalVisible(true);
+};
+
+
 const addContact = () => {
   const recordidd = String(new Date().getTime());
   const databaseRef = ref(database, `Events/${user.uid}/${id}/tables/${recordidd}`);
@@ -444,6 +486,8 @@ const deleteTable = (recordID) => {
       setContacts((prevContacts) =>
         prevContacts.filter((contact) => contact.recordID !== recordID)
       );
+      setEditModalVisible(false);
+
       Alert.alert("השולחן נמחק בהצלחה!");
     })
     .catch((error) => {
@@ -559,26 +603,70 @@ const deleteAllTablesview = () => {
       <View style={[styles.topBar, { paddingTop: insets.top }]}>
         <Text style={styles.title}>ניהול שולחנות</Text>
       </View>
-  
+
+      <Text style={styles.noItemsText}>לחץ על התמונה להעלות תרשים אולם</Text>
+
+
       <TouchableOpacity onPress={() => props.navigation.navigate('ListItem', { id })}>
         <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
       </TouchableOpacity>
 
       {selectedImage ? (
-        <TouchableOpacity onPress={() => handleButtonPress(0)} style={styles.imagePlaceholder}>
-          <Image source={{ uri: selectedImage }} style={styles.imageBackground2} />
-        </TouchableOpacity>
+        <View style={styles.imageContainer}>
+          <TouchableOpacity onPress={() => handleButtonPress(0)} style={styles.imagePlaceholder}>
+            <Image source={{ uri: selectedImage }} style={styles.imageBackground2} />
+          </TouchableOpacity>
+
+          {/* כפתור מחיקת התמונה */}
+          <TouchableOpacity onPress={() => deleteImage(selectedImage)} style={styles.deleteImageButton}>
+            <Text style={styles.deleteImageButtonText}>✕</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <TouchableOpacity onPress={() => handleButtonPress(0)} style={styles.imagePlaceholder}>
           <Image source={require('../assets/uploadimg.png')} style={styles.imageBackground} />
         </TouchableOpacity>
       )}
-      
+
+
 
       <Modal visible={editModalVisible} animationType="fade" transparent={true}>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>{selectedTable?.displayName || 'עריכת שולחן'}</Text>
+
+            {/* כפתור להוספת אנשים */}
+            <View style={styles.buttonRow2}>
+              <TouchableOpacity
+                style={styles.actionButton2}
+                onPress={openAddGuestsModal}
+              >
+                <Text style={styles.actionButtonText}>הוסף אנשים</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionButton2}
+                onPress={() => {
+                  const tableNumber =
+                    contacts.findIndex((contact) => contact.recordID === selectedTable?.recordID) + 1;
+                  const guestNames =
+                    selectedTable?.guests?.map((guest) => guest.displayName || 'ללא שם').join(', ') || 'אין אורחים';
+                  const guestCount = selectedTable?.guests?.length || 0;
+                  const tableName = selectedTable?.displayName || 'ללא שם';
+
+                  handlePrint(tableNumber, guestNames, guestCount, tableName);
+                }}
+              >
+                <Text style={styles.actionButtonText}>הדפס</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionButton3}
+                onPress={() => deleteTable(selectedTable?.recordID)}
+              >
+                <Text style={styles.actionButtonText}>מחק שולחן</Text>
+              </TouchableOpacity>
+            </View>
 
             {/* רשימת האנשים בשולחן */}
             <FlatList
@@ -593,55 +681,14 @@ const deleteAllTablesview = () => {
                     style={styles.deleteGuestButton}
                     onPress={() => deleteSpecificGuest(item.recordID)}
                   >
-                    <Text style={styles.deleteButtonText}>מחק</Text>
+                      <Image source={require('../assets/delete.png')} style={styles.deleteIcon} />
                   </TouchableOpacity>
                 </View>
               )}
             />
 
-            {/* כפתור להוספת אנשים */}
-            <TouchableOpacity
-              style={styles.addGuestButton}
-              onPress={() => setAddGuestsModalVisible(true)}
-            >
-              <Text style={styles.addGuestButtonText}>הוסף אנשים לשולחן</Text>
-            </TouchableOpacity>
 
-            {/* כפתורי הדפסה ומחיקה */}
-            <View style={styles.buttonRow}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => {
-                  const tableNumber = contacts.findIndex((contact) => contact.recordID === selectedTable?.recordID) + 1;
-                  const guestNames =
-                    selectedTable?.guests?.map((guest) => guest.displayName || 'ללא שם').join(', ') || 'אין אורחים';
-                  const guestCount = selectedTable?.guests?.length || 0;
-                  const tableName = selectedTable?.displayName || 'ללא שם';
-
-                  handlePrint(tableNumber, guestNames, guestCount,tableName);
-                }}
-              >
-                <Text style={styles.actionButtonText}>הדפס</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => deleteTable(selectedTable?.recordID)}
-              >
-                <Text style={styles.actionButtonText}>מחק שולחן</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* כפתור לסגירת המודל */}
-            <TouchableOpacity style={styles.cancelButton} onPress={closeEditModal}>
-              <Text style={styles.modalButtonText}>סגור</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-
-    <Modal visible={addGuestsModalVisible} animationType="fade" transparent={true}>
+<Modal visible={addGuestsModalVisible} animationType="fade" transparent={true}>
       <View style={styles.modalContainer}>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>בחר אנשים להוספה</Text>
@@ -687,43 +734,67 @@ const deleteAllTablesview = () => {
     </Modal>
 
 
-      <Text style={styles.noItemsText}>לחץ על התמונה להעלות תרשים אולם</Text>
+
+
+            {/* כפתור לסגירת המודל */}
+            <TouchableOpacity style={styles.cancelButton2} onPress={closeEditModal}>
+              <Text style={styles.modalButtonText}>סגור</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+
+
+
   <View style={styles.buttonsContainer}>
       
       <Text style={styles.tableCountText}>({contacts.length})</Text>
 
       {/* כפתור מחיקת כל השולחנות */}
       <TouchableOpacity
-        style={styles.deleteAllButton}
+        style={[styles.deleteAllButton, contacts.length === 0 && styles.disabledButton]}
         onPress={deleteAllTables}
+        disabled={contacts.length === 0}
       >
-        <Text style={styles.dummyButtonText}>מחק הכל</Text>
+        <Text style={styles.dummyButtonText}>
+          {contacts.length === 0 ? 'מחק הכל' : 'מחק הכל'}
+        </Text>
       </TouchableOpacity>
 
       <TouchableOpacity
-          style={styles.deleteAllButton2}
-          onPress={printAllTables}
-        >
-          <Text style={styles.dummyButtonText}>הדפס הכל</Text>
+        style={[styles.deleteAllButton2, contacts.length === 0 && styles.disabledButton]}
+        onPress={printAllTables}
+        disabled={contacts.length === 0}
+      >
+        <Text style={styles.dummyButtonText}>
+          {contacts.length === 0 ? 'הדפס הכל' : 'הדפס הכל'}
+        </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
-      style={styles.deleteAllButton2}
-      onPress={() => {
-        const tableData = contacts.map((contact) => ({
-          id: contact.recordID,
-          name: contact.displayName, // שליחת שם השולחן בלבד
-        }));
 
-        props.navigation.navigate('TablePlanningScreen', {
-          id,
-          selectedImage,
-          tableData,
-        });
-      }}
-    >
-      <Text style={styles.dummyButtonText}>תכנון שולחנות</Text>
-    </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.deleteAllButton2}
+        onPress={() => {
+          if (selectedImage) {
+            const tableData = contacts.map((contact) => ({
+              id: contact.recordID,
+              name: contact.displayName, // שליחת שם השולחן בלבד
+            }));
+
+            props.navigation.navigate('TablePlanningScreen', {
+              id,
+              selectedImage,
+              tableData,
+            });
+          } else {
+            Alert.alert("נא לטעון תמונה חדשה", "יש ללחוץ על כפתור העלאת תמונה כדי להעלות תרשים אולם.");
+          }
+        }}
+      >
+        <Text style={styles.dummyButtonText}>תכנון שולחנות</Text>
+      </TouchableOpacity>
+
 
 </View>
 
@@ -752,52 +823,58 @@ const deleteAllTablesview = () => {
         <Text style={styles.addButtonText}>הוסף שולחן +</Text>        
       </TouchableOpacity>
   
-        <Modal visible={modalVisible} animationType="fade" transparent={true}>
-    <View style={styles.modalContainer}>
-      <View style={styles.modalContent}>
-        <Text style={styles.modalTitle}>הוסף שולחן חדש</Text>
-        <Text style={styles.tableCountText}> ({selectedContacts.length})</Text>
+      <Modal visible={modalVisible} animationType="fade" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContentAnimated}>
+            <Text style={styles.modalTitle}>הוסף שולחן חדש ({selectedContacts.length})</Text>
 
-        <TextInput
-          style={styles.input4}
-          placeholder="שם שולחן"
-          value={newContactName}
-          onChangeText={setNewContactName}
-        />
+            <TextInput
+              style={styles.input4}
+              placeholder="שם שולחן"
+              value={newContactName}
+              onChangeText={setNewContactName}
+            />
 
-<TextInput
-  style={styles.modalSearchInput}
-  placeholder="חפש איש קשר..."
-  value={searchContactText}
-  onChangeText={setSearchContactText}
-/>
+            {/* שורת החיפוש ורשימת האנשים */}
+            <View style={styles.searchAndListContainer}>
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder="חפש איש קשר..."
+                value={searchContactText}
+                onChangeText={setSearchContactText}
+              />
 
+              <FlatList
+                data={filteredModalContacts}
+                keyExtractor={(item) => item.recordID}
+                style={styles.flatList}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    onPress={() => toggleContactSelection(item.recordID)}
+                    style={[
+                      styles.contactItem,
+                      selectedContacts.includes(item.recordID) && styles.contactItemSelected,
+                    ]}
+                  >
+                    <Text style={styles.contactName}>{item.displayName}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
 
-      <FlatList
-        data={filteredModalContacts}
-        keyExtractor={(item) => item.recordID}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            onPress={() => toggleContactSelection(item.recordID)}
-            style={[
-              styles.contactItem,
-              selectedContacts.includes(item.recordID) && styles.contactItemSelected,
-            ]}
-          >
-            <Text style={styles.contactName}>{item.displayName}</Text>
-          </TouchableOpacity>
-        )}
-      />
+            <View style={styles.buttonRow}>
+              <TouchableOpacity style={styles.modalButton} onPress={addContact} activeOpacity={0.7}>
+                <Text style={styles.modalButtonText}>הוסף</Text>
+              </TouchableOpacity>
 
-        <TouchableOpacity style={styles.modalButton} onPress={addContact}>
-          <Text style={styles.modalButtonText}>הוסף</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
-          <Text style={styles.modalButtonText}>ביטול</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  </Modal>
+              <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)} activeOpacity={0.7}>
+                <Text style={styles.modalButtonText}>ביטול</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
 
 
     </View>
@@ -859,10 +936,12 @@ const styles = StyleSheet.create({
     marginBottom: -80,
   },
   noItemsText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#555',
     textAlign: 'center',
-    marginTop: 70, // Adjust margin to position correctly
+    marginTop: 95, // Adjust margin to position correctly
+    marginBottom: -115,
+
   },
   noItemsText2: {
     fontSize: 16,
@@ -876,6 +955,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     position: 'absolute',
     top: 0,
+  },
+  topBar2: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: 10,
+    top: 100,
   },
   tableContainer: {
     flex: 1,
@@ -931,12 +1016,57 @@ const styles = StyleSheet.create({
 
     marginRight: 300,
   },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)', // רקע כהה עם שקיפות
+  },
+  flatListContainer: {
+    maxHeight: 200, // גובה מקסימלי לרשימה (יכול להתאים לפי הצורך)
+    marginBottom: 15, // ריווח מתחת לרשימה
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    backgroundColor: '#f7f7f7',
+  },
+  flatList: {
+    flexGrow: 0, // מונע מהרשימה להתרחב מעבר למקסימום שהוגדר
+  },
+  searchAndListContainer: {
+    width: '100%',
+    maxHeight: 400, // גובה מקסימלי מוגדל לרשימה ושורת החיפוש
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#f7f7f7',
+    marginBottom: 15,
+  },
+  disabledButton: {
+    backgroundColor: '#ccc', // צבע אפור לכפתור במצב לא פעיל
+  },
+  
+  modalContentAnimated: {
+    width: '90%',
+    padding: 20,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+    transform: [{ scale: 1 }],
+    opacity: 0.95,
+  },
+  
   modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
     textAlign: 'center',
     marginBottom: 15,
+    color: '#333',
   },
   input: {
     width: '80%',
@@ -947,6 +1077,30 @@ const styles = StyleSheet.create({
     marginBottom: 370,
     backgroundColor: '#fff',
   },
+  imageContainer: {
+    position: 'relative',
+    width: '100%',
+    height: '120%',
+    marginTop: 0,
+    marginBottom: -710,
+  },
+  deleteImageButton: {
+    top: -220,
+    right: -360,
+    backgroundColor: '#f44336',
+    width: 26,
+    height: 26,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  deleteImageButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  
   input2: {
     width: '80%',
     height: 40,
@@ -981,11 +1135,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#000',
     paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: 10,
+    flex: 1,
+    marginRight: 10,
     alignItems: 'center',
-    marginVertical: 10,
+    justifyContent: 'center',
+    shadowColor: '#4CAF50',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
   },
   addButton: {
     padding: 6,
@@ -1014,12 +1175,32 @@ const styles = StyleSheet.create({
     height: 850,
   },
   cancelButton: {
-    backgroundColor: '#f44336',
+    backgroundColor: '#808080',
     paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    flex: 1,
+    marginLeft: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#f44336',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+  },
+  cancelButton2: {
+    backgroundColor: '#808080',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: 10,
     alignItems: 'center',
-    marginVertical: 10,
+    justifyContent: 'center',
+    shadowColor: '#f44336',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
   },
+  
   modalButtonText: {
     color: '#fff',
     fontSize: 16,
@@ -1144,6 +1325,7 @@ const styles = StyleSheet.create({
     width: '50%',
     alignSelf: 'flex-end', // מצמיד את כל הקונטיינר לצד ימין
     marginRight: 20, // רווח קטן מצד ימין
+    marginTop: 80,
 
   },
 
@@ -1166,9 +1348,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   buttonRow: {
-    flexDirection: 'row', // מיישר את הכפתורים בשורה
-    justifyContent: 'space-between', // מרווח שווה בין הכפתורים
-    marginTop: 10, // מרווח מעל הכפתורים
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
   },
   actionButton: {
     flex: 1, // נותן לכל כפתור גודל שווה
@@ -1209,27 +1391,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  
   input4: {
     width: '100%',
-    height: 40,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#ccc',
     borderRadius: 10,
-    paddingHorizontal: 10,
-    marginVertical: 10,
-    backgroundColor: '#f9f9f9',
+    marginBottom: 15,
+    backgroundColor: '#f7f7f7',
+    textAlign: 'right', // יישור הטקסט לימין
   },
+  
+  
   modalSearchInput: {
-    width: '90%',
-    alignSelf: 'center',
-    marginBottom: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 10,
+    padding: 12,
     backgroundColor: '#fff',
-    textAlign: 'right', // ליישור לימין
+    borderBottomWidth: 1,
+    borderColor: '#ddd',
+    fontSize: 16,
   },
   guestContainer: {
     flexDirection: 'row',
@@ -1247,9 +1426,8 @@ const styles = StyleSheet.create({
   },
   
   deleteGuestButton: {
-    backgroundColor: '#f44336',
     paddingVertical: 5,
-    paddingHorizontal: 10,
+    paddingHorizontal: 0,
     borderRadius: 5,
   },
   
@@ -1273,12 +1451,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   addGuestButton: {
-    backgroundColor: '#4CAF50',
-    paddingVertical: 12,
+    backgroundColor: '#4CAF50', // צבע ירוק
+    paddingVertical: 15,       // ריווח אנכי גדול יותר
     borderRadius: 10,
     alignItems: 'center',
-    marginVertical: 10,
+    marginVertical: 20,        // מרווח אנכי לפני ואחרי הכפתור
+    width: '100%',             // הכפתור יתפרס על כל רוחב המודל
   },
+  
   
   addGuestButtonText: {
     color: '#fff',
@@ -1287,16 +1467,40 @@ const styles = StyleSheet.create({
   },
   
   contactItem: {
-    padding: 10,
-    marginVertical: 5,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 5,
+    padding: 12,
+    borderBottomWidth: 1,
+    borderColor: '#eee',
   },
   
   contactItemSelected: {
     backgroundColor: '#d0f0c0',
   },
-  
+
+  buttonRow2: {
+    flexDirection: 'row',
+    justifyContent: 'space-between', // ריווח שווה בין הכפתורים
+    alignItems: 'center',
+    marginVertical: 10,
+    paddingHorizontal: 10,
+  },
+  actionButton2: {
+    flex: 1, // כל כפתור יקבל גודל שווה
+    backgroundColor: '#000',
+    paddingVertical: 10,
+    marginHorizontal: 5,
+    borderRadius: 10,
+    alignItems: 'center',
+    elevation: 3,
+  },
+  actionButton3: {
+    flex: 1, // כל כפתור יקבל גודל שווה
+    backgroundColor: '#f44336',
+    paddingVertical: 10,
+    marginHorizontal: 5,
+    borderRadius: 10,
+    alignItems: 'center',
+    elevation: 3,
+  },
 });
 
 export default SeatedAtTable;

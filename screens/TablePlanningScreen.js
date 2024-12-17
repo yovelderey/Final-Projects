@@ -9,10 +9,12 @@ import {
   Alert,
   Dimensions,
   FlatList,
+  StatusBar,
   Modal,
 } from 'react-native';
 import { getDatabase, ref, set, onValue } from 'firebase/database';
 import firebase from 'firebase/compat/app';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const TablePlanningScreen = ({ navigation, route }) => {
 
@@ -22,7 +24,9 @@ const TablePlanningScreen = ({ navigation, route }) => {
   const [textSize, setTextSize] = useState(9); // גודל ברירת מחדל של הטקסט
   const [color, setColor] = useState('#4CAF50'); // צבע ברירת מחדל ירוק
   const [rotation, setRotation] = useState(0); // סיבוב ברירת מחדל של 0 מעלות
-  
+  const insets = useSafeAreaInsets();
+  const [isLocked, setIsLocked] = useState(false); // מצב נעילה
+
   const { id, selectedImage, tableData } = route.params || {}; // קבלת הנתונים
   const [tables, setTables] = useState(
     tableData.map((table) => ({
@@ -251,14 +255,6 @@ const openTableModal = (table) => {
   };
 
 
-  useEffect(() => {
-    //console.log('Table Data received22:', tableData);
-    
-    // מעבר על המערך והצגת כל שם
-    tableData.forEach((table, index) => {
-      console.log(`Table ${index + 1} name:`, table.name);
-    });
-  }, []);
   
   return (
     <View style={styles.container}>
@@ -274,97 +270,122 @@ const openTableModal = (table) => {
       ) : (
         <Text style={styles.noImageText}>נא להעלות תמונה</Text>
       )}
-      <Text style={styles.limitText}>
-  {`שולחנות נוכחיים: ${tables.length}/${maxTablesFromSeatedAtTable}`}
-</Text>
- {/* Modal להצגת האורחים בשולחן */}
-      <Modal visible={modalVisible} transparent={true} animationType="slide">
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            {selectedTable && (
-              <>
-                <Text style={styles.modalTitle}>{selectedTable.name || 'פרטי שולחן'}</Text>
-                <Text style={styles.modalSubTitle}>
-                  {`מספר אנשים: ${guests.length}`}
-                </Text>
+      <StatusBar backgroundColor="#FFC0CB" barStyle="dark-content" />
+      <View style={[styles.topBar, { paddingTop: insets.top }]}>
+        <Text style={styles.title}>ניהול שולחנות</Text>
+      </View>
 
-                <FlatList
-                  data={guests}
-                  keyExtractor={(item, index) => index.toString()}
-                  renderItem={({ item }) => (
-                    <View style={styles.guestContainer}>
-                      <Text style={styles.guestName}>{item.displayName || 'ללא שם'}</Text>
-                    </View>
-                  )}
-                />
+      <TouchableOpacity onPress={() => navigation.goBack()}>
+        <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
+      </TouchableOpacity>
 
-                <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
-                  <Text style={styles.closeButtonText}>סגור</Text>
-                </TouchableOpacity>
-              </>
+    <View style={styles.buttonsContainer}>
+        <TouchableOpacity style={styles.button} onPress={increaseSize}>
+            <Image source={require('../assets/zoomin.png')} style={styles.imageback2} />
+
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.button} onPress={decreaseSize}>
+            <Image source={require('../assets/zoomout.png')} style={styles.imageback2} />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.button} onPress={changeColor}>
+            <Image source={require('../assets/colorpalette.png')} style={styles.imageback2} />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.button} onPress={rotateTables}>
+            <Image source={require('../assets/rotating.png')} style={styles.imageback2} />
+        </TouchableOpacity>
+
+          {/* כפתור נעילה */}
+      <TouchableOpacity style={styles.button} onPress={() => setIsLocked(!isLocked)}>
+        <Image
+          source={isLocked ? require('../assets/lock.png') : require('../assets/lockopen.png')}
+          style={styles.imageback2}
+        />
+      </TouchableOpacity>
+    </View>
+
+    <Modal visible={modalVisible} transparent={true} animationType="fade">
+  <View style={styles.modalContainer}>
+    <View style={styles.modalContent}>
+      {selectedTable && (
+        <>
+          <Text style={styles.modalTitle}>{selectedTable.name || 'פרטי שולחן'}</Text>
+          <Text style={styles.modalSubTitle}>{`מספר אנשים: ${guests.length}`}</Text>
+
+          <FlatList
+            data={guests}
+            keyExtractor={(item, index) => index.toString()}
+            renderItem={({ item }) => (
+              <View style={styles.guestContainer}>
+                <Text style={styles.guestName}>{item.displayName || 'ללא שם'}</Text>
+              </View>
             )}
-          </View>
-        </View>
-      </Modal>
+          />
 
-{/* הצגת השולחנות */}
-{imageLoaded &&
-  tables.map((table, index) => {
-    return (
-        <View
-  key={table.id}
-  {...(panResponders[index]?.panHandlers || {})}
-  style={[
-    styles.table,
-    {
-      transform: [
-        { translateX: table.x },
-        { translateY: table.y },
-        { rotate: `${rotation}deg` }, // הוספת סיבוב
-      ],
-      width: size,               // הגדרת רוחב לפי ה-state של הגודל
-      height: size,              // הגדרת גובה לפי ה-state של הגודל
-      backgroundColor: color,    // הגדרת צבע לפי ה-state של הצבע
-    },
-  ]}
->
-  <Text style={[styles.tableText, { fontSize: textSize }]}>
-    {`שולחן ${index + 1}`}
-  </Text>
-  <Text style={[styles.tableText, { fontSize: textSize }]}>
-    {table.name || `שולחן ${index + 1} ללא שם`}
-  </Text>
-  <TouchableOpacity style={styles.infoButton} onPress={() => openTableModal(table)}>
-            <Text style={styles.buttonText}>פרטים</Text>
+          <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
+            <Text style={styles.closeButtonText}>סגור</Text>
           </TouchableOpacity>
-</View>
+        </>
+      )}
+    </View>
+  </View>
+</Modal>
 
-    );
-  })}
+      {imageLoaded &&
+        tables.map((table, index) => {
+  let isDragging = false;
 
-  <View style={styles.buttonsContainer}>
-  <TouchableOpacity style={styles.button} onPress={increaseSize}>
-    <Text style={styles.buttonText}>הגדל</Text>
-  </TouchableOpacity>
+  return (
+    <View
+      key={table.id}
+      {...panResponders[index]?.panHandlers}
+      style={[
+        styles.table,
+        {
+          transform: [
+            { translateX: table.x },
+            { translateY: table.y },
+            { rotate: `${rotation}deg` },
+          ],
+          width: size,
+          height: size,
+          backgroundColor: color,
+        },
+      ]}
+    >
+    
+      <View style={styles.fullSizeTouchable}>
+        <Text style={[styles.tableText, { fontSize: size * 0.2 }]}>
+              {`שולחן ${index + 1}`}
+          </Text>
+        <TouchableOpacity
+          style={styles.touchableArea}
+          activeOpacity={1}
+          onPressIn={() => (isDragging = false)}
+          onPressOut={() => {
+            if (!isDragging && !isLocked) {
+              openTableModal(table);
+            }
+          }}
+        >
 
-  <TouchableOpacity style={styles.button} onPress={decreaseSize}>
-    <Text style={styles.buttonText}>הקטן</Text>
-  </TouchableOpacity>
+          <Text style={[styles.tableText, { fontSize: size * 0.2 }]}>
+            {table.name || `שולחן ${index + 1} ללא שם`}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+})
+}
+    <Text style={styles.centeredText}>הוראות שימוש</Text>
+    <Text style={styles.centeredText2}>לפניך 5 כלים, מנעול - נעילת רשימת אורחים בשולחן, סיבוב - לסובב את השולחנות, צבע - לצבוע את השולחנות, זכוכיות מגדלת - זום אין זום אאוט. את השולחנות ניתן להזיז ולמקמם אותם על פני התרשים אולם שמוצג לפניכם כדי לקבל תאימות מרבית לסקיצה שלכם</Text>
 
-  <TouchableOpacity style={styles.button} onPress={changeColor}>
-    <Text style={styles.buttonText}>שנה צבע</Text>
-  </TouchableOpacity>
-
-  <TouchableOpacity style={styles.button} onPress={rotateTables}>
-    <Text style={styles.buttonText}>סובב</Text>
-  </TouchableOpacity>
-
-  <TouchableOpacity style={styles.button} onPress={() => navigation.goBack()}>
-    <Text style={styles.buttonText}>חזור</Text>
-  </TouchableOpacity>
-</View>
 
     </View>
+    
   );
 };
 
@@ -386,161 +407,145 @@ const styles = StyleSheet.create({
   },
   table: {
     position: 'absolute',
-    width: 55,
-    height: 30,
-    backgroundColor: '#4CAF50',
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 5,
+    overflow: 'hidden',    // מונע חריגה של התוכן מהכפתור
+    minWidth: 30,          // גודל מינימלי לכפתור
+    minHeight: 30,         // גודל מינימלי לכפתור
   },
+  
   tableText: {
     color: '#fff',
-    fontSize: 9,
-
     fontWeight: 'bold',
+    textAlign: 'center',
+    flexShrink: 1,         // מאפשר לטקסט להתכווץ בתוך גבולות הכפתור
+    maxWidth: '90%',       // מגביל את רוחב הטקסט
   },
   buttonsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: 10,
+    marginTop: -545,
+
   },
   button: {
-    backgroundColor: '#2196F3',
-    padding: 10,
-    borderRadius: 5,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    padding: 0,
+    borderRadius: 0,
   },
   modalContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', // רקע כהה עם שקיפות
+    paddingHorizontal: 20,
   },
   modalContent: {
-    width: '80%',
+    width: '100%',
+    maxHeight: '80%',
     backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 20,
-    alignItems: 'center',
+    borderRadius: 20,
+    padding: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10, // הצללה לאנדרואיד
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
     marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+    paddingBottom: 10,
+  },
+  modalSubTitle: {
+    fontSize: 18,
+    color: '#555',
+    textAlign: 'center',
+    marginBottom: 15,
   },
   guestContainer: {
-    padding: 10,
+    backgroundColor: '#f0f0f0',
+    padding: 15,
+    borderRadius: 12,
     marginVertical: 5,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 5,
+    shadowColor: '#ccc',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2, // הצללה לאנדרואיד
   },
   guestName: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  guestPhone: {
-    fontSize: 14,
-    color: '#555',
-  },
-  guestPrice: {
-    fontSize: 14,
-    color: '#777',
-  },
-  noGuestsText: {
-    fontSize: 16,
-    color: '#888',
+    color: '#444',
+    fontWeight: '500',
   },
   closeButton: {
+    backgroundColor: '#4CAF50',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
     marginTop: 20,
-    backgroundColor: '#2196F3',
-    padding: 10,
-    borderRadius: 5,
-  },
-  closeButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  subText: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-    marginTop: 5,
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)', // רקע כהה עם שקיפות
-    padding: 20,
-  },
-  modalContent: {
-    width: '90%',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 25,
-    alignItems: 'center',
-    shadowColor: '#000',
+    alignSelf: 'center',
+    width: '50%',
+    shadowColor: '#4CAF50',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 5,
   },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    color: '#333',
-  },
-  guestContainer: {
-    width: '100%',
-    padding: 15,
-    marginVertical: 5,
-    backgroundColor: '#f1f1f1',
-    borderRadius: 10,
-    shadowColor: '#aaa',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  guestName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 5,
-  },
-  guestPhone: {
-    fontSize: 16,
-    color: '#555',
-  },
-  guestPrice: {
-    fontSize: 16,
-    color: '#777',
-  },
-  noGuestsText: {
-    fontSize: 18,
-    color: '#999',
-    marginVertical: 20,
-  },
-  closeButton: {
-    marginTop: 25,
-    backgroundColor: '#ff4d4d',
-    paddingVertical: 12,
-    paddingHorizontal: 25,
-    borderRadius: 8,
-  },
   closeButtonText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
-    textTransform: 'uppercase',
+    textAlign: 'center',
   },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  topBar: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: 10,
+    position: 'absolute',
+    top: 0,
+  },
+  imageback: {
+    width: 40,
+    height: 40,
+    position: 'absolute', // מאפשר מיקום מוחלט
+    top: -595,              // לדוגמה: מיקום 10 פיקסלים מלמעלה
+    right: 340,            // לדוגמה: מיקום 10 פיקסלים מימין
+  },
+  imageback2: {
+    width: 28,
+    height: 28,
+    position: 'absolute', // מאפשר מיקום מוחלט
+  },
+touchableArea: {
+  flex: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  width: '100%',
+  height: '100%',
+},
+centeredText: {
+  fontSize: 20,
+  textAlign: 'center',
+  marginTop: 550, // רווח מעל הטקסט
+  fontWeight: 'bold', // הופך את הטקסט לבולד
+
+},
+centeredText2: {
+  fontSize: 15,
+  textAlign: 'center',
+},
+  
+  
 });
 
 export default TablePlanningScreen;
