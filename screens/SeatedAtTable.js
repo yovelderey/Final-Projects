@@ -676,13 +676,14 @@ const deleteAllTablesview = () => {
               contentContainerStyle={{ paddingBottom: 10 }}
               renderItem={({ item }) => (
                 <View style={styles.guestContainer}>
-                  <Text style={styles.guestName}>{item.displayName || 'ללא שם'}</Text>
                   <TouchableOpacity
                     style={styles.deleteGuestButton}
                     onPress={() => deleteSpecificGuest(item.recordID)}
                   >
                       <Image source={require('../assets/delete.png')} style={styles.deleteIcon} />
                   </TouchableOpacity>
+                  <Text style={styles.guestName}>{item.displayName || 'ללא שם'}</Text>
+
                 </View>
               )}
             />
@@ -726,7 +727,7 @@ const deleteAllTablesview = () => {
           </TouchableOpacity>
 
           {/* כפתור לסגירת המודל */}
-          <TouchableOpacity style={styles.cancelButton} onPress={() => setAddGuestsModalVisible(false)}>
+          <TouchableOpacity style={styles.cancelButton2} onPress={() => setAddGuestsModalVisible(false)}>
             <Text style={styles.modalButtonText}>סגור</Text>
           </TouchableOpacity>
         </View>
@@ -1014,7 +1015,7 @@ const styles = StyleSheet.create({
     marginTop: 70,
     marginBottom: -90,
 
-    marginRight: 300,
+    marginRight: 320,
   },
   modalOverlay: {
     flex: 1,
@@ -1363,7 +1364,7 @@ const styles = StyleSheet.create({
   
   actionButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: 'bold',
     textAlign: 'center',
   },
@@ -1451,7 +1452,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   addGuestButton: {
-    backgroundColor: '#4CAF50', // צבע ירוק
+    backgroundColor: '#000', // צבע ירוק
     paddingVertical: 15,       // ריווח אנכי גדול יותר
     borderRadius: 10,
     alignItems: 'center',
@@ -1486,20 +1487,21 @@ const styles = StyleSheet.create({
   actionButton2: {
     flex: 1, // כל כפתור יקבל גודל שווה
     backgroundColor: '#000',
-    paddingVertical: 10,
+    paddingVertical: 7,
     marginHorizontal: 5,
-    borderRadius: 10,
+    borderRadius: 5,
     alignItems: 'center',
-    elevation: 3,
+    padding: 5,
   },
   actionButton3: {
     flex: 1, // כל כפתור יקבל גודל שווה
+
     backgroundColor: '#f44336',
-    paddingVertical: 10,
+    paddingVertical: 7,
     marginHorizontal: 5,
-    borderRadius: 10,
+    borderRadius: 5,
     alignItems: 'center',
-    elevation: 3,
+    padding: 5,
   },
 });
 
