@@ -26,7 +26,11 @@ const TablePlanningScreen = ({ navigation, route }) => {
   const [rotation, setRotation] = useState(0); // סיבוב ברירת מחדל של 0 מעלות
   const insets = useSafeAreaInsets();
   const [isLocked, setIsLocked] = useState(false); // מצב נעילה
-
+  const [showLockMessage, setShowLockMessage] = useState(false);
+  const screenHeight = Dimensions.get('window').height;
+  const minY = 175;           // הגובה המינימלי לגרירה (לדוגמה: 100 פיקסלים)
+  const maxY = screenHeight - 210; // הגובה המקסימלי לגרירה (לדוגמה: 200 פיקסלים מתחתית המסך)
+  
   const { id, selectedImage, tableData } = route.params || {}; // קבלת הנתונים
   const [tables, setTables] = useState(
     tableData.map((table) => ({
@@ -60,15 +64,68 @@ const saveSettingsToFirebase = (updatedSettings) => {
     }).catch((error) => Alert.alert('שגיאה בשמירת ההגדרות:', error.message));
   };
   
-  // פונקציה להגדלת גודל השולחנות
-  const increaseSize = () => {
+
+const centerTables = () => {
+  Alert.alert(
+    'מרכוז השולחנות',
+    ' פעולה זו תמרכז את השולחנות למרכז ותמחק את הסידור הנוכחי.',
+    [
+      {
+        text: 'ביטול',
+        style: 'cancel',
+      },
+      {
+        text: 'אישור',
+        onPress: () => {
+          const centerX = Dimensions.get('window').width / 2 - size / 2;
+          const centerY = Dimensions.get('window').height / 2 - size / 2;
+
+          setTables((prevTables) =>
+            prevTables.map((table) => ({
+              ...table,
+              x: centerX,
+              y: centerY,
+            }))
+          );
+
+          saveTablesToFirebase(); // שמירת המיקומים החדשים בפיירבייס
+        },
+      },
+    ],
+    { cancelable: true }
+  );
+};
+
+
+const increaseSize = () => {
+  if (size < 115) { // הגבלה מקסימלית של 115
     const newSize = size + 10;
     const newTextSize = textSize + 2;
     setSize(newSize);
     setTextSize(newTextSize);
     saveSettingsToFirebase({ size: newSize, textSize: newTextSize, color, rotation });
+  } else {
+    Alert.alert('גודל מקסימלי', 'לא ניתן להגדיל את השולחן מעבר');
+  }
+};
+
+  // פונקציה לנעילה עם הודעה מוקפצת
+  const toggleLock = () => {
+    const newLockState = !isLocked;
+    setIsLocked(newLockState);
+  
+    // הצגת ההודעה רק כאשר המנעול ננעל
+    if (newLockState) {
+      setShowLockMessage(true);
+  
+      // הסתרת ההודעה אחרי 5 שניות
+      setTimeout(() => {
+        setShowLockMessage(false);
+      }, 5000);
+    }
   };
   
+
   // פונקציה להקטנת גודל השולחנות
   const decreaseSize = () => {
     const newSize = size > 20 ? size - 10 : size;
@@ -160,29 +217,28 @@ const saveSettingsToFirebase = (updatedSettings) => {
     });
   }, [user, id]);
   
-  
-
-  
-  
-
-  // יצירת PanResponder לכל שולחן
   const panResponders = tables.map((table) =>
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: (e, gestureState) => {
-        setTables((prevTables) =>
-          prevTables.map((t) =>
-            t.id === table.id
-              ? { ...t, x: t.x + gestureState.dx, y: t.y + gestureState.dy }
-              : t
-          )
-        );
-      },
-      onPanResponderRelease: () => {
-        saveTablesToFirebase(); // שמור את המיקום בפיירבייס לאחר שחרור
-      },
-    })
-  );
+  PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderMove: (e, gestureState) => {
+      setTables((prevTables) =>
+        prevTables.map((t) => {
+          if (t.id === table.id) {
+            // חישוב המיקום החדש עם הגבלת הגובה
+            const newY = t.y + gestureState.dy;
+            const limitedY = Math.max(minY, Math.min(newY, maxY));
+
+            return { ...t, x: t.x + gestureState.dx, y: limitedY };
+          }
+          return t;
+        })
+      );
+    },
+    onPanResponderRelease: () => {
+      saveTablesToFirebase(); // שמירת המיקום בפיירבייס לאחר שחרור
+    },
+  })
+);
   const [selectedTableGuests, setSelectedTableGuests] = useState([]);
   const [maxTablesFromSeatedAtTable, setMaxTablesFromSeatedAtTable] = useState(0);
 
@@ -279,32 +335,36 @@ const openTableModal = (table) => {
         <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
       </TouchableOpacity>
 
-    <View style={styles.buttonsContainer}>
+      <View style={styles.buttonsContainer}>
         <TouchableOpacity style={styles.button} onPress={increaseSize}>
-            <Image source={require('../assets/zoomin.png')} style={styles.imageback2} />
-
+          <Image source={require('../assets/zoomin.png')} style={styles.imageback2} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.button} onPress={decreaseSize}>
-            <Image source={require('../assets/zoomout.png')} style={styles.imageback2} />
+          <Image source={require('../assets/zoomout.png')} style={styles.imageback2} />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.button} onPress={centerTables}>
+          <Image source={require('../assets/placeholder.png')} style={styles.imageback2} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.button} onPress={changeColor}>
-            <Image source={require('../assets/colorpalette.png')} style={styles.imageback2} />
+          <Image source={require('../assets/colorpalette.png')} style={styles.imageback2} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.button} onPress={rotateTables}>
-            <Image source={require('../assets/rotating.png')} style={styles.imageback2} />
+          <Image source={require('../assets/rotating.png')} style={styles.imageback2} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.button} onPress={toggleLock}>
+          <Image
+            source={isLocked ? require('../assets/lock.png') : require('../assets/lockopen.png')}
+            style={styles.imageback2}
+          />
         </TouchableOpacity>
 
-          {/* כפתור נעילה */}
-      <TouchableOpacity style={styles.button} onPress={() => setIsLocked(!isLocked)}>
-        <Image
-          source={isLocked ? require('../assets/lock.png') : require('../assets/lockopen.png')}
-          style={styles.imageback2}
-        />
-      </TouchableOpacity>
-    </View>
+      </View>
+
 
     <Modal visible={modalVisible} transparent={true} animationType="fade">
   <View style={styles.modalContainer}>
@@ -380,8 +440,14 @@ const openTableModal = (table) => {
   );
 })
 }
+{showLockMessage && (
+  <View style={styles.lockMessage}>
+    <Text style={styles.lockMessageText}>🔒 נעילת רשימת אורחים - מופעל</Text>
+  </View>
+)}
+
     <Text style={styles.centeredText}>הוראות שימוש</Text>
-    <Text style={styles.centeredText2}>לפניך 5 כלים, מנעול - נעילת רשימת אורחים בשולחן, סיבוב - לסובב את השולחנות, צבע - לצבוע את השולחנות, זכוכיות מגדלת - זום אין זום אאוט. את השולחנות ניתן להזיז ולמקמם אותם על פני התרשים אולם שמוצג לפניכם כדי לקבל תאימות מרבית לסקיצה שלכם</Text>
+    <Text style={styles.centeredText2}>לפניך 6 כלים, מנעול - נעילת רשימת אורחים בשולחן, סיבוב - לסובב את השולחנות, צבע - לצבוע את השולחנות, מיקוד - מרכז את השולחנות למרכז, זכוכיות מגדלת - זום אין זום אאוט. את השולחנות ניתן להזיז ולמקמם אותם על פני התרשים אולם שמוצג לפניכם כדי לקבל תאימות מרבית לסקיצה שלכם</Text>
 
 
     </View>
@@ -409,7 +475,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 5,
+    borderRadius: 7,
     overflow: 'hidden',    // מונע חריגה של התוכן מהכפתור
     minWidth: 30,          // גודל מינימלי לכפתור
     minHeight: 30,         // גודל מינימלי לכפתור
@@ -471,6 +537,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     padding: 15,
     borderRadius: 12,
+    
     marginVertical: 5,
     shadowColor: '#ccc',
     shadowOffset: { width: 0, height: 2 },
@@ -480,18 +547,20 @@ const styles = StyleSheet.create({
   },
   guestName: {
     fontSize: 16,
+    textAlign: 'right',   // מיישר את הטקסט לימין
+
     color: '#444',
     fontWeight: '500',
   },
   closeButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#808080',
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 25,
     marginTop: 20,
     alignSelf: 'center',
     width: '50%',
-    shadowColor: '#4CAF50',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
@@ -544,7 +613,26 @@ centeredText2: {
   fontSize: 15,
   textAlign: 'center',
 },
-  
+lockMessage: {
+  position: 'absolute',
+  bottom: 30,
+  left: 0,
+  right: 0,
+  backgroundColor: '#000',
+  padding: 10,
+  marginHorizontal: 20,
+  borderRadius: 10,
+  alignItems: 'center',
+  opacity: 0.8,
+  zIndex: 1,
+},
+
+lockMessageText: {
+  color: '#fff',
+  fontSize: 16,
+  fontWeight: 'bold',
+},
+
   
 });
 

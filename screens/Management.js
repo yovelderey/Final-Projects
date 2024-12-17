@@ -668,7 +668,7 @@ const styles = StyleSheet.create({
   closeButton: {
     marginTop: 15,
     padding: 10,
-    backgroundColor: '#DC3545', // צבע כפתור סגירה
+    backgroundColor: '#808080', // צבע כפתור סגירה
     borderRadius: 5,
     width: '100%',
   },

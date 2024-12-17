@@ -106,6 +106,54 @@ const Document = (props) => {
     saveData();
   };
 
+  // const handleButtonPress = async (index) => {
+  //   // בדיקה אם מספר התמונות הכולל הוא 5 או יותר
+  //   const totalImages = imageUrls.length + images.filter((img) => img !== null).length;
+  //   if (totalImages >= 5) {
+  //     Alert.alert('הגבלת כמות', 'לא ניתן להעלות יותר מ-5 תמונות.');
+  //     return;
+  //   }
+  // פתיחת הגלריה לבחירת תמונה
+  //   let result = await ImagePicker.launchImageLibraryAsync({
+  //     mediaTypes: ImagePicker.MediaTypeOptions.Images,
+  //     allowsEditing: true,
+  //     aspect: [4, 3],
+  //     quality: 1,
+  //   });
+  
+  //   // אם המשתמש בחר תמונה ולא ביטל
+  //   if (!result.canceled) {
+  //     const timestamp = new Date().getTime(); // חותמת זמן ייחודית
+  //     const imageName = `image_${timestamp}.jpg`;
+  
+  //     // העלאת התמונה
+  //     uploadImage(result.assets[0].uri, imageName, index);
+  
+  //     // חישוב גודל התמונה במגה-בייט
+  //     let sizeOfimageMB = sizeOfimage / 1048576;
+  //     let temp = eventDetails.NumberofSizeimage + sizeOfimageMB;
+  
+  //     // עדכון גודל התמונות בפיירבייס
+  //     const databaseRefNumberofSizeimag = ref(
+  //       database,
+  //       `Events/${user.uid}/${eventDetails.eventName}/NumberofSizeimage/`
+  //     );
+  //     set(databaseRefNumberofSizeimag, temp);
+  
+  //     console.log('sizeOfimage2:', sizeOfimage);
+  //     console.log('sizeOfimageMB2:', sizeOfimageMB);
+  
+  //     // הצגת כל התמונות עם הגדלים שלהן
+  //     const userId = firebase.auth().currentUser.uid;
+  //     const imageDetails = await getAllImagesAndSizes(userId);
+  
+  //     imageDetails.forEach((image) => {
+  //       console.log(`Image Name: ${image.name}, Size: ${image.sizeMB} MB`);
+  //     });
+  //   }
+  // };
+  
+
   const handleButtonPress = async (index) => {
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -201,12 +249,16 @@ const Document = (props) => {
   };
 
   const addField = () => {
-    if (names.length < 10) { // Limit to 10 items
+    // בדיקה האם מספר התמונות הכולל קטן מ-5
+    if (names.length + imageUrls.length < 5) {
       setNames([...names, '']);
       setImages([...images, null]);
       setProgress([...progress, 0]);
+    } else {
+      Alert.alert('הגבלת כמות', 'לא ניתן להעלות יותר מ-5 תמונות.');
     }
   };
+  
     
   const removeField = () => {
     if (names.length > 1) { // Ensure at least one item
@@ -448,7 +500,7 @@ const Document = (props) => {
         fontWeight: 'bold',
         color: 'black',
         marginTop: 0,
-        padding: 10,
+        padding: 15,
 
         alignItems: 'center',
         textAlign: 'center',
@@ -575,7 +627,7 @@ const Document = (props) => {
 
       },
       addButton: {
-        backgroundColor: '#28a745',
+        backgroundColor: '#000',
         borderRadius: 5,
         alignItems: 'center',
         marginLeft: 10, // Space between buttons
@@ -584,7 +636,7 @@ const Document = (props) => {
         padding: 3,
       },
       removeButton: {
-        backgroundColor: '#dc3545',
+        backgroundColor: '#000',
         borderRadius: 5,
         alignItems: 'center',
         marginLeft: 5, // Space between buttons

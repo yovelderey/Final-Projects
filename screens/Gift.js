@@ -139,7 +139,7 @@ const exportToExcel = async () => {
       Alert.alert('Sharing not available', 'Sharing is not available on this device');
     }
 
-    Alert.alert('Success', `Excel file saved successfully at ${path}`);
+    //Alert.alert('Success', `Excel file saved successfully at ${path}`);
   } catch (error) {
     console.error('Error saving file:', error);
     Alert.alert('Error', 'There was a problem saving the file');
@@ -147,19 +147,31 @@ const exportToExcel = async () => {
 };
 
 
-  const updatePrice = (recordID, price) => {
-    const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordID}`);
-    const updatedContacts = contacts.map(contact =>
-      contact.recordID === recordID ? { ...contact, newPrice: price } : contact
-    );
-    setContacts(updatedContacts);
-    set(databaseRef, { ...contacts.find(contact => contact.recordID === recordID), newPrice: price });
-    
-    const total = updatedContacts.reduce((sum, contact) => {
-      return sum + (parseFloat(contact.newPrice) || 0);
-    }, 0);
-    setTotalPrice(total);
-  };
+const updatePrice = (recordID, price) => {
+  // המרת הקלט למספר
+  const numericPrice = parseFloat(price) || 0;
+
+  // בדיקה אם המחיר חורג מהסכום המותר
+  if (numericPrice > 100000) {
+    Alert.alert('הגבלת מחיר', 'לא ניתן להזין מחיר גבוה מ-100,000.');
+    return;
+  }
+
+  const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts/${recordID}`);
+  const updatedContacts = contacts.map(contact =>
+    contact.recordID === recordID ? { ...contact, newPrice: price } : contact
+  );
+
+  setContacts(updatedContacts);
+  set(databaseRef, { ...contacts.find(contact => contact.recordID === recordID), newPrice: price });
+
+  // חישוב מחדש של הסכום הכולל
+  const total = updatedContacts.reduce((sum, contact) => {
+    return sum + (parseFloat(contact.newPrice) || 0);
+  }, 0);
+  setTotalPrice(total);
+};
+
 
   const filteredContacts = contacts.filter(contact =>
     contact.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -195,6 +207,7 @@ const exportToExcel = async () => {
       <View style={[styles.topBar, { paddingTop: insets.top }]}>
         <Text style={styles.title}>רשימת מתנות</Text>
       </View>
+
       <TouchableOpacity onPress={() => props.navigation.navigate('ListItem', { id })}>
         <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
       </TouchableOpacity>
@@ -261,10 +274,8 @@ const styles = StyleSheet.create({
     width: '70%',
     alignItems: 'center',
     paddingVertical: 10,
- 
     position: 'absolute',
-    top: 10, 
-    zIndex: 1000, 
+    top: 0, 
   },
   title: {
     fontSize: 24,
@@ -272,13 +283,10 @@ const styles = StyleSheet.create({
   },
   tableContainer: {
     width: '100%',
-    maxHeight: '50%',
-    marginVertical: 70,
-
+    maxHeight: '60%',
     alignItems: 'center', // למרכז את התוכן אופקית
     position: 'absolute',
-    top: 130, 
-    zIndex: 1000, 
+    top: 110, 
   },
   list: {
     width: '100%',
