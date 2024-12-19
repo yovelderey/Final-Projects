@@ -1,377 +1,403 @@
-import React, { useRef, useState ,useEffect} from 'react';
-import { View, Text, ImageBackground,Image, FlatList, TextInput, StyleSheet ,StatusBar, TouchableOpacity,ScrollView,Alert } from 'react-native';
-import { firebaseConfig } from '../config';
-import { getDatabase, ref, set,get,child } from 'firebase/database';
+import React, { useState, useEffect } from 'react';
+import { View, Text,StatusBar,Image, TextInput,ImageBackground, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { getDatabase, ref, set, get } from 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
-import { useNavigation } from '@react-navigation/native';
-import { remove } from 'firebase/database';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
+import { Modal } from 'react-native';
 
 const Providers = ({ route, navigation }) => {
   const { id } = route.params;
-  const initialData = [
-    [true, 'מחיר', 'תוכן', 'טלפון', 'שם'],
-    ...Array.from({ length: 4 }, () => Array(5).fill(''))
-  ];
-
-  const [tableData, setTableData] = useState(initialData);
-  const [checked, setChecked] = useState(Array(10).fill(false));
-  const [sumNumericColumn, setSumNumericColumn] = useState(Array(10).fill(0));
   const database = getDatabase();
   const user = firebase.auth().currentUser;
-  const insets = useSafeAreaInsets();
+  const [showRecommendations, setShowRecommendations] = useState(false);
 
-  const handleInputChange = (text, rowIndex, colIndex) => {
-    const newData = [...tableData];
-    newData[rowIndex][colIndex] = text;
-    setTableData(newData);
-  };
+  // יצירת טבלה בגודל 3x3
+  const createNewTable = () => ({
+     // שינוי ברירת המחדל של שם הטבלה
+    data: Array.from({ length: 5 }, () => Array(3).fill('')),
+  });
+  
+  
 
-  const handleCheckBoxChange = (rowIndex) => {
-    const newChecked = [...checked];
-    newChecked[rowIndex] = !newChecked[rowIndex];
-    setChecked(newChecked);
+  const [tables, setTables] = useState([createNewTable()]);
 
-    const newTableData = [...tableData];
-    newTableData[rowIndex][0] = newChecked[rowIndex];
-    setTableData(newTableData);
-
-    if (newChecked[rowIndex]) {
-      const sum = tableData[rowIndex].reduce((total, cell, colIndex) => {
-        if (colIndex === 1) {
-          const numericValue = parseFloat(cell.replace(/[^0-9.-]/g, ''));
-          if (!isNaN(numericValue)) total += numericValue;
-        }
-        return total;
-      }, 0);
-      const newSumNumericColumn = [...sumNumericColumn];
-      newSumNumericColumn[rowIndex] = sum;
-      setSumNumericColumn(newSumNumericColumn);
-    } else {
-      const newSumNumericColumn = [...sumNumericColumn];
-      newSumNumericColumn[rowIndex] = 0;
-      setSumNumericColumn(newSumNumericColumn);
+  // שמירת הנתונים ב-Firebase
+  const saveToFirebase = (updatedTables) => {
+    if (!user) {
+      Alert.alert('שגיאה', 'המשתמש אינו מחובר.');
+      return;
     }
+
+    const databaseRef = ref(database, `Events/${user.uid}/${id}/Providers`);
+    set(databaseRef, updatedTables)
+      .then(() => console.log('הנתונים נשמרו בהצלחה!'))
+      .catch(error => Alert.alert('Error', error.message));
   };
 
-  const handleDeleteBudgetItems = () => {
+  // טעינת הנתונים מ-Firebase
+  const loadFromFirebase = () => {
+    if (!user) {
+      Alert.alert('שגיאה', 'המשתמש אינו מחובר.');
+      return;
+    }
+
     const databaseRef = ref(database, `Events/${user.uid}/${id}/Providers`);
-    remove(databaseRef)
-      .then(() => {
-        Alert.alert('נמחק בהצלחה!', 'פרטי התקציב נמחקו מ-Firebase.');
+    get(databaseRef)
+      .then((snapshot) => {
+        if (snapshot.exists()) {
+          setTables(snapshot.val());
+        }
       })
-      .catch(error => {
-        Alert.alert('שגיאה במחיקה', `אירעה שגיאה בעת מחיקת הנתונים: ${error.message}`);
+      .catch((error) => {
+        Alert.alert('Error', error.message);
       });
   };
 
-  const handleCustomAction = (index) => {
-    console.log(`לחצן פעולה מותאמת אישית בלחיצה, אינדקס ${index}`);
+  useEffect(() => {
+    loadFromFirebase();
+  }, []);
+
+  const handleAddTable = () => {
+    const newTables = [...tables, createNewTable()];
+    setTables(newTables);
+    saveToFirebase(newTables);
   };
-
-  const fetchDataFromFirebase = () => {
-    const databaseRef = ref(database, `Events/${user.uid}/${id}/Providers`);
-    if (user) {
-      get(databaseRef)
-        .then(snapshot => {
-          if (snapshot.exists()) {
-            const data = snapshot.val();
-            const formattedData = data.map(item => [
-              item.checked,
-              item.price,
-              item.content,
-              item.date,
-              item.name
-            ]);
-            setTableData(formattedData);
-
-            const checkedData = formattedData.map(row => row[0]);
-            setChecked(checkedData);
-          }
-        })
-        .catch(error => {
-          Alert.alert('שגיאה בקריאה', `אירעה שגיאה בעת קריאת הנתונים: ${error.message}`);
-        });
+  const showAlert = () => {
+    Alert.alert(
+      'ניהול ספקים',
+      'השוואה בין ספקים שונים בקטגוריות שונות כגון: אולמות, צלמים, אלכוהול וכו..\n\n' +
+      'ניתן להוסיף ספקים להשוואה על ידי כפתור ה- + או להסרה על ידי כפתור ה- -.\n\n' +
+      'ניתן להיכנס למרכז הספקים לצורך קבלת מידע או המלצות על ספק ולקבל חוות דעת.\n\n' +
+      'תמיד נשמח להוסיף ספק חדש למאגר שלנו.\n\nתודה,\nצוות EasyVent.',
+      [{ text: 'סגור' }]
+    );
+  };
+  
+  const handleRemoveLastTable = () => {
+    if (tables.length > 1) {
+      const newTables = tables.slice(0, -1);
+      setTables(newTables);
+      saveToFirebase(newTables);
+    } else {
+      Alert.alert('שגיאה', 'לא ניתן להסיר את הטבלה.');
     }
   };
 
-  useEffect(() => {
-    fetchDataFromFirebase();
-  }, [user, id]);
+  const handleClearAllTables = () => {
+    Alert.alert(
+      'אישור מחיקה',
+      'האם אתה בטוח שברצונך למחוק את כל הטבלאות?',
+      [
+        { text: 'ביטול', style: 'cancel' },
+        { 
+          text: 'הסר', 
+          style: 'destructive',
+          onPress: () => {
+            const newTables = [createNewTable()];
+            setTables(newTables);
+            saveToFirebase(newTables);
+            Alert.alert('הצלחה', 'כל הטבלאות נמחקו בהצלחה.');
+          }
+        }
+      ],
+      { cancelable: true }
+    );
+  };
+  
 
-  const renderCheckBox = (index) => (
-    <TouchableOpacity
-      style={styles.checkbox}
-      onPress={() => handleCheckBoxChange(index)}
-    >
-      <Text style={styles.checkboxText}>
-        {checked[index] ? 'V' : ''}
-      </Text>
-    </TouchableOpacity>
-  );
+  // שינוי ערכי התא
+  const handleInputChange = (text, tableIndex, rowIndex, colIndex) => {
+    const newTables = [...tables];
+    newTables[tableIndex].data[rowIndex][colIndex] = text;
+    setTables(newTables);
+    saveToFirebase(newTables);
+  };
 
-  const renderItem = ({ item, index }) => (
-    <View style={styles.row}>
-      {renderCheckBox(index)}
-      {item.slice(1).map((cell, colIndex) => (
-        <TextInput
-          key={`${index}-${colIndex}`}
-          style={styles.cell}
-          value={cell}
-          onChangeText={(text) => {
-            if (colIndex === 4) {
-              const numericValue = text.replace(/[^0-9]/g, '');
-              handleInputChange(numericValue, index, colIndex + 1);
-            } else {
-              handleInputChange(text, index, colIndex + 1);
-            }
-          }}
-          keyboardType={colIndex === 4 ? 'numeric' : 'default'}
-        />
-      ))}
- 
+  // שינוי שם הטבלה
+  const handleTableNameChange = (text, tableIndex) => {
+    const newTables = [...tables];
+    newTables[tableIndex].name = text;
+    setTables(newTables);
+    saveToFirebase(newTables);
+  };
+
+  const renderTable = (table, tableIndex) => (
+    <View key={tableIndex} style={styles.tableContainer}>
+      <TextInput
+        style={styles.tableNameInput}
+        value={table.name}
+        onChangeText={(text) => handleTableNameChange(text, tableIndex)}
+        placeholder="שם ספקים להשוואה"  // הוספת hint לשם הטבלה
+      />
+
+      <View style={styles.headerRow}>
+        <Text style={styles.headerCell}>מחיר</Text>
+        <Text style={styles.headerCell}>תוכן</Text>
+        <Text style={styles.headerCell}>שם</Text>
+
+      </View>
+      {table.data.map((row, rowIndex) => (
+  <View key={rowIndex} style={styles.row}>
+        {row.map((cell, colIndex) => (
+          <TextInput
+              key={`${tableIndex}-${rowIndex}-${colIndex}`}
+              style={[styles.cell, colIndex === 2 && styles.smallText]} // הוספת הסגנון רק לעמודה השלישית
+              value={cell || ''}
+              onChangeText={(text) => handleInputChange(text, tableIndex, rowIndex, colIndex)}
+              placeholder={
+                colIndex === 2
+                  ? tableIndex === 0
+                    ? `אולם ${rowIndex + 1}`           // לטבלה הראשונה
+                    : tableIndex === 1
+                    ? `ספק אלכוהול ${rowIndex + 1}`    // לטבלה השנייה
+                    : `ספקים נוספים ${rowIndex + 1}`   // לטבלה השלישית ומעלה
+                  : ''
+              }
+            />
+
+        ))}
+      </View>
+    ))}
+
+
     </View>
   );
-
-
-
-  const handleAddRow = () => {
-    const newRow = [false, '', '', '', ''];
-    const newTableData = [...tableData, newRow];
-    setTableData(newTableData);
   
-    const newChecked = [...checked, false];
-    setChecked(newChecked);
-  
-    const databaseRef = ref(database, `Events/${user.uid}/${id}/Providers`);
-    set(databaseRef, newTableData.map(row => ({
-      checked: row[0] !== undefined ? row[0] : false, // טיפול ב-undefined
-      price: row[1] !== undefined ? row[1] : '',
-      content: row[2] !== undefined ? row[2] : '',
-      date: row[3] !== undefined ? row[3] : '',
-      name: row[4] !== undefined ? row[4] : ''
-    }))).catch(error => {});
-  };
-  
-  const handleRemoveLastRow = () => {
-    if (tableData.length === 0) {
-      Alert.alert('שגיאה', 'אין שורות להסרה.');
-      return;
-    }
-  
-    const newTableData = tableData.slice(0, -1);
-    setTableData(newTableData);
-  
-    const newChecked = checked.slice(0, -1);
-    setChecked(newChecked);
-  
-    const databaseRef = ref(database, `Events/${user.uid}/${id}/Providers`);
-    set(databaseRef, newTableData.map(row => ({
-      checked: row[0] !== undefined ? row[0] : false, // טיפול ב-undefined
-      price: row[1] !== undefined ? row[1] : '',
-      content: row[2] !== undefined ? row[2] : '',
-      date: row[3] !== undefined ? row[3] : '',
-      name: row[4] !== undefined ? row[4] : ''
-    }))).catch(error => {});
-  };
-  
-
-  const handleSaveToFirebase = () => {
-    const dataToSave = tableData.map(row => ({
-      checked: row[0],
-      price: row[1],
-      content: row[2],
-      date: row[3],
-      name: row[4]
-    }));
-
-    if (user) {
-      const databaseRef = ref(database, `Events/${user.uid}/${id}/Providers`);
-      set(databaseRef, dataToSave)
-        .then(() => {
-          Alert.alert('נשמר בהצלחה!', 'הנתונים נשמרו ב-Firebase.');
-        })
-        .catch(error => {
-          Alert.alert('שגיאה בשמירה', `אירעה שגיאה בעת שמירת הנתונים: ${error.message}`);
-        });
-    }
-  };
 
   return (
-    <ImageBackground source={require('../assets/backgruond_pro.png')} style={styles.background}>
-      <View style={styles.container}>
-        <StatusBar backgroundColor="#FFC0CB" barStyle="dark-content" />
-        <View style={[styles.topBar, { paddingTop: insets.top }]}>
-          <Text style={styles.title}>ניהול ספקים</Text>
-        </View>
+  <ImageBackground source={require('../assets/backgruondcontact.png')} style={styles.background}>
 
-        <View style={styles.moreContainer}>
-          <TouchableOpacity
-            style={styles.showPasswordButton}
-            onPress={handleDeleteBudgetItems}
-          >
-            <Image source={require('../assets/delete.png')} style={styles.icon} />
-          </TouchableOpacity>
+    <StatusBar backgroundColor="rgba(108, 99, 255, 0.9)" barStyle="light-content" />
+      <View style={styles.header}>
+        <Text style={styles.title}>ניהול ספקים</Text>
 
-          <View style={styles.leftIcons}>
-            <TouchableOpacity onPress={handleAddRow} style={styles.removeButton}>
-              <Image source={require('../assets/plus.png')} style={styles.icon2} />
-            </TouchableOpacity>
-
-            <TouchableOpacity onPress={handleRemoveLastRow} style={styles.removeButton}>
-              <Image source={require('../assets/minus-sign.png')} style={styles.icon2} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.tableContainer}>
-          <FlatList
-            data={tableData}
-            renderItem={renderItem}
-            keyExtractor={(item, index) => index.toString()}
-            contentContainerStyle={styles.table}
-          />
-        </View>
-
-        <TouchableOpacity style={styles.largeButton} onPress={handleSaveToFirebase}>
-          <Text style={styles.title3}>שמור נתונים</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          onPress={() => navigation.navigate('ListItem', { id })}
-          style={[styles.showPasswordButton, { position: 'absolute', top: '7%', left: '4%' }]}
-        >
-          <Image source={require('../assets/back_icon2.png')} style={styles.backIcon} />
-        </TouchableOpacity>
       </View>
+
+      <View style={styles.buttonContainer}>
+
+        <TouchableOpacity onPress={showAlert} style={styles.button}>
+          <Image source={require('../assets/info.png')} style={styles.imageback2} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.navigate('ProvidersScreen')} style={styles.button}>
+          <Image source={require('../assets/feedback.png')} style={styles.imageback2} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleClearAllTables} style={styles.button}>
+          <Image source={require('../assets/broom.png')} style={styles.deleteIcon} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleAddTable} style={styles.button}>
+          <Image source={require('../assets/plus.png')} style={styles.icon2} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleRemoveLastTable} style={styles.button}>
+         <Image source={require('../assets/minus-sign.png')} style={styles.icon2} />
+        </TouchableOpacity>
+
+      </View>
+
+      <Text style={styles.text}>לחץ על כפתור ה- + ליצירת השוואה בין ספקים חדשים</Text>
+      <Text style={styles.text}>ומלא את הטבלה בערכים מתאימים.</Text>
+
+      <ScrollView>
+        {tables.map((table, index) => renderTable(table, index))}
+      </ScrollView>
+     
     </ImageBackground>
+
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 10,
+    padding: 15,
   },
-  background: {
-    flex: 1,
-    resizeMode: 'cover',
-    justifyContent: 'center',
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    justifyContent: 'center',
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: -5,
+    color: '#FFF', // טקסט כהה
     marginTop: 20,
 
   },
-  moreContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginVertical: 15,
-  },
-  tableContainer: {
-    flex: 1,
-    marginTop: -10,
-  },
-  table: {
-    paddingBottom: 10,
+  text: {
+    fontSize: 14,
+    textAlign: 'center',
+    color: '#000', // טקסט כהה
 
   },
- 
+
+  
+  buttonText: {
+    color: '#000', // צבע טקסט סגול
+    fontSize: 20,    
+    fontWeight: 'bold',
+    // גודל טקסט גדול יותר
+  },
+  
+  tableContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)', // צבע רקע עם שקיפות
+    padding: 15,
+    marginBottom: 20,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+    width: '95%', // מקטין את הרוחב ל-90% מהרוחב הזמין
+    alignSelf: 'center', // ממקם את הטבלה במרכז
+  },
+  
+  
+  tableNameInput: {
+    fontSize: 20,
+    fontWeight: '600',
+    marginBottom: 15,
+    borderBottomWidth: 1,
+    borderColor: '#d1d1d1',
+    paddingBottom: 5,
+    color: '#333',
+    textAlign: 'right', // יישור הטקסט לימין
+  },
+  
+  headerRow: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(108, 99, 255, 0.9)', // סגול עם אטימות של 90%
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 5,
+    marginBottom: 10,
+  },
+  imageback2: {
+    width: 28,
+    height: 28,
+    marginRight: -7,
+
+  },
+  
+  headerCell: {
+    flex: 1,
+    fontWeight: '600',
+    color: '#fff', // טקסט לבן
+    textAlign: 'center',
+    fontSize: 16,
+  },
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 5,
+    marginBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#C0C0C0',
+    borderBottomColor: '#e0e0e0',
+    paddingBottom: 5,
   },
-  checkbox: {
-    width: 30,
-    height: 30,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: '#FFC0CB',
-    justifyContent: 'center',
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end', // יישור הכפתורים לצד ימין
     alignItems: 'center',
-    textAlign: 'center',
-
-    marginRight: 10,
+    marginVertical: 15,
+    marginRight: 0, // הצמדת הכפתורים יותר לצד ימין
   },
-  checkboxText: {
-    fontSize: 18,
-    color: '#FFC0CB',
+  button: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginLeft: 4, // הקטנת הרווח בין הכפתורים
+    alignItems: 'center',
   },
+  
+  
+  
   cell: {
     flex: 1,
-    height: 30,
-    borderColor: '#C0C0C0',
+    height: 45,
     borderWidth: 1,
-    paddingHorizontal: 5,
-    borderRadius: 4,
-    marginRight: 10,
-  },
-  customAction: {
-    backgroundColor: '#FFC0CB',
+    borderColor: '#ddd',
+    textAlign: 'center',
+    marginRight: 5,
+    borderRadius: 8,
+    backgroundColor: 'rgba(249, 249, 249, 0.7)', // רקע אפור בהיר עם אטימות של 70%
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 4,
-  },
-  customActionText: {
-    color: '#fff',
-  },
-  largeButton: {
-    width: '40%',
-    height: 40,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginVertical: 20,
-    alignSelf: 'center',
-    padding: 10,
-    borderRadius: 10,
-    marginTop: 70,
-
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  title3: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
+    color: '#333',
   },
-  showPasswordButton: {
-    padding: 5,
+  deleteIcon: {
+    width: 28,
+    height: 28,
+    marginRight: -5,
   },
-  icon: {
-    width: 30,
-    height: 30,
-  },
-  leftIcons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  navButton: {
+    backgroundColor: '#ff6f61', // צבע אדום מודרני
+    padding: 15,
+    borderRadius: 12,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  removeButton: {
-    marginLeft: 10,
-    padding: 5,
+  navButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
   },
   icon2: {
     width: 20,
     height: 20,
 
   },
-  backIcon: {
+  footerButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  background: {
+    flex: 1,
+    resizeMode: 'cover', // התאמת התמונה לגודל המסך
+    justifyContent: 'center',
+  },
+  header: {
+    backgroundColor: 'rgba(108, 99, 255, 0.9)', // סגול עם אטימות של 90%
+    paddingTop: 30, // הוסף רווח כדי לכסות את אזור הסטטוס בר והמגרעת
+    paddingBottom: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  imageback: {
     width: 40,
     height: 40,
+    position: 'absolute',
+    top: 30, 
+    left: -180, 
+    zIndex: 0, 
   },
+  smallText: {
+    fontSize: 14, // גודל הכתב הרצוי
+    color: '#000', // צבע אפור להבלטת ה-Hint
+  },
+ 
+  
+  
+  
+  closeButton: {
+    backgroundColor: '#FF4C4C',
+    padding: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  
+  closeButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  
+  
 });
+
 
 export default Providers;

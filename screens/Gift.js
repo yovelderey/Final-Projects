@@ -42,6 +42,8 @@ const Gift = (props) => {
   const database = getDatabase();
   const [totalPrice, setTotalPrice] = useState(0); // סטייט לסכום הכולל
   const insets = useSafeAreaInsets();
+  const [averagePrice, setAveragePrice] = useState(0);
+  const [paidGuestsCount, setPaidGuestsCount] = useState(0); // ספירת אורחים ששילמו
 
   useEffect(() => {
     const requestPermissions = async () => {
@@ -67,7 +69,19 @@ const Gift = (props) => {
         return sum + (parseFloat(contact.newPrice) || 0);
       }, 0);
       setTotalPrice(total);
+    
+      // חישוב הממוצע כערך שלם
+      const validPrices = contactsArray.filter(contact => parseFloat(contact.newPrice));
+      const average = validPrices.length > 0 ? Math.round(total / validPrices.length) : 0;
+      setAveragePrice(average);
+    
+      // ספירת אורחים ששילמו
+      const paidCount = contactsArray.filter(contact => parseFloat(contact.newPrice) > 0).length;
+      setPaidGuestsCount(paidCount);
     };
+    
+    
+    
 
     onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
@@ -235,22 +249,36 @@ const updatePrice = (recordID, price) => {
       )}
 
       <View style={styles.backgroundContainer}>
-        <View style={styles.row}>
-          <View style={styles.section}>
-            <Text style={styles.header}>כמות מוזמנים</Text>
-            <View style={styles.priceContainer}>
-              <Text style={styles.textPrice}> {contacts.length}</Text>
-            </View>
-          </View>
-          <View style={styles.section}>
-            <Text style={styles.header}>סך הכל</Text>
-            <View style={styles.priceContainer}>
-              <Text style={styles.textPrice}>{totalPrice}₪</Text>
-            </View>
-          </View>
-        </View>
+  <View style={styles.row}>
+    <View style={styles.section}>
+      <Text style={styles.header}>מוזמנים באירוע</Text>
+      <View style={styles.priceContainer}>
+        <Text style={styles.textPrice}>{contacts.length}</Text>
       </View>
+    </View>
 
+    <View style={styles.section}>
+      <Text style={styles.header}>אורחים ששילמו</Text>
+      <View style={styles.priceContainer}>
+        <Text style={styles.textPrice}>{paidGuestsCount}</Text>
+      </View>
+    </View>
+
+    <View style={styles.section}>
+      <Text style={styles.header}>סך הכל מתנות</Text>
+      <View style={styles.priceContainer}>
+        <Text style={styles.textPrice}>{totalPrice}₪</Text>
+      </View>
+    </View>
+
+    <View style={styles.section}>
+      <Text style={styles.header}>ממוצע לאדם</Text>
+      <View style={styles.priceContainer}>
+        <Text style={styles.textPrice}>{averagePrice}₪</Text>
+      </View>
+    </View>
+  </View>
+</View>
 
 
       <TouchableOpacity onPress={exportToExcel} style={styles.exportButton}>
@@ -283,7 +311,7 @@ const styles = StyleSheet.create({
   },
   tableContainer: {
     width: '100%',
-    maxHeight: '60%',
+    maxHeight: '58%',
     alignItems: 'center', // למרכז את התוכן אופקית
     position: 'absolute',
     top: 110, 
@@ -457,7 +485,7 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 10,
     position: 'absolute',
-    top: 750, 
+    top: 770, 
     zIndex: 1000,     paddingHorizontal: 95, // Increase horizontal padding for wider button
 
   },
@@ -477,20 +505,23 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     width: '90%',
     position: 'absolute',
-    top: 650, 
+    top: 620, 
     zIndex: 1000, 
   },
   row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',  // פיזור אחיד של הסקשנים
     alignItems: 'center',
-    paddingHorizontal: 20, // Add padding to create space between the sections
+    width: '100%',                   // הרחבת השורה לרוחב מלא
+    paddingHorizontal: 0,           // ריווח פנימי לשמירה על גבולות המסך
   },
+  
   section: {
     flex: 1,
     alignItems: 'center',
-    marginHorizontal: 10,
+    marginHorizontal: 5,     // הקטנת המרווח בין הסקשנים כדי לתת יותר מקום לרוחב
   },
+  
   header: {
     fontSize: 18,
     color: '#000000',
@@ -500,18 +531,26 @@ const styles = StyleSheet.create({
   },
   priceContainer: {
     backgroundColor: '#ffffff',
-    padding: 10,
-    borderRadius: 10,
+    paddingVertical: 10,       // רווח פנימי אנכי
+    paddingHorizontal: 10,     // רווח פנימי אופקי
+    borderRadius: 15,          // פינות מעוגלות
     borderWidth: 1,
     borderColor: '#cccccc',
-    width: '100%',
+    width: '100%',             // הרחבת הרוחב למלוא הקונטיינר
+    justifyContent: 'center',
     alignItems: 'center',
-
+    minHeight: 60,             // גובה מינימלי לקונטיינר
+    flexDirection: 'row',      // סידור אופקי של התוכן
   },
+  
   textPrice: {
-    fontSize: 16,
+    fontSize: 13,              // גודל טקסט קטן יותר כדי להתאים מספרים גדולים
     color: '#000000',
+    textAlign: 'center',       // יישור מרכזי של הטקסט
+    flexShrink: 1,             // מניעת שבירת השורה על ידי הקטנת האלמנט במידת הצורך
   },
+  
+  
   gif: {
     width: '100%',
     height: '100%',

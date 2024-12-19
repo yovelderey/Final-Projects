@@ -8,6 +8,8 @@ import 'firebase/compat/auth';
 import 'firebase/compat/database'; // Import the Realtime Database module
 import * as Progress from 'react-native-progress';
 import 'firebase/database'; // Import the Realtime Database module
+import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
 
 import { getDatabase, ref, set, onValue } from 'firebase/database';
 
@@ -95,7 +97,7 @@ const Document = (props) => {
       setImageUrls(urls);
 
     } catch (error) {
-      console.error("Failed to load images:", error.message);
+      //console.error("Failed to load images:", error.message);
     }
   };
 
@@ -106,55 +108,14 @@ const Document = (props) => {
     saveData();
   };
 
-  // const handleButtonPress = async (index) => {
-  //   // בדיקה אם מספר התמונות הכולל הוא 5 או יותר
-  //   const totalImages = imageUrls.length + images.filter((img) => img !== null).length;
-  //   if (totalImages >= 5) {
-  //     Alert.alert('הגבלת כמות', 'לא ניתן להעלות יותר מ-5 תמונות.');
-  //     return;
-  //   }
-  // פתיחת הגלריה לבחירת תמונה
-  //   let result = await ImagePicker.launchImageLibraryAsync({
-  //     mediaTypes: ImagePicker.MediaTypeOptions.Images,
-  //     allowsEditing: true,
-  //     aspect: [4, 3],
-  //     quality: 1,
-  //   });
-  
-  //   // אם המשתמש בחר תמונה ולא ביטל
-  //   if (!result.canceled) {
-  //     const timestamp = new Date().getTime(); // חותמת זמן ייחודית
-  //     const imageName = `image_${timestamp}.jpg`;
-  
-  //     // העלאת התמונה
-  //     uploadImage(result.assets[0].uri, imageName, index);
-  
-  //     // חישוב גודל התמונה במגה-בייט
-  //     let sizeOfimageMB = sizeOfimage / 1048576;
-  //     let temp = eventDetails.NumberofSizeimage + sizeOfimageMB;
-  
-  //     // עדכון גודל התמונות בפיירבייס
-  //     const databaseRefNumberofSizeimag = ref(
-  //       database,
-  //       `Events/${user.uid}/${eventDetails.eventName}/NumberofSizeimage/`
-  //     );
-  //     set(databaseRefNumberofSizeimag, temp);
-  
-  //     console.log('sizeOfimage2:', sizeOfimage);
-  //     console.log('sizeOfimageMB2:', sizeOfimageMB);
-  
-  //     // הצגת כל התמונות עם הגדלים שלהן
-  //     const userId = firebase.auth().currentUser.uid;
-  //     const imageDetails = await getAllImagesAndSizes(userId);
-  
-  //     imageDetails.forEach((image) => {
-  //       console.log(`Image Name: ${image.name}, Size: ${image.sizeMB} MB`);
-  //     });
-  //   }
-  // };
-  
-
   const handleButtonPress = async (index) => {
+    // בדיקה אם מספר התמונות הכולל הוא 5 או יותר
+    const totalImages = imageUrls.length + images.filter((img) => img !== null).length;
+    if (totalImages >= 10) {
+      Alert.alert('הגבלת כמות', 'לא ניתן להעלות יותר מ-10 תמונות.');
+      return;
+    }
+  // פתיחת הגלריה לבחירת תמונה
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
@@ -162,25 +123,59 @@ const Document = (props) => {
       quality: 1,
     });
 
+    
+    // אם המשתמש בחר תמונה ולא ביטל
     if (!result.canceled) {
-      const timestamp = new Date().getTime(); // Unique timestamp
+      const timestamp = new Date().getTime(); // חותמת זמן ייחודית
       const imageName = `image_${timestamp}.jpg`;
+  
+      // העלאת התמונה
       uploadImage(result.assets[0].uri, imageName, index);
-
-      let sizeOfimageMB = sizeOfimage / 1048576;  
-      let temp = (eventDetails.NumberofSizeimage + sizeOfimageMB);
-      const databaseRefNumberofSizeimag = ref(database, `Events/${user.uid}/${eventDetails.eventName}/NumberofSizeimage/`);
-      set(databaseRefNumberofSizeimag,temp)
-     // console.log("temp2:",temp);
-      console.log("sizeOfimage2:",sizeOfimage);
-     // console.log("sizeOfimageMB2:",sizeOfimageMB);
-
+  
+      // חישוב גודל התמונה במגה-בייט
+      let sizeOfimageMB = sizeOfimage / 1048576;
+      let temp = eventDetails.NumberofSizeimage + sizeOfimageMB;
+  
+      // עדכון גודל התמונות בפיירבייס
+      const databaseRefNumberofSizeimag = ref(
+        database,
+        `Events/${user.uid}/${eventDetails.eventName}/NumberofSizeimage/`
+      );
+      set(databaseRefNumberofSizeimag, temp);
+  
+      console.log('sizeOfimage2:', sizeOfimage);
+      console.log('sizeOfimageMB2:', sizeOfimageMB);
+  
+      // הצגת כל התמונות עם הגדלים שלהן
       const userId = firebase.auth().currentUser.uid;
       const imageDetails = await getAllImagesAndSizes(userId);
-    
-      imageDetails.forEach(image => {
+  
+      imageDetails.forEach((image) => {
         console.log(`Image Name: ${image.name}, Size: ${image.sizeMB} MB`);
       });
+    }
+  };
+  
+  const downloadImage = async (url) => {
+    try {
+      // בקשת הרשאה לשמירה בגלריה
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('שגיאה', 'לא ניתנה הרשאה לשמירת קבצים');
+        return;
+      }
+  
+      // הורדת התמונה לתיקיית המטמון
+      const fileName = url.split('/').pop();
+      const fileUri = FileSystem.documentDirectory + fileName;
+      const downloadResult = await FileSystem.downloadAsync(url, fileUri);
+  
+      // שמירת התמונה לגלריה
+      await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+      Alert.alert('הצלחה', 'התמונה נשמרה בהצלחה במכשיר');
+    } catch (error) {
+      console.error('שגיאה בהורדת התמונה:', error);
+      Alert.alert('שגיאה', 'התרחשה שגיאה במהלך ההורדה');
     }
   };
 
@@ -249,15 +244,20 @@ const Document = (props) => {
   };
 
   const addField = () => {
-    // בדיקה האם מספר התמונות הכולל קטן מ-5
-    if (names.length + imageUrls.length < 5) {
+    const totalImages = names.length + imageUrls.length;
+    const maxImages = 10;
+    
+    // בדיקה האם ניתן להוסיף עוד תמונות
+    if (totalImages < maxImages) {
       setNames([...names, '']);
       setImages([...images, null]);
       setProgress([...progress, 0]);
     } else {
-      Alert.alert('הגבלת כמות', 'לא ניתן להעלות יותר מ-5 תמונות.');
+      const remaining = maxImages - imageUrls.length;
+      Alert.alert('הגבלת כמות', `לא ניתן להעלות יותר מ-${remaining} תמונות.`);
     }
   };
+  
   
     
   const removeField = () => {
@@ -306,29 +306,47 @@ const Document = (props) => {
   };
 
   const deleteStoredImage = async (url) => {
-    if (!userId) {
-      Alert.alert("User ID not found. Please log in.");
-      return;
-    }
-
-    try {
-      // Extract image name from URL
-      const imageName = url.split('%2F').pop().split('?')[0];
-      const ref = storage.ref().child(`users/${userId}/${id}/images/${imageName}`);
-      
-      // Delete the image from Firebase Storage
-      await ref.delete();
-      
-      // Update state
-      const newImageUrls = imageUrls.filter(imageUrl => imageUrl !== url);
-      setImageUrls(newImageUrls);
-      
-      Alert.alert("התמונה נמחקה!");
-    } catch (error) {
-      console.error("שגיאה בעת מחיקה:", error.message);
-      Alert.alert("Image delete failed:", error.message);
-    }
+    Alert.alert(
+      'אישור מחיקה',
+      'האם ברצונך למחוק את התמונה?',
+      [
+        {
+          text: 'ביטול',
+          style: 'cancel',
+        },
+        {
+          text: 'מחק',
+          onPress: async () => {
+            try {
+              if (!userId) {
+                Alert.alert('שגיאה', 'משתמש לא מחובר');
+                return;
+              }
+  
+              // חילוץ שם התמונה מה-URL
+              const imageName = url.split('%2F').pop().split('?')[0];
+              const ref = storage.ref().child(`users/${userId}/${id}/images/${imageName}`);
+  
+              // מחיקת התמונה מה-Storage
+              await ref.delete();
+  
+              // עדכון ה-state לאחר מחיקה
+              const newImageUrls = imageUrls.filter((imageUrl) => imageUrl !== url);
+              setImageUrls(newImageUrls);
+  
+              Alert.alert('התמונה נמחקה בהצלחה');
+            } catch (error) {
+              console.error('שגיאה בעת מחיקה:', error.message);
+              Alert.alert('שגיאה', 'התרחשה שגיאה במהלך המחיקה');
+            }
+          },
+          style: 'destructive', // סגנון אדום לכפתור מחיקה
+        },
+      ],
+      { cancelable: true }
+    );
   };
+  
     
   const navigateBack = () => {
     navigation.goBack();
@@ -407,6 +425,16 @@ const Document = (props) => {
           <View style={styles.buttonRow}>
           <Text style={styles.noItemsText}>          מספר הקבצים: {imageUrls.length} </Text>
 
+          <Modal visible={modalVisible} transparent={true} animationType="fade">
+            <View style={styles.modalContainer}>
+              <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
+                <Text style={styles.closeButtonText}>X</Text>
+              </TouchableOpacity>
+              <Image source={{ uri: currentImage }} style={styles.fullImage} />
+            </View>
+          </Modal>
+
+
             <TouchableOpacity onPress={addField} style={styles.addButton}>
               <Text style={styles.addButtonText}>+</Text>
             </TouchableOpacity>
@@ -434,7 +462,7 @@ const Document = (props) => {
                           <Image source={{ uri: images[index] }} style={styles.selectedImage} />
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => deleteImage(index)} style={styles.deleteButton}>
-                          <Text style={styles.deleteButtonText}>מחק</Text>
+                          <Text style={styles.deleteButtonText}>X</Text>
                         </TouchableOpacity>
                       </View>
                     )}
@@ -459,15 +487,25 @@ const Document = (props) => {
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {imageUrls.map((url, index) => (
                 <View key={index} style={styles.itemContainer}>
+                  {/* כפתור X למחיקה */}
+                  <TouchableOpacity onPress={() => deleteStoredImage(url)} style={styles.deleteButton}>
+                    <Text style={styles.deleteButtonText}>X</Text>
+                  </TouchableOpacity>
+
+                  {/* תמונה */}
                   <TouchableOpacity onPress={() => openImageModal(url)}>
                     <Image source={{ uri: url }} style={styles.selectedImage} />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => deleteStoredImage(url)} style={styles.deleteButton}>
-                    <Text style={styles.deleteButtonText}>מחק</Text>
+
+                  {/* כפתור הורדה */}
+                  <TouchableOpacity onPress={() => downloadImage(url)} style={styles.downloadButton}>
+                    <Text style={styles.downloadButtonText}>הורד</Text>
                   </TouchableOpacity>
                 </View>
               ))}
             </ScrollView>
+
+
           </View>
       
           <TouchableOpacity 
@@ -477,7 +515,11 @@ const Document = (props) => {
         <Image source={require('../assets/back_icon2.png')} style={styles.backIcon} />
       </TouchableOpacity>
         </View>
+
+
+
       );
+      
       
       
     };
@@ -499,7 +541,7 @@ const Document = (props) => {
         fontSize: 24,
         fontWeight: 'bold',
         color: 'black',
-        marginTop: 0,
+        marginTop: -15,
         padding: 15,
 
         alignItems: 'center',
@@ -589,24 +631,26 @@ const Document = (props) => {
       selectedImage: {
         width: 100,
         height: 100,
-        borderRadius: 5,
-        marginRight: 10,
+        borderRadius: 10,
+        marginBottom: 10,         // ריווח בין התמונה לכפתור
       },
       deleteButton: {
-        backgroundColor: '#FF4C4C',
-        width: 80,
-        height: 30,
-        borderRadius: 15,
-        marginTop: 10,
-        padding: 5,
-
+        position: 'absolute',
+        top: 5,
+        right: 5,
+        backgroundColor: 'red',
+        width: 25,
+        height: 25,
+        borderRadius: 12.5, // עיגול מושלם
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 1, // כדי להבטיח שהכפתור יהיה מעל התמונה
       },
       deleteButtonText: {
         color: '#fff',
         fontWeight: 'bold',
-        fontSize: 14,
+        fontSize: 16,
         textAlign: 'center',
-
       },
       progressBar: {
         borderRadius: 6, // עיגול פינות
@@ -670,7 +714,7 @@ const Document = (props) => {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: 'rgba(0,0,0,0.8)',
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
       },
       fullImage: {
         width: '100%',
@@ -679,14 +723,20 @@ const Document = (props) => {
       },
       closeButton: {
         position: 'absolute',
-        bottom: 30,
-        backgroundColor: '#007BFF',
-        padding: 15,
-        borderRadius: 5,
+        top: 40,
+        right: 20,
+        backgroundColor: 'red',
+        width: 30,            // רוחב הכפתור
+        height: 30,           // גובה הכפתור
+        borderRadius: 20,     // רדיוס הפינות חצי מהרוחב/גובה לעיגול מושלם
+        justifyContent: 'center',  // למרכז את הטקסט אנכית
+        alignItems: 'center',      // למרכז את הטקסט אופקית
+        zIndex: 1,
       },
       closeButtonText: {
         color: '#fff',
         fontWeight: 'bold',
+        fontSize: 18,
       },
       backButton: {
         backgroundColor: '#007BFF',
@@ -700,6 +750,23 @@ const Document = (props) => {
         fontWeight: 'bold',
         fontSize: 16,
       },
+      downloadButton: {
+        backgroundColor: '#000', // צבע ירוק
+        width: 80,
+        height: 30,
+        borderRadius: 15,
+        marginTop: 5,
+        padding: 5,
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+      downloadButtonText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 14,
+        textAlign: 'center',
+      },
+      
     });
     
     export default Document;

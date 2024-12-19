@@ -25,6 +25,7 @@ import SplashScreen from './screens/SplashScreen';
 import ResponsesScreen from './screens/ResponsesScreen';
 import EditHome from './screens/EditHome';
 import TablePlanningScreen from './screens/TablePlanningScreen';
+import ProvidersScreen from './screens/ProvidersScreen';
 
 
 
@@ -56,7 +57,9 @@ const App = () => {
         <Stack.Screen name="ResponsesScreen" component={ResponsesScreen} />
         <Stack.Screen name="EditHome" component={EditHome} />
         <Stack.Screen name="TablePlanningScreen" component={TablePlanningScreen} />
+        <Stack.Screen name="ProvidersScreen" component={ProvidersScreen} />
 
+        
       </Stack.Navigator>
     </NavigationContainer>
   );
