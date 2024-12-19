@@ -170,21 +170,32 @@ const Providers = ({ route, navigation }) => {
     <StatusBar backgroundColor="rgba(108, 99, 255, 0.9)" barStyle="light-content" />
       <View style={styles.header}>
         <Text style={styles.title}>ניהול ספקים</Text>
-
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
-        </TouchableOpacity>
-
+        <View style={styles.headerButtons}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Text style={styles.backButtonText}>←</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
+      <TouchableOpacity style={styles.cardButton} onPress={() => navigation.navigate('ProvidersScreen')}>
+        <View style={styles.cardContent}>
+          <Text style={styles.arrow}>←</Text>
+          <View style={styles.separator} />
+          <View style={styles.textContainer}>
+            <Text style={styles.cardTitle}>מאגר ספקים</Text>
+            <Text style={styles.cardSubtitle}>רשימת ספקים מומלצת</Text>
+          </View>
+        </View>
+      </TouchableOpacity>
+
+
 
       <View style={styles.buttonContainer}>
 
         <TouchableOpacity onPress={showAlert} style={styles.button}>
           <Image source={require('../assets/info.png')} style={styles.imageback2} />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate('ProvidersScreen')} style={styles.button}>
-          <Image source={require('../assets/feedback.png')} style={styles.imageback2} />
-        </TouchableOpacity>
+
         <TouchableOpacity onPress={handleClearAllTables} style={styles.button}>
           <Image source={require('../assets/broom.png')} style={styles.deleteIcon} />
         </TouchableOpacity>
@@ -197,8 +208,7 @@ const Providers = ({ route, navigation }) => {
 
       </View>
 
-      <Text style={styles.text}>לחץ על כפתור ה- + ליצירת השוואה בין ספקים חדשים</Text>
-      <Text style={styles.text}>ומלא את הטבלה בערכים מתאימים.</Text>
+
 
       <ScrollView>
         {tables.map((table, index) => renderTable(table, index))}
@@ -215,13 +225,12 @@ const styles = StyleSheet.create({
     padding: 15,
   },
   title: {
+    marginTop: 25,
+    color: '#fff', // טקסט כהה
     fontSize: 28,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: -5,
-    color: '#FFF', // טקסט כהה
-    marginTop: 20,
-
+    marginBottom: -20,
   },
   text: {
     fontSize: 14,
@@ -299,6 +308,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 15,
     marginRight: 0, // הצמדת הכפתורים יותר לצד ימין
+    marginBottom: 0,
+    marginTop: -15,
+
   },
   button: {
     paddingVertical: 10,
@@ -308,7 +320,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   
-  
+  headerButtons: {
+    marginBottom: -23,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    
+  },
+  backButtonText: {
+    fontSize: 29,
+    color: '#fff',
+    marginBottom: 20,
+
+  },
+  backButtonText2: {
+    fontSize: 36,
+    color: '#fff',
+    marginRight: -12, // מרווח מימין לכפתור חזרה
+
+
+  },
   
   cell: {
     flex: 1,
@@ -360,12 +391,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   header: {
-    backgroundColor: 'rgba(108, 99, 255, 0.9)', // סגול עם אטימות של 90%
-    paddingTop: 30, // הוסף רווח כדי לכסות את אזור הסטטוס בר והמגרעת
+    backgroundColor: 'rgba(108, 99, 255, 0.9)',
+    paddingTop: 30,
     paddingBottom: 15,
+    paddingHorizontal: 20,
     alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
   },
   imageback: {
     width: 40,
@@ -396,6 +426,56 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   
+  cardButton: {
+    backgroundColor: 'rgba(108, 99, 255, 0.1)', // צבע רקע בהיר תואם לסגנון העמוד
+    borderRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 15,
+    marginVertical: 20,
+    width: '90%',
+    alignSelf: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  
+  cardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  
+  textContainer: {
+    flex: 1,
+  },
+  
+  cardTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#6c63ff', // צבע כותרת
+    textAlign: 'right',
+  },
+  
+  cardSubtitle: {
+    fontSize: 14,
+    color: '#555',
+    textAlign: 'right',
+  },
+  
+  separator: {
+    width: 1,
+    height: '100%',
+    backgroundColor: '#ccc', // צבע הקו המפריד
+    marginHorizontal: 15,
+  },
+  
+  arrow: {
+    fontSize: 36,
+    color: '#6c63ff', // צבע החץ
+    fontWeight: 'bold',
+  },
   
 });
 

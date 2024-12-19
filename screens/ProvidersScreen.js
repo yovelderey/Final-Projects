@@ -236,7 +236,12 @@ const ProvidersScreen = ({ navigation }) => {
     return (
       <View style={styles.providerCard}>
         <Text style={styles.providerName}>{item.name || 'לא ידוע'}</Text>
-        <Text style={styles.providerDetail}>📍 מיקום: {item.location || 'לא ידוע'}</Text>
+        <View style={styles.separator} />
+
+        <Text style={styles.providerDetail}> {item.location || 'לא ידוע'}</Text>
+        <Text style={styles.providerDetail}>{item.category || 'לא מוגדר'}</Text>
+        <Text style={styles.providerDetail}>{item.phone || 'לא זמין'}</Text>
+
         <View style={styles.providerDetailStars}>
           <Text style={styles.providerDetail}> </Text>
           {Array.from({ length: 5 }).map((_, index) => (
@@ -245,9 +250,7 @@ const ProvidersScreen = ({ navigation }) => {
             </Text>
           ))}
         </View>
-        <Text style={styles.providerDetail}>💬 ביקורת: {item.review || 'אין ביקורת'}</Text>
-        <Text style={styles.providerDetail}>📞 טלפון: {item.phone || 'לא זמין'}</Text>
-        <Text style={styles.providerDetail}>🏷️ קטגוריה: {item.category || 'לא מוגדר'}</Text>
+        <Text style={styles.providerDetail}>{item.review || 'אין ביקורת'}</Text>
       </View>
     );
   };
@@ -258,10 +261,8 @@ const ProvidersScreen = ({ navigation }) => {
     <View style={styles.container}>
 
       <StatusBar backgroundColor="rgba(108, 99, 255, 0.9)" barStyle="light-content" />
-
       <View style={styles.header}>
         <Text style={styles.title}>מאגר ספקים</Text>
-
         <View style={styles.headerButtons}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Text style={styles.backButtonText}>←</Text>
@@ -467,19 +468,21 @@ const styles = StyleSheet.create({
   },
   title: {
     marginTop: 25,
+    color: '#fff', // טקסט כהה
 
     fontSize: 28,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: -5,
+    marginBottom: -20,
   },
   providerName: {
-    fontSize: 18, // הקטנת גודל הטקסט של שם הספק
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 3, // הקטנת המרווח
+    marginBottom: 3,
     color: '#6c63ff',
-    textAlign: 'right',
+    textAlign: 'center', // ממרכז את הטקסט
   },
+  
   starContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -496,11 +499,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerButtons: {
-    marginBottom: -20,
-
+    marginBottom: -23,
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
+    
   },
   star: {
     fontSize: 30,
@@ -521,13 +524,22 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     borderWidth: 1,
-    borderColor: '#ccc',
-    padding: 10,
+    borderColor: '#6c63ff', // צבע גבול סגול תואם את צבע הכפתורים
+    paddingVertical: 8,
+    paddingHorizontal: 10,
     textAlign: 'right',
-
-    borderRadius: 8,
+    borderRadius: 10, // פינות מעוגלות יותר
     marginBottom: 20,
+    backgroundColor: '#f0f0f0', // רקע לבן כדי להבליט את שורת החיפוש
+    fontSize: 16, // גודל טקסט ברור יותר
+    color: '#333', // צבע טקסט כהה
+    shadowColor: '#000', // צל להבלטת השורה
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2, // הצללה לאנדרואיד
   },
+  
   scrollView: {
     flexGrow: 1,
   },
@@ -593,23 +605,28 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
+    
     elevation: 2,
   },
   backButton: {
     padding: 10,
+    marginLeft: -10, // מרווח משמאל לכפתור פלוס
+
   },
   backButtonText: {
     fontSize: 29,
     color: '#fff',
   },
   backButtonText2: {
-    fontSize: 32,
+    fontSize: 36,
     color: '#fff',
+    marginRight: -12, // מרווח מימין לכפתור חזרה
+
 
   },
   addButtonSmall: {
     fontSize: 27,
-    
+
   },
   addButtonText: {
     color: '#fff',
@@ -690,8 +707,8 @@ const styles = StyleSheet.create({
   providerDetail: {
     fontSize: 15, // הקטנת גודל הטקסט של הפרטים
     marginBottom: 2, // הקטנת המרווחים בין הפרטים
-    color: '#555',
-    textAlign: 'right',
+    color: '#000',
+    textAlign: 'center', // ממרכז את הטקסט של הפרטים
   },
 
   headerContainer: {
@@ -730,6 +747,11 @@ const styles = StyleSheet.create({
     right: 10,
     zIndex: 1,
   },
+  separator: {
+    height: 1,
+    backgroundColor: '#ccc',
+    marginVertical: 5,
+  },
   
   closeButtonText: {
     fontSize: 24,
@@ -767,7 +789,7 @@ const styles = StyleSheet.create({
   providerDetailStars: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end', // יישור לימין
+    justifyContent: 'center', // ממרכז את הכוכבים
 
     marginBottom: 2,
   },

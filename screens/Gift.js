@@ -212,7 +212,9 @@ const updatePrice = (recordID, price) => {
   );
 
   return (
+    
     <View style={styles.container}>
+    
           <ImageBackground
           source={require('../assets/backgruond_gift.png')} // טוען את ה-GIF מהתיקייה המקומית
           style={styles.gif}
