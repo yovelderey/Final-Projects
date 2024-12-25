@@ -303,13 +303,14 @@ const Management = (props) => {
   return (
     <ImageBackground source={require('../assets/backgruondcontact.png')} style={styles.background}>
       <StatusBar backgroundColor="#FFC0CB" barStyle="dark-content" />
-      <View style={styles.topBar}>
-        <Text style={styles.title}>ניהול אורחים</Text>
-      </View>
+        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Text style={styles.backButtonText}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>ניהול אורחים</Text>
+        </View>
 
-      <TouchableOpacity onPress={() => props.navigation.navigate('ListItem', { id })}>
-        <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
-      </TouchableOpacity>
+        <View style={styles.container}>
 
       {contacts.length === 0 ? (
         <View style={styles.noItemsContainer}>
@@ -317,6 +318,7 @@ const Management = (props) => {
         </View>
       ) : (
         <View style={styles.tableContainer}>
+        
           <TextInput
             style={styles.searchInput}
             placeholder="חפש מוזמנים"
@@ -344,6 +346,7 @@ const Management = (props) => {
       <TouchableOpacity style={styles.mainButton} onPress={() => setModalVisible2(true)}>
         <Text style={styles.mainButtonText}>הוסף מוזמנים +</Text>
       </TouchableOpacity>
+      
       </View>
 
       <Modal
@@ -356,10 +359,16 @@ const Management = (props) => {
           <View style={styles.modalContainer}>
             <Text style={styles.modalTitle}>בחר אפשרות</Text>
 
-            <TouchableOpacity style={styles.optionButton} onPress={() => {
-              setModalVisible(true)}}>
+            <TouchableOpacity
+              style={styles.optionButton}
+              onPress={() => {
+                setModalVisible(true); // פותח את המודל להוספת מספר ידני
+                setModalVisible2(false); // סוגר את המודל הראשי
+              }}
+            >
               <Text style={styles.optionButtonText}>הוסף מספר ידני</Text>
             </TouchableOpacity>
+
 
             <TouchableOpacity style={styles.optionButton} onPress={() => {
               setModalVisible2(false);
@@ -375,16 +384,8 @@ const Management = (props) => {
         </View>
       </Modal>
 
-
-
-
-      <Modal
-  visible={modalVisible}
-  animationType="slide"
-  transparent={true}
-  onRequestClose={() => setModalVisible(false)}
->
-  <View style={styles.modalBackground2}>
+      {modalVisible && (
+  <View style={styles.overlay}>
     <View style={styles.modalContent2}>
       <Text style={styles.modalTitle2}>הוסף איש קשר חדש</Text>
       <TextInput
@@ -394,17 +395,14 @@ const Management = (props) => {
         onChangeText={(text) => setNewContactName(text)}
       />
       <View style={styles.phoneInputContainer}>
-      <View style={styles.pickerWrapper}>
-      <TextInput
-        style={styles.prefixInput}
-        placeholder="קידומת"
-        value={selectedPrefix} // ערך הקידומת
-        keyboardType="numeric" // רק מספרים
-        maxLength={3} // הגבלת הקלט ל-3 ספרות
-        onChangeText={(text) => setSelectedPrefix(text)} // עדכון הקידומת
-      />
-      </View>
-      
+        <TextInput
+          style={styles.prefixInput}
+          placeholder="קידומת"
+          value={selectedPrefix}
+          keyboardType="numeric"
+          maxLength={3}
+          onChangeText={(text) => setSelectedPrefix(text)}
+        />
         <TextInput
           style={styles.phoneInput}
           placeholder="טלפון"
@@ -429,9 +427,11 @@ const Management = (props) => {
       </View>
     </View>
   </View>
-</Modal>
+)}
 
+        </View>
     </ImageBackground>
+    
   );
 };
 
@@ -439,8 +439,11 @@ const styles = StyleSheet.create({
   background: {
     flex: 1,
     resizeMode: 'cover',
+  },
+  container: {
+    flex: 1,
+    resizeMode: 'cover',
     padding: 16,
-
   },
   topBar: {
     padding: 15,
@@ -459,9 +462,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    color: '#333',
     fontWeight: 'bold',
-    Color: '#ff69b4',
+    color: 'white',
   },
   noItemsContainer: {
     flex: 1,
@@ -778,6 +780,109 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
     textAlign: 'center', // יישור מרכזי
     
+  },
+  header: {
+    width: '100%',
+    backgroundColor: 'rgba(108, 99, 255, 0.9)',
+    paddingTop: 50, // מרווח עליון מתחשב ב-Safe Area
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  backButton: {
+    position: 'absolute',
+    left: 20,
+    bottom: 20, // ממקם את הכפתור בתחתית ה-`header`
+  },
+  backButtonText: {
+    fontSize: 29,
+    color: 'white',
+  },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10, // מבטיח שהאזור יישב מעל כל התוכן
+  },
+  modalContent2: {
+    width: '80%',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+    alignItems: 'center',
+  },
+  modalTitle2: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  modalInput2: {
+    width: '100%',
+    height: 40,
+    borderColor: '#ddd',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    marginBottom: 15,
+    textAlign: 'right',
+  },
+  phoneInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  prefixInput: {
+    width: 70,
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    marginRight: 10,
+    textAlign: 'center',
+  },
+  phoneInput: {
+    flex: 1,
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    textAlign: 'right',
+  },
+  modalButtonsContainer2: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  modalButtonCancel2: {
+    flex: 1,
+    backgroundColor: '#FF6F61',
+    borderRadius: 8,
+    paddingVertical: 10,
+    marginRight: 5,
+    alignItems: 'center',
+  },
+  modalButtonSave2: {
+    flex: 1,
+    backgroundColor: '#4CAF50',
+    borderRadius: 8,
+    paddingVertical: 10,
+    marginLeft: 5,
+    alignItems: 'center',
+  },
+  modalButtonText2: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
 

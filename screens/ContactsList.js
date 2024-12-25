@@ -78,9 +78,9 @@ const ContactsList = ({ route, navigation }) => {
       </TouchableOpacity>
       <TouchableOpacity 
         onPress={navigateBack}
-        style={[styles.showPasswordButton, { position: 'absolute', top: '8%', left: '5%' }]}
+        style={[styles.showPasswordButton, { position: 'absolute', top: '7%', left: '97%' }]}
       >
-        <Image source={require('../assets/back_icon2.png')} style={styles.backIcon} />
+        <Image source={require('../assets/no.png')} style={styles.backIcon} />
       </TouchableOpacity>
     </View>
   );
@@ -150,8 +150,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   backIcon: {
-    width: 40,
-    height: 40,
+    width: 30,
+    height: 30,
 
   },
 });

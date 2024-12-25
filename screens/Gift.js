@@ -13,6 +13,8 @@ import * as FileSystem from 'expo-file-system';
 import XLSX from 'xlsx';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
+import { PieChart } from 'react-native-chart-kit';
+import { Dimensions } from 'react-native';
 
 
 
@@ -44,7 +46,12 @@ const Gift = (props) => {
   const insets = useSafeAreaInsets();
   const [averagePrice, setAveragePrice] = useState(0);
   const [paidGuestsCount, setPaidGuestsCount] = useState(0); // ספירת אורחים ששילמו
-
+  const navigation = useNavigation();
+  const chartConfig = {
+    backgroundGradientFrom: '#f5f5f5',
+    backgroundGradientTo: '#f5f5f5',
+    color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+  };
   useEffect(() => {
     const requestPermissions = async () => {
       if (Platform.OS === 'android') {
@@ -80,6 +87,7 @@ const Gift = (props) => {
       setPaidGuestsCount(paidCount);
     };
     
+
     
     
 
@@ -185,6 +193,17 @@ const updatePrice = (recordID, price) => {
   }, 0);
   setTotalPrice(total);
 };
+const [sortOrder, setSortOrder] = useState('desc'); // 'desc' = מהגבוה לנמוך, 'asc' = מהנמוך לגבוה
+
+const sortContactsByPrice = () => {
+  const sortedContacts = [...contacts].sort((a, b) => {
+    const priceA = parseFloat(a.newPrice) || 0;
+    const priceB = parseFloat(b.newPrice) || 0;
+    return sortOrder === 'desc' ? priceB - priceA : priceA - priceB;
+  });
+  setContacts(sortedContacts);
+  setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc'); // שינוי כיוון המיון
+};
 
 
   const filteredContacts = contacts.filter(contact =>
@@ -212,118 +231,247 @@ const updatePrice = (recordID, price) => {
   );
 
   return (
-    
-    <View style={styles.container}>
-    
-          <ImageBackground
-          source={require('../assets/backgruond_gift.png')} // טוען את ה-GIF מהתיקייה המקומית
-          style={styles.gif}
-          resizeMode="cover" // כדי שה-GIF יכסה את כל המסך
-        />    
-      <View style={[styles.topBar, { paddingTop: insets.top }]}>
-        <Text style={styles.title}>רשימת מתנות</Text>
-      </View>
-
-      <TouchableOpacity onPress={() => props.navigation.navigate('ListItem', { id })}>
-        <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
-      </TouchableOpacity>
-
-      {contacts.length === 0 ? (
-        <View style={styles.noItemsContainer}>
-          <Text style={styles.noItemsText}>אין פריטים להצגה</Text>
+    <ImageBackground
+      source={require('../assets/backgruond_gift.png')}
+      style={styles.backgroundImage}
+    >
+      <View style={styles.container}>
+        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Text style={styles.backButtonText}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>רשימת מתנות</Text>
         </View>
-      ) : (
-        <View style={styles.tableContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="חפש מוזמנים"
-            value={searchQuery}
-            onChangeText={text => setSearchQuery(text)}
-          />
-          <FlatList
-            data={filteredContacts}
-            renderItem={renderItem}
-            keyExtractor={(item) => item.recordID}
-            style={styles.list}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
-          />
+  
+        {contacts.length === 0 ? (
+          <View style={styles.noItemsContainer}>
+            <Text style={styles.textPrice}>אין פריטים להצגה</Text>
+          </View>
+        ) : (
+          <View style={styles.tableContainer}>
+            <View style={styles.searchAndSortContainer}>
+              <TouchableOpacity onPress={sortContactsByPrice} style={styles.sortButton}>
+                <Image
+                  source={
+                    sortOrder === 'desc'
+                      ? require('../assets/sort.png')
+                      : require('../assets/sort2.png')
+                  }
+                  style={styles.sortIcon}
+                />
+              </TouchableOpacity>
+  
+              <TextInput
+                style={[styles.searchInput, { flex: 1 }]}
+                placeholder="חפש מוזמנים"
+                value={searchQuery}
+                onChangeText={text => setSearchQuery(text)}
+              />
+            </View>
+            <FlatList
+                data={filteredContacts}
+                renderItem={renderItem}
+                keyExtractor={(item) => item.recordID}
+                style={styles.list}
+                ItemSeparatorComponent={() => <View style={styles.separator} />}
+              />
+             
+
+          </View>
+        )}
+
+        <View style={styles.backgroundContainer}>
+          <View style={styles.row}>
+        
+            <View style={styles.section}>
+              <Text style={styles.header2}>סך הכל מתנות</Text>
+              <View style={styles.priceContainer}>
+                <Text style={styles.textPrice}>{totalPrice}₪</Text>
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.header2}>ממוצע לאדם</Text>
+              <View style={styles.priceContainer}>
+                <Text style={styles.textPrice}>{averagePrice}₪</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.row}>
+        
+            <View style={styles.section}>
+              <Text style={styles.header2}>אורחים ששילמו</Text>
+              <View style={styles.priceContainer}>
+                <Text style={styles.textPrice}>{paidGuestsCount}</Text>
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.header2}>מוזמנים באירוע</Text>
+              <View style={styles.priceContainer}>
+                <Text style={styles.textPrice}>{contacts.length}</Text>
+              </View>
+            </View>
+          </View>
+
         </View>
-      )}
-
-      <View style={styles.backgroundContainer}>
-  <View style={styles.row}>
-    <View style={styles.section}>
-      <Text style={styles.header}>מוזמנים באירוע</Text>
-      <View style={styles.priceContainer}>
-        <Text style={styles.textPrice}>{contacts.length}</Text>
-      </View>
-    </View>
-
-    <View style={styles.section}>
-      <Text style={styles.header}>אורחים ששילמו</Text>
-      <View style={styles.priceContainer}>
-        <Text style={styles.textPrice}>{paidGuestsCount}</Text>
-      </View>
-    </View>
-
-    <View style={styles.section}>
-      <Text style={styles.header}>סך הכל מתנות</Text>
-      <View style={styles.priceContainer}>
-        <Text style={styles.textPrice}>{totalPrice}₪</Text>
-      </View>
-    </View>
-
-    <View style={styles.section}>
-      <Text style={styles.header}>ממוצע לאדם</Text>
-      <View style={styles.priceContainer}>
-        <Text style={styles.textPrice}>{averagePrice}₪</Text>
-      </View>
-    </View>
-  </View>
-</View>
-
-
+        
       <TouchableOpacity onPress={exportToExcel} style={styles.exportButton}>
         <Image source={require('../assets/excel.png')} style={styles.backIcon2} />
         <Text style={styles.exportButtonText}>ייצא לקובץ אקסל</Text>
 
       </TouchableOpacity>
-
-
-    </View>
+      </View>
+    </ImageBackground>
   );
+  
 };
-
 const styles = StyleSheet.create({
-  container: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'white',
+  backgroundImage: {
+    flex: 1,
+    resizeMode: 'cover',
   },
-  topBar: {
-    width: '70%',
+  container: {
+    flex: 1,
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingVertical: 10,
+  },
+  header: {
+    width: '100%',
+    backgroundColor: 'rgba(108, 99, 255, 0.9)',
+    paddingTop: 50, // מרווח עליון מתחשב ב-Safe Area
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  backButton: {
     position: 'absolute',
-    top: 0, 
+    left: 20,
+    bottom: 20, // ממקם את הכפתור בתחתית ה-`header`
+  },
+  backButtonText: {
+    fontSize: 29,
+    color: 'white',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
+    color: 'white',
+  },
+  searchAndSortContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '90%',
+    marginBottom: 10, // מרווח קטן לפני ה-FlatList
   },
   tableContainer: {
     width: '100%',
-    maxHeight: '58%',
-    alignItems: 'center', // למרכז את התוכן אופקית
-    position: 'absolute',
-    top: 110, 
+    flex: 1, // נותן לטבלה לקחת את כל המקום הזמין
+    alignItems: 'center',
+    marginTop: 10, // מרווח קטן מתחת ל-header
+    marginBottom: 10, // מרווח קטן לפני ה-FlatList
+
+  },
+  sortButton: {
+    marginRight: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  sortIcon: {
+    width: 26,
+    height: 26,
+    tintColor: 'black',
+  },
+  searchInput: {
+    height: 40,
+    borderColor: '#ccc',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    fontSize: 16,
+    backgroundColor: '#fff',
   },
   list: {
     width: '100%',
+    maxHeight: 450, // גובה מקסימלי לטבלה
+    minHeight: 100, // גובה מינימלי לטבלה
     borderRadius: 10,
-    overflow: 'hidden',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3, // להוספת צל באנדרואיד
+
+  },
+  
+  separator: {
+    height: 1,
+    backgroundColor: '#ccc',
+    marginVertical: 5,
+  },
+  backgroundContainer: {
     padding: 10,
-    boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)',
+    borderRadius: 10,
+    width: '90%',
+    marginBottom: 60,
+    marginTop: -10, // מרווח קטן מתחת ל-header
+    marginBottom: 20, // מרווח קטן לפני ה-FlatList
+    
+  },
+
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',  // פיזור אחיד של הסקשנים
+    alignItems: 'center',
+    width: '100%',                   // הרחבת השורה לרוחב מלא
+    paddingHorizontal: 0,    
+  },
+  section: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 5,     // הקטנת המרווח בין הסקשנים כדי לתת יותר מקום לרוחב
+  },
+
+  header2: {
+    fontSize: 19,
+    color: 'rgba(108, 99, 255, 0.9)',
+    marginBottom: 5,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+
+  priceContainer: {
+    paddingVertical: 10,       // רווח פנימי אנכי
+    paddingHorizontal: 10,     // רווח פנימי אופקי
+    borderRadius: 15,          // פינות מעוגלות
+    borderWidth: 1,
+    width: '100%',             // הרחבת הרוחב למלוא הקונטיינר
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 60,             // גובה מינימלי לקונטיינר
+    flexDirection: 'row',  
+    borderColor: 'rgba(108, 99, 255, 0.9)',   // סידור אופקי של התוכן
+  },
+  
+  textPrice: {
+    fontSize: 30,              // גודל טקסט קטן יותר כדי להתאים מספרים גדולים
+    color: 'rgba(108, 99, 255, 0.9)',
+    textAlign: 'center',       // יישור מרכזי של הטקסט
+    flexShrink: 1,     
+    fontWeight: 'bold',
+    // מניעת שבירת השורה על ידי הקטנת האלמנט במידת הצורך
+  },
+  separator: {
+    height: 2,
+    backgroundColor: '#ccc',
+    marginVertical: 5,
   },
   itemContainer: {
     flexDirection: 'row',
@@ -340,7 +488,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: '#000',
     borderRadius: 5,
     marginRight: 10,
     fontWeight: 'bold',
@@ -351,128 +498,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
 
   },
-  separator: {
-    height: 2,
-    backgroundColor: '#ccc',
-    marginVertical: 5,
-  },
-  noItemsContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    fontSize: 16,
-    color: '#000',
-    position: 'absolute',
-    top: 200, 
-    zIndex: 1000, 
-
-  },
-  noItemsText: {
-    fontSize: 18,
-    color: '#999',
-  },
-  contactCount: {
-    fontSize: 16,
-    color: '#999',
-    marginTop: 10,
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  input: {
-    height: 40,
-    borderColor: 'gray',
-    borderWidth: 1,
-    marginBottom: 20,
-    paddingHorizontal: 10,
-    borderRadius: 5,
-  },
-  input2: {
-    height: 40,
-    borderColor: 'gray',
-    borderWidth: 1,
-    marginBottom: 20,
-    paddingHorizontal: 10,
-    borderRadius: 5,
-  },
-  totalPriceText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#000',
-    marginTop: 10,
-  },
-  modalButton: {
-    backgroundColor: '#007bff',
+  exportButton: {
+    flexDirection: 'row', // Make sure items are aligned horizontally
+    alignItems: 'center', // Center items vertically
+    backgroundColor: '#4CAF50', // Background color for the button
     padding: 10,
-    borderRadius: 5,
-    alignItems: 'center',
-    marginTop: 10,
-    width: '100%',
-  },
-  cancelButton: {
-    backgroundColor: 'red',
-  },
-  modalButtonText: {
-    color: 'white',
-    fontSize: 16,
-  },
-  imageback: {
-    width: 40,
-    height: 40,
-    position: 'absolute',
-    top: -800, 
-    left: -190, 
-    zIndex: 0, 
-  },
-  buttonContainer3: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    paddingHorizontal: 10,
-  },
-  buttonContainer2: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    paddingHorizontal: 10,
-  },
-  searchInput: {
-    width: '90%', // רוחב 80% מהמסך
-    height: 40, // גובה הקלט
-    borderColor: '#ccc', // צבע הגבול
-    borderWidth: 1, // עובי הגבול
-    borderRadius: 8, // עיגול הפינות
-    paddingHorizontal: 10, // מרווח פנימי אופקי
-    fontSize: 16, // גודל הפונט
-    color: '#333', // צבע הטקסט
-    backgroundColor: '#fff', // צבע הרקע
-    textAlign: 'right', // יישור הטקסט לימין
-    marginBottom: 20, // מרווח תחתון
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
-  },
-  showPasswordButton: {
-    backgroundColor: '#ff69b4',
-    padding: 15,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    
-  },
-  backIcon: {
-    width: 30,
-    height: 30,
+    borderRadius: 10,
+    paddingHorizontal: 85, // Increase horizontal padding for wider button
+    marginBottom: 30, // מרווח קטן לפני ה-FlatList
   },
   backIcon2: {
     width: 30,
@@ -480,84 +513,50 @@ const styles = StyleSheet.create({
     marginRight: 8, // Small space between the image and text
 
   },
-  exportButton: {
-    flexDirection: 'row', // Make sure items are aligned horizontally
-    alignItems: 'center', // Center items vertically
-    backgroundColor: '#4CAF50', // Background color for the button
-    padding: 10,
-    borderRadius: 10,
-    position: 'absolute',
-    top: 770, 
-    zIndex: 1000,     paddingHorizontal: 95, // Increase horizontal padding for wider button
-
-  },
-  icon2: {
-    width: 24, // Size of the image
-    height: 24,
-    marginRight: 8, // Small space between the image and text
-  },
   exportButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  backgroundContainer: {
-    backgroundColor: '#ff69b4', // Background color for the whole row
-    padding: 10,
-    borderRadius: 10,
+  chartContainer: {
+    padding: 0,
+    borderRadius: 15,
     width: '90%',
-    position: 'absolute',
-    top: 620, 
-    zIndex: 1000, 
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',  // פיזור אחיד של הסקשנים
+    marginBottom: 20,
     alignItems: 'center',
-    width: '100%',                   // הרחבת השורה לרוחב מלא
-    paddingHorizontal: 0,           // ריווח פנימי לשמירה על גבולות המסך
+    justifyContent: 'center',
+    borderWidth: 1,       // עובי השוליים
+    borderColor: 'black', // צבע השוליים
+    borderRadius: 10,  
   },
   
-  section: {
-    flex: 1,
+  chartBox: {
+    backgroundColor: '#fff',
+    padding: 10,
+    borderRadius: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3, // להוספת צל באנדרואיד
+    width: '100%',
     alignItems: 'center',
-    marginHorizontal: 5,     // הקטנת המרווח בין הסקשנים כדי לתת יותר מקום לרוחב
   },
   
-  header: {
+  chartTitle: {
     fontSize: 18,
-    color: '#000000',
-    marginBottom: 5,
+    color: '#fff',
     fontWeight: 'bold',
+    marginBottom: 10,
     textAlign: 'center',
   },
-  priceContainer: {
-    backgroundColor: '#ffffff',
-    paddingVertical: 10,       // רווח פנימי אנכי
-    paddingHorizontal: 10,     // רווח פנימי אופקי
-    borderRadius: 15,          // פינות מעוגלות
-    borderWidth: 1,
-    borderColor: '#cccccc',
-    width: '100%',             // הרחבת הרוחב למלוא הקונטיינר
-    justifyContent: 'center',
+  
+  pieChart: {
     alignItems: 'center',
-    minHeight: 60,             // גובה מינימלי לקונטיינר
-    flexDirection: 'row',      // סידור אופקי של התוכן
-  },
-  
-  textPrice: {
-    fontSize: 13,              // גודל טקסט קטן יותר כדי להתאים מספרים גדולים
-    color: '#000000',
-    textAlign: 'center',       // יישור מרכזי של הטקסט
-    flexShrink: 1,             // מניעת שבירת השורה על ידי הקטנת האלמנט במידת הצורך
+    justifyContent: 'center',
   },
   
   
-  gif: {
-    width: '100%',
-    height: '100%',
-
-  },
 });
 
 export default Gift;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, Alert, ScrollView, Modal, Pressable } from 'react-native';
+import { View, Text, StatusBar, TouchableOpacity, Image, StyleSheet, Alert, ScrollView, Modal, Pressable } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import firebase from 'firebase/compat/app';
@@ -10,6 +10,7 @@ import * as Progress from 'react-native-progress';
 import 'firebase/database'; // Import the Realtime Database module
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { getDatabase, ref, set, onValue } from 'firebase/database';
 
@@ -43,6 +44,7 @@ const Document = (props) => {
   const user = firebase.auth().currentUser;
   const [eventDetails, setEventDetails] = useState({});
   const [sizeOfimage, setsizeOfimage] = useState(null);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const fetchUserId = async () => {
@@ -156,21 +158,36 @@ const Document = (props) => {
     }
   };
   
+  const confirmAndDownloadImage = (url) => {
+    Alert.alert(
+      "אישור הורדה",
+      "האם אתה בטוח שברצונך להוריד את התמונה למכשיר?",
+      [
+        {
+          text: "ביטול",
+          style: "cancel", // פעולה שמבטלת את ההורדה
+        },
+        {
+          text: "הורד",
+          onPress: () => downloadImage(url), // מפעיל את ההורדה אם המשתמש מאשר
+        },
+      ],
+      { cancelable: true } // מאפשר לסגור את הדיאלוג בלחיצה מחוץ לחלון
+    );
+  };
+  
   const downloadImage = async (url) => {
     try {
-      // בקשת הרשאה לשמירה בגלריה
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('שגיאה', 'לא ניתנה הרשאה לשמירת קבצים');
         return;
       }
   
-      // הורדת התמונה לתיקיית המטמון
       const fileName = url.split('/').pop();
       const fileUri = FileSystem.documentDirectory + fileName;
       const downloadResult = await FileSystem.downloadAsync(url, fileUri);
   
-      // שמירת התמונה לגלריה
       await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
       Alert.alert('הצלחה', 'התמונה נשמרה בהצלחה במכשיר');
     } catch (error) {
@@ -178,6 +195,7 @@ const Document = (props) => {
       Alert.alert('שגיאה', 'התרחשה שגיאה במהלך ההורדה');
     }
   };
+  
 
   const uploadImage = async (uri, imageName, index) => {
     if (!userId) {
@@ -419,11 +437,14 @@ const Document = (props) => {
   
     return (
         <View style={styles.container}>
-          <View style={styles.headerContainer}>
-            <Text style={styles.header}>קבלות ומסמכים</Text>
-          </View>
+          <StatusBar backgroundColor="#FFC0CB" barStyle="dark-content" />
+            <View style={[styles.header2, { paddingTop: insets.top + 10 }]}>
+              <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                <Text style={styles.backButtonText}>←</Text>
+              </TouchableOpacity>
+              <Text style={styles.title}>ניהול קבצים</Text>
+            </View>
           <View style={styles.buttonRow}>
-          <Text style={styles.noItemsText}>          מספר הקבצים: {imageUrls.length} </Text>
 
           <Modal visible={modalVisible} transparent={true} animationType="fade">
             <View style={styles.modalContainer}>
@@ -461,16 +482,14 @@ const Document = (props) => {
                         <TouchableOpacity onPress={() => openImageModal(images[index])}>
                           <Image source={{ uri: images[index] }} style={styles.selectedImage} />
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => deleteImage(index)} style={styles.deleteButton}>
-                          <Text style={styles.deleteButtonText}>X</Text>
-                        </TouchableOpacity>
+
                       </View>
                     )}
                     <Progress.Bar 
                         progress={progress[index]} 
                         width={345} 
                         height={12}
-                        color="#4caf50" // צבע ה-Progress Bar עצמו
+                        color='rgba(108, 99, 255, 0.9)' // צבע ה-Progress Bar עצמו
                         unfilledColor="#e0e0e0" // צבע החלק הלא ממולא
                         borderWidth={0} // הסרת הגבול של ה-Progress Bar
                         borderRadius={6} // עיגול פינות של ה-Progress Bar עצמו
@@ -484,6 +503,8 @@ const Document = (props) => {
       
           <View style={styles.storedImagesContainer}>
             <Text style={styles.header}>תמונות מאוחסנות</Text>
+            <Text style={styles.noItemsText}>מספר הקבצים: {imageUrls.length} </Text>
+
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {imageUrls.map((url, index) => (
                 <View key={index} style={styles.itemContainer}>
@@ -498,22 +519,17 @@ const Document = (props) => {
                   </TouchableOpacity>
 
                   {/* כפתור הורדה */}
-                  <TouchableOpacity onPress={() => downloadImage(url)} style={styles.downloadButton}>
+                  <TouchableOpacity onPress={() => confirmAndDownloadImage(url)} style={styles.downloadButton}>
                     <Text style={styles.downloadButtonText}>הורד</Text>
                   </TouchableOpacity>
+
                 </View>
               ))}
             </ScrollView>
 
 
           </View>
-      
-          <TouchableOpacity 
-        onPress={() => props.navigation.navigate('ListItem', { id })}
-        style={[styles.showPasswordButton, { position: 'absolute', top: '7%', left: '4%' }]}
-      >
-        <Image source={require('../assets/back_icon2.png')} style={styles.backIcon} />
-      </TouchableOpacity>
+
         </View>
 
 
@@ -566,7 +582,8 @@ const Document = (props) => {
         fontSize: 18,
         color: '#888',
         textAlign: 'center',
-        marginTop: 20,
+        marginTop: -12,
+        marginBottom: 20,
 
       },
       itemBackground: {
@@ -665,40 +682,34 @@ const Document = (props) => {
       buttonRow: {
         flexDirection: 'row',
         justifyContent: 'flex-end', // Align items to the right
-        marginTop: -50, // Add some space from the top
+        marginTop: -40, // Add some space from the top
         marginRight: 10, // Space between buttons
         marginBottom: 5,
 
       },
       addButton: {
-        backgroundColor: '#000',
         borderRadius: 5,
         alignItems: 'center',
         marginLeft: 10, // Space between buttons
-        width: 30,
-        height: 30,
+
         padding: 3,
       },
       removeButton: {
-        backgroundColor: '#000',
         borderRadius: 5,
         alignItems: 'center',
         marginLeft: 5, // Space between buttons
-        width: 30,
-        height: 30,
+  
         padding: 3,
 
       },
       addButtonText: {
         color: '#fff',
-        fontWeight: 'bold',
-        fontSize: 18,
+        fontSize: 30,
 
       },
       removeButtonText: {
         color: '#fff',
-        fontWeight: 'bold',
-        fontSize: 18,
+        fontSize: 30,
       },
       storedImagesContainer: {
         backgroundColor: '#f0f0f0',
@@ -766,7 +777,31 @@ const Document = (props) => {
         fontSize: 14,
         textAlign: 'center',
       },
-      
+      header2: {
+        width: '100%',
+        backgroundColor: 'rgba(108, 99, 255, 0.9)',
+        paddingTop: 50, // מרווח עליון מתחשב ב-Safe Area
+        paddingBottom: 20,
+        paddingHorizontal: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+      },
+      backButton: {
+        position: 'absolute',
+        left: 20,
+        bottom: 20, // ממקם את הכפתור בתחתית ה-`header`
+      },
+      backButtonText: {
+        fontSize: 29,
+        color: 'white',
+      },
+      title: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: 'white',
+      },
     });
     
     export default Document;
