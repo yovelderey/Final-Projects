@@ -106,7 +106,18 @@ const fixedColors = [
   
     setTotalCheckedSum(totalSum);
     setTotalCheckedCount(totalCount);
+  
+    // עדכון spend במצב וב-Firebase
+    setSpend(totalSum);
+    if (user) {
+      const databaseRef = ref(database, `Events/${user.uid}/${id}/spend`);
+      set(databaseRef, totalSum).catch((error) => {
+        Alert.alert('שגיאה', `אירעה שגיאה בעת עדכון spend: ${error.message}`);
+      });
+    }
   };
+  
+  
   
   useEffect(() => {
     if (tableData.length > 0) {
@@ -270,9 +281,7 @@ const fixedColors = [
           Alert.alert('שגיאה בשמירה', `אירעה שגיאה בעת שמירת הנתונים: ${error.message}`);
         });
 
-      const databaseRef2 = ref(database, `Events/${user.uid}/${id}/spend`);
-      set(databaseRef2, sumNumericColumn.reduce((acc, cur) => acc + cur, 0))
-        .catch(error => {});
+
     }
   };
 

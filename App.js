@@ -26,6 +26,10 @@ import ResponsesScreen from './screens/ResponsesScreen';
 import EditHome from './screens/EditHome';
 import TablePlanningScreen from './screens/TablePlanningScreen';
 import ProvidersScreen from './screens/ProvidersScreen';
+import RSVPstwo from './screens/RSVPstwo';
+import RSVPsthree from './screens/RSVPsthree';
+import RSVPsfour from './screens/RSVPsfour';
+import RSVPsfive from './screens/RSVPsfive';
 
 
 
@@ -58,6 +62,10 @@ const App = () => {
         <Stack.Screen name="EditHome" component={EditHome} />
         <Stack.Screen name="TablePlanningScreen" component={TablePlanningScreen} />
         <Stack.Screen name="ProvidersScreen" component={ProvidersScreen} />
+        <Stack.Screen name="RSVPstwo" component={RSVPstwo} />
+        <Stack.Screen name="RSVPsthree" component={RSVPsthree} />
+        <Stack.Screen name="RSVPsfour" component={RSVPsfour} />
+        <Stack.Screen name="RSVPsfive" component={RSVPsfive} />
 
         
       </Stack.Navigator>

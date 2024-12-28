@@ -218,7 +218,7 @@ import React, { useEffect, useRef,useState } from 'react';
   };
 
   const handleButton6Press = () => {
-    props.navigation.navigate('RSVPs', { id });
+    props.navigation.navigate('RSVPstwo', { id });
     // Add your code here for Button 6 מגיעים או לא
   };
 
@@ -471,13 +471,18 @@ import React, { useEffect, useRef,useState } from 'react';
       </TouchableOpacity>
     </View>
 
+      <TouchableOpacity 
+        onPress={() => props.navigation.navigate('Main')} 
+        style={[styles.button2, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}
+      >  
+      <Image source={require('../assets/men.png')} style={[styles.icon2, ]} />
+        <Text style={[styles.buttonText2, { marginLeft: 8 }]}>חזור למסך הבית</Text>
+      </TouchableOpacity>
+
+
+
           <Text style={styles.text2}> חפשו אותנו ברשתות החברתיות</Text>
                
-          <TouchableOpacity 
-          onPress={() => props.navigation.navigate('Main')}
-              style={[styles.showPasswordButton, { position: 'absolute', top: '95%', left: '3%' }]}>
-              <Image source={require('../assets/back_icon2.png')} style={styles.backIcon} />
-          </TouchableOpacity>
 
           <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center',    marginBottom: 120,}}>
                   <TouchableOpacity onPress={onPressLogin} style={[styles.toolbar_down, { marginHorizontal: 10 }]}>
@@ -573,6 +578,17 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginHorizontal: 5,  // הוספת שוליים אופקיים לכפתורים
   },
+
+  button2: {
+    backgroundColor: 'rgba(107, 99, 255, 0.77)',
+    padding: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 16,
+    width: '80%',
+    alignItems: 'center',
+    textAlign: 'center',
+  },
   background: {
     width: 50, // Adjust the width as needed
     height: 50, // Adjust the height as needed
@@ -636,6 +652,10 @@ const styles = StyleSheet.create({
     marginTop: -10, // Adjust as needed
   },
   buttonText: {
+    color: 'black',
+    fontSize: 16,
+  },
+  buttonText2: {
     color: 'black',
     fontSize: 16,
   },
@@ -747,7 +767,10 @@ const styles = StyleSheet.create({
     marginBottom: 10, // email password log in is down
 
   },
-
+  icon2: {
+    width: 20,
+    height: 20,
+  },
   imageContainer: {
     position: 'absolute',
     width: width,
@@ -785,12 +808,12 @@ const styles = StyleSheet.create({
   countdownText: {
     fontSize: 20, // טקסט גדול יותר
     fontWeight: 'bold',
-    color: '#ff1493', // צבע ורוד עז לטקסט
+    color: 'rgba(108, 99, 255, 0.9)', // צבע ורוד עז לטקסט
     textAlign: 'center',
     padding: 8,
     backgroundColor: '#fff0f5', // רקע נוסף מסביב לטקסט בצבע ורוד בהיר מאוד
     borderRadius: 7, // פינות עגולות לטקסט
-    shadowColor: '#ff69b4', // צל בצבע ורוד
+    shadowColor: 'rgba(108, 99, 255, 0.9)', // צל בצבע ורוד
     shadowOpacity: 0.8,
     shadowRadius: 30,
     elevation: 10, // הצללה קלה לטקסט
