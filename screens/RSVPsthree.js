@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState,useEffect } from 'react';
 import { View, Text, ImageBackground, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -7,6 +7,7 @@ import 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
+import { getDatabase, ref, set, onValue } from 'firebase/database';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
@@ -22,13 +23,52 @@ if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
 
-const RSVPsthree = ({ navigation }) => {
+const RSVPsthree = (props) => {
   const insets = useSafeAreaInsets();
+  const id = props.route.params.id; // Accessing the passed id
+  const user = firebase.auth().currentUser;
+  const [eventDetails, setEventDetails] = useState({});
+  const database = getDatabase();
 
   const [selectedDate1, setSelectedDate1] = useState('');
   const [selectedTime1, setSelectedTime1] = useState(new Date());
 
   const canProceed = selectedDate1;
+
+
+  useEffect(() => {
+    if (user) {
+      const databaseRef = ref(database, `Events/${user.uid}/${id}/`);
+  
+      const unsubscribe = onValue(databaseRef, (snapshot) => {
+        const fetchedData = snapshot.val();
+        if (fetchedData) {
+          setEventDetails(fetchedData);
+        }
+      });
+  
+      return () => unsubscribe();
+    }
+  }, [user, id]);
+
+
+  const handleSave = async () => {
+    if (user) {
+      try {
+        const databaseRef = ref(database, `Events/${user.uid}/${id}/message_date_hour`);
+        const messageData = {
+          date: selectedDate1,
+          time: selectedTime1.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        await set(databaseRef, messageData); // שמירת התאריך והשעה בפיירבייס
+        props.navigation.navigate('RSVPsfour', { id });
+      } catch (error) {
+        console.error("Error saving message to Firebase: ", error);
+        alert('שגיאה בשמירת ההודעה. נסה שוב.');
+      }
+    }
+  };
+  
 
   return (
     <ImageBackground
@@ -36,7 +76,7 @@ const RSVPsthree = ({ navigation }) => {
       style={styles.backgroundImage}
     >
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => props.navigation.navigate('RSVPstwo', { id })} style={styles.backButton}>
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.title}>אישורי הגעה</Text>
@@ -66,14 +106,9 @@ const RSVPsthree = ({ navigation }) => {
         </View>
 
         <TouchableOpacity
+        
           style={[styles.nextButton, { opacity: canProceed ? 1 : 0.5 }]}
-          onPress={() => {
-            if (canProceed) {
-              navigation.navigate('RSVPsfour');
-            } else {
-              alert('יש לבחור תאריך ושעה לפני המעבר');
-            }
-          }}
+          onPress={handleSave}
           disabled={!canProceed}
         >
           <Text style={styles.nextButtonText}>הבא</Text>

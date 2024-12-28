@@ -20,8 +20,9 @@ if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
 
-const RSVPstwo = ({ navigation }) => {
+const RSVPstwo = (props) => {
   const insets = useSafeAreaInsets();
+  const id = props.route.params.id; // Accessing the passed id
 
   return (
     <ImageBackground
@@ -30,14 +31,14 @@ const RSVPstwo = ({ navigation }) => {
     >
       <View style={styles.container}>
         <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => props.navigation.navigate('ListItem', { id })} style={styles.backButton}>
             <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={styles.title}>אשיורי הגעה</Text>
         </View>
         <TouchableOpacity 
         style={styles.bottomButton} 
-        onPress={() => navigation.navigate('RSVPsthree')}
+        onPress={() => props.navigation.navigate('RSVPsthree', { id })}
         >
         <Text style={styles.bottomButtonText}>התחל!</Text>
         </TouchableOpacity>
