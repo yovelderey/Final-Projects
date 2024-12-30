@@ -218,9 +218,15 @@ import React, { useEffect, useRef,useState } from 'react';
   };
 
   const handleButton6Press = () => {
-    props.navigation.navigate('RSVPstwo', { id });
-    // Add your code here for Button 6 מגיעים או לא
+    if (eventDetails.message && eventDetails.message_date_hour) {
+      props.navigation.navigate('RSVPs', { id });
+      //props.navigation.navigate('Test2', { id });
+
+    } else {
+      props.navigation.navigate('RSVPstwo', { id });
+    }
   };
+  
 
   const handleButton7Press = () => {
     props.navigation.navigate('Gift', { id });

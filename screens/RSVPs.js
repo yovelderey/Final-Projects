@@ -395,18 +395,36 @@ const RSVPs = (props) => {
   );
 
   return (
-    <View style={styles.container}>
-          <ImageBackground
-          source={require('../assets/send_mesege_back.png')} // טוען את ה-GIF מהתיקייה המקומית
-          style={styles.gif}
-          resizeMode="cover" // כדי שה-GIF יכסה את כל המסך
-        />   
+    
 
-          <TouchableOpacity onPress={() => props.navigation.navigate('ListItem', { id })}>
-            <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
-          </TouchableOpacity>
+    <ImageBackground
+      source={require('../assets/send_mesege_back.png')}
+      style={styles.backgroundImage}
+    >
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <TouchableOpacity
+          onPress={() => props.navigation.navigate('ListItem', { id })}
+          style={styles.backButton}
+        >
+          <Text style={styles.backButtonText}>←</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>אישורי הגעה</Text>
+      </View>
 
-      <Text style={styles.header2}>שליחת הודעות</Text>
+      <TouchableOpacity style={styles.cardButton} onPress={() => props.navigation.navigate('RSVPstwo', { id })}>
+        <View style={styles.cardContent}>
+          <Text style={styles.arrow}>←</Text>
+          <View style={styles.separator} />
+          <View style={styles.textContainer}>
+            <Text style={styles.cardTitle}>עריכת הודעה</Text>
+            <Text style={styles.cardSubtitle}>
+              {eventDetails.message_date_hour?.date || "תאריך לא זמין"} בשעה {eventDetails.message_date_hour?.time || "השעה לא זמינה"}
+            </Text>
+            <Text style={styles.cardSubtitle}>ההודעה תשלח למוזמנים</Text>
+
+          </View>
+        </View>
+      </TouchableOpacity>
 
       <View style={styles.counterContainer}>
         <View style={styles.counterItemGreen}>
@@ -423,45 +441,36 @@ const RSVPs = (props) => {
         </View>
       </View>
 
-      <TouchableOpacity onPress={handleRefresh} style={styles.triggerButton}>
-        <Text style={styles.buttonText}>רענן נתונים</Text>
-      </TouchableOpacity>
-      <Text style={styles.header3}>הכנס את ההודעה שברצונך המוזמנים יקבלו בעת שליחה</Text>
-      <Text style={styles.header3}>למטה מוצג טמפלייט</Text>
-
-
-      <TextInput
-        style={styles.input}
-        placeholder="הכנס את ההודעה שלך"
-        value={message}
-        onChangeText={setMessage}
-        multiline
-      />
-
-      <TouchableOpacity onPress={handlemessage} style={styles.sendButton}>
-        <Text style={styles.buttonText}>שלח הודעה</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        onPress={() => props.navigation.navigate('ResponsesScreen', { id, responses })}
-        style={styles.viewResponsesButton}
-      >
-        <Text style={styles.buttonText}>הצג תגובות</Text>
-      </TouchableOpacity>
-
-
-
-      <View style={styles.tableContainer}>
-        <Text style={styles.tableHeader}>מספרי טלפון שנשלחה אליהם הודעה</Text>
-        <FlatList
-          data={filteredContacts}
-          renderItem={renderItem}
-          keyExtractor={(item) => item.recordID}
-          style={[styles.list, { maxHeight: 180 }]} // מגביל את הגובה של הטבלה
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 10 }} // מרווח פנימי לטבלה
-        />
+      <View style={styles.counterContainer}>
+        <View style={styles.counterItemblack}>
+          <Text style={styles.counterText}>{contacts.length}</Text>
+          <Text style={styles.counterLabel}>מוזמנים</Text>
+        </View>
+        <View style={styles.counterItemblack1}>
+          <Text style={styles.counterText}>{eventDetails.maybe}</Text>
+          <Text style={styles.counterLabel}>נשלח</Text>
+        </View>
+        <View style={styles.counterItemblack2}>
+          <Text style={styles.counterText}>{eventDetails.no_cuming}</Text>
+          <Text style={styles.counterLabel}>לא נשלח</Text>
+        </View>
       </View>
+      <Text style={styles.header3}>ניתן לשלוח הודעה נוספת עכשיו למוזמנים, ההודעה תשלח בזה הרגע עם כיתוב שלכם </Text>
+
+      <View style={styles.container2}>
+        <TouchableOpacity onPress={handleRefresh} style={styles.triggerButton}>
+          <Text style={styles.buttonText}>שלח הודעה עכשיו</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => props.navigation.navigate('ResponsesScreen', { id, responses })}
+          style={styles.triggerButton2}
+        >
+          <Text style={styles.buttonText}>הצג תגובות</Text>
+        </TouchableOpacity>
+      </View>
+
+
 
       <Modal
   transparent={true}
@@ -489,23 +498,34 @@ const RSVPs = (props) => {
   </View>
 </Modal>
 
-    </View>
+    </ImageBackground>
   );
 };
 
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: 16,
-    backgroundColor: '#f8f9fa',
+  backgroundImage: {
+    flex: 1,
+    resizeMode: 'cover',
+
   },
   header: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    color: '#343a40',
-    textAlign: 'center', // מרכז את הטקסט בתוך הרכיב
+    backgroundColor: 'rgba(108, 99, 255, 0.9)',
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  backButton: {
+    position: 'absolute',
+    left: 20,
+    bottom: 20,
+  },
+  backButtonText: {
+    fontSize: 29,
+    color: 'white',
   },
   header2: {
     fontSize: 22,
@@ -520,7 +540,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 10,
     color: '#343a40',
-    marginTop: -5, // הוסף מרווח מעל התיבה
+    marginTop: 10, // הוסף מרווח מעל התיבה
     textAlign: 'center', // מרכז את הטקסט בתוך הרכיב
   },
   input: {
@@ -559,18 +579,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  backButton: {
-    backgroundColor: '#6c757d',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+
   responseItem: {
     padding: 12,
     borderBottomWidth: 1,
@@ -613,6 +622,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '30%',
   },
+  counterItemblack: {
+    backgroundColor: 'rgba(59, 187, 155, 0.9)',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    width: '30%',
+  },
+  counterItemblack1: {
+    backgroundColor: 'rgba(152, 116, 153, 0.9)',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    width: '30%',
+  },
+  counterItemblack2: {
+    backgroundColor: '#DEE2E6',
+    borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
+    width: '30%',
+  },
   counterText: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -621,6 +651,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#495057',
   },
+  
   tableContainer: {
     marginTop: -5,
 
@@ -655,13 +686,22 @@ const styles = StyleSheet.create({
   },
     // שאר הסגנונות שלך
     triggerButton: {
-      backgroundColor: '#ff69b4',
-      padding: 12,
-      borderRadius: 8,
-      alignItems: 'center',
-      marginBottom: 26,
-      marginTop: 20,
-
+      flex: 1, // כל כפתור יתפוס שטח שווה
+      backgroundColor: 'rgba(108, 99, 255, 0.9)', // צבע הרקע
+      paddingVertical: 10, // גובה הכפתור
+      marginHorizontal: 5, // רווח בין הכפתורים
+      borderRadius: 10, // פינות מעוגלות
+      alignItems: 'center', // יישור הטקסט למרכז
+      justifyContent: 'center', // יישור הטקסט למרכז
+    },
+    triggerButton2: {
+      flex: 1, // כל כפתור יתפוס שטח שווה
+      backgroundColor: 'rgba(108, 99, 255, 0.9)', // צבע הרקע
+      paddingVertical: 10, // גובה הכפתור
+      marginHorizontal: 5, // רווח בין הכפתורים
+      borderRadius: 10, // פינות מעוגלות
+      alignItems: 'center', // יישור הטקסט למרכז
+      justifyContent: 'center', // יישור הטקסט למרכז
     },
     buttonText: {
       color: '#ffffff',
@@ -729,6 +769,68 @@ const styles = StyleSheet.create({
       fontSize: 16,
       color: '#000',
 
+    },
+    title: {
+      fontSize: 20,
+      color: 'white',
+      fontWeight: 'bold',
+      marginBottom: 10,
+    },
+    cardButton: {
+      backgroundColor: 'rgba(108, 99, 255, 0.1)', // צבע רקע בהיר תואם לסגנון העמוד
+      borderRadius: 20,
+      paddingVertical: 20,
+      paddingHorizontal: 15,
+      marginVertical: 20,
+      width: '90%',
+      alignSelf: 'center',
+      elevation: 4,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+    },
+    
+    cardContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    cardTitle: {
+      fontSize: 22,
+      fontWeight: 'bold',
+      color: '#6c63ff', // צבע כותרת
+      textAlign: 'right',
+    },
+    
+    cardSubtitle: {
+      fontSize: 14,
+      color: '#555',
+      textAlign: 'right',
+    },
+    
+    separator: {
+      width: 1,
+      height: '100%',
+      backgroundColor: '#ccc', // צבע הקו המפריד
+      marginHorizontal: 15,
+    },
+    
+    arrow: {
+      fontSize: 36,
+      color: '#6c63ff', // צבע החץ
+      fontWeight: 'bold',
+    },
+    textContainer: {
+      flex: 1,
+    },
+    container2: {
+      flexDirection: 'row', // מסדר את הילדים בשורה
+      justifyContent: 'space-between', // רווח שווה בין הכפתורים
+      alignItems: 'center',
+      marginVertical: 20, // רווח מעל ומתחת לשורה
+      width: '100%', // מוודא שכל הכפתורים יתיישרו לרוחב המסך
+      paddingHorizontal: 20, // ריווח פנימי משני הצדדים
     },
 });
 

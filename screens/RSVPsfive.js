@@ -41,23 +41,37 @@ const RSVPsfive = (props) => {
   };
   
 
-  useEffect(() => {
-    if (user) {
-      const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts`);
-  
-      const unsubscribe = onValue(databaseRef, (snapshot) => {
-        const fetchedContacts = snapshot.val();
-        if (fetchedContacts) {
-          const contactsArray = Object.values(fetchedContacts);
-          setContacts(contactsArray);
-          setFilteredContacts(contactsArray); // עדכון רשימה מסוננת
-        }
-      });
-  
-      return () => unsubscribe();
-    }
-  }, [user, id]);
-  
+useEffect(() => {
+  if (user) {
+    const databaseRef = ref(database, `Events/${user.uid}/${id}/contacts`);
+
+    const unsubscribe = onValue(databaseRef, (snapshot) => {
+      const fetchedContacts = snapshot.val();
+      if (fetchedContacts) {
+        const contactsArray = Object.values(fetchedContacts);
+        setContacts(contactsArray);
+        setFilteredContacts(contactsArray); // עדכון רשימה מסוננת
+      }
+    });
+
+    return () => unsubscribe();
+  }
+}, [user, id]);
+
+useEffect(() => {
+  if (user) {
+    const databaseRef = ref(database, `Events/${user.uid}/${id}/`);
+
+    const unsubscribe = onValue(databaseRef, (snapshot) => {
+      const fetchedData = snapshot.val();
+      if (fetchedData) {
+        setEventDetails(fetchedData);
+      }
+    });
+
+    return () => unsubscribe();
+  }
+}, [user, id]);
 
 
   return (

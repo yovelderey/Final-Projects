@@ -47,13 +47,17 @@ const RSVPsfour = (props) => {
     }
   }, [user, id]);
 
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
   useEffect(() => {
-    if (!loading && eventDetails.secondOwnerName && eventDetails.firstOwnerName) {
+    if (!loading && isInitialLoad && eventDetails.secondOwnerName && eventDetails.firstOwnerName) {
       setMessage(
         `משפחה וחברים יקרים, אנו שמחים להזמינכם לחגוג עימנו את החתונה של ${eventDetails.secondOwnerName} ו${eventDetails.firstOwnerName} שתיערך בתאריך ${eventDetails.eventDate} ב${eventDetails.eventLocation}. קבלת פנים בשעה ${eventDetails.eventTime}. *לחצ/י על הכפתורים לאישור הגעה 👇* _‏נשלח באמצעות EasyVent אישורי הגעה. אם הודעה זו הגיעה אליך בטעות, נא השיבו טעות _\t\t`
       );
+      setIsInitialLoad(false); // סמן שהטעינה הראשונית הסתיימה
     }
-  }, [loading, eventDetails]);
+  }, [loading, eventDetails, isInitialLoad]);
+  
   
 
 

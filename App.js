@@ -30,6 +30,7 @@ import RSVPstwo from './screens/RSVPstwo';
 import RSVPsthree from './screens/RSVPsthree';
 import RSVPsfour from './screens/RSVPsfour';
 import RSVPsfive from './screens/RSVPsfive';
+import Test2 from './screens/Test2.js';
 
 
 
@@ -66,6 +67,7 @@ const App = () => {
         <Stack.Screen name="RSVPsthree" component={RSVPsthree} />
         <Stack.Screen name="RSVPsfour" component={RSVPsfour} />
         <Stack.Screen name="RSVPsfive" component={RSVPsfive} />
+        <Stack.Screen name="Test2" component={Test2} />
 
         
       </Stack.Navigator>
