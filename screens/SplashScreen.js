@@ -8,6 +8,8 @@ const SplashScreen = () => {
   const loadingBarWidth = useRef(new Animated.Value(0)).current;
   const [isConnected, setIsConnected] = useState(true);
 
+
+
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener(state => {
       setIsConnected(state.isConnected);

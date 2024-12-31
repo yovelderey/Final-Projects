@@ -22,9 +22,10 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff",
-        "newArchEnabled": true
 
-      }
+      },
+      "newArchEnabled": true
+
     },
     "web": {
       "favicon": "./assets/favicon.png"
