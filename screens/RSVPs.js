@@ -8,6 +8,7 @@ import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, push,get, onValue } from 'firebase/database';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getStorage, ref as storageRef, listAll, getDownloadURL } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
@@ -43,7 +44,8 @@ const RSVPs = (props) => {
   const [isRunning, setIsRunning] = useState(false);
   const auth = getAuth();
   const database = getDatabase();
-  
+  const [invitationImageUrl, setInvitationImageUrl] = useState(null);
+
   useEffect(() => {
 
     const fetchData = async () => {
@@ -208,73 +210,57 @@ const RSVPs = (props) => {
     return phoneNumber;
   }
   
+  const fetchInvitationImage = async () => {
+    try {
+      const storage = getStorage();
+      const folderPath = `users/${user.uid}/${id}/invitation/`;
+      const listRef = storageRef(storage, folderPath);
+  
+      // קבלת רשימת הקבצים בתיקיית `invitation`
+      const files = await listAll(listRef);
+  
+      if (files.items.length > 0) {
+        // קבלת ה-URL של התמונה הראשונה
+        const imageUrl = await getDownloadURL(files.items[0]);
+        setInvitationImageUrl(imageUrl); // שמירת ה-URL של התמונה
+      } else {
+        console.log('No image found in invitation folder.');
+        setInvitationImageUrl(null); // אין תמונה זמינה
+      }
+    } catch (error) {
+      console.error('Error fetching invitation image:', error);
+    }
+  };
+  
+  useEffect(() => {
+    if (user && id) {
+      fetchInvitationImage();
+    }
+  }, [user, id]); // הטעינה מתבצעת כאשר `user` או `id` משתנים
   
   const sendMessageToRecipients = async () => {
     try {
       setModalVisible(true);
       startTimer();
-      const apiUrl = 'http://192.168.1.213:5000/send-messages';
-      //const apiUrl = 'http://172.20.10.2:5000/send-messages';
-      //telephone ^^^
-
-
-
-      const recipients = contacts.map(contact => contact.phoneNumbers).filter(num => num.trim() !== '');
-      const formattedContacts = recipients.map(formatPhoneNumber);
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          formattedContacts,
-          message,
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Response JSON:', result);
-        if (result.success) {
-          setResponses(result.responses);
-          countResponses(result.responses);
-
-          setTimeout(() => {
-            setModalVisible(false);
-          }, 0); // טוען למשך 10 שניות
-        } else {
-          Alert.alert('Error', 'Failed to send messages.');
-          setTimeout(() => {
-            setModalVisible(false);
-          }, 0); // טוען למשך 10 שניות
-        }
-      } else {
-        Alert.alert('Error', `Server returned status: ${response.status}`);
-        setTimeout(() => {
-          setModalVisible(false);
-        }, 0); // טוען למשך 10 שניות
-      }
-    } catch (error) {
-      console.error('Error:', error);
-      setTimeout(() => {
+  
+      // שליפת ההודעה מ-Firebase
+      const messageRef = ref(database, `Events/${user.uid}/${id}/message`);
+      const messageSnapshot = await get(messageRef);
+      const messageFromFirebase = messageSnapshot.val();
+  
+      if (!messageFromFirebase) {
+        Alert.alert('Error', 'No message found in Firebase.');
         setModalVisible(false);
-      }, 0); // טוען למשך 10 שניות
-      Alert.alert('Error', 'Something went wrong.');
-    }
-  };
-
-
-  const triggerWaitForResponse = async () => {
-    try {
-      setModalVisible(true);
-      startTimer_2();
-      const apiUrl = 'http://192.168.1.213:5000/trigger-wait-for-response';
-
-      //const apiUrl = 'http://172.20.10.2:5000/trigger-wait-for-response';
-      //telephone ^^^
-
-      const recipients = contacts.map(contact => contact.phoneNumbers).filter(num => num.trim() !== '');
+        return;
+      }
+  
+      const apiUrl = 'http://localhost:3000/webhook';
+  
+      // הפקת מספרי הטלפון מאנשי הקשר
+      const recipients = contacts.map((contact) => contact.phoneNumbers).filter((num) => num.trim() !== '');
       const formattedContacts = recipients.map(formatPhoneNumber);
+  
+      // שליחת הנתונים לשרת
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -282,38 +268,36 @@ const RSVPs = (props) => {
         },
         body: JSON.stringify({
           formattedContacts,
+          message: messageFromFirebase,
+          imageUrl: invitationImageUrl || '', // שימוש ב-URL של התמונה או ערך ריק אם לא זמין
+
         }),
       });
   
       if (response.ok) {
         const result = await response.json();
         console.log('Response JSON:', result);
+  
         if (result.success) {
           setResponses(result.responses);
           countResponses(result.responses);
-          setTimeout(() => {
-          setModalVisible(false);
-          }, 0); // טוען למשך 10 שניות
+          setTimeout(() => setModalVisible(false), 0);
         } else {
-          Alert.alert('Error', 'Failed to trigger response wait.');
-          setTimeout(() => {
-          setModalVisible(false);
-          }, 0); // טוען למשך 10 שניות
+          Alert.alert('Error', 'Failed to send messages.');
+          setTimeout(() => setModalVisible(false), 0);
         }
       } else {
         Alert.alert('Error', `Server returned status: ${response.status}`);
-        setTimeout(() => {
-        setModalVisible(false);
-        }, 0); // טוען למשך 10 שניות
+        setTimeout(() => setModalVisible(false), 0);
       }
     } catch (error) {
       console.error('Error:', error);
+      setTimeout(() => setModalVisible(false), 0);
       Alert.alert('Error', 'Something went wrong.');
-      setTimeout(() => {
-      setModalVisible(false);
-      }, 0); // טוען למשך 10 שניות
     }
   };
+  
+
   
   const handleReset = () => {
     if (user) {
@@ -373,9 +357,8 @@ const RSVPs = (props) => {
         {
           text: "אישור",
           onPress: () => {
-            console.log('מרענן נתונים');
-            handleReset();
-            triggerWaitForResponse();
+            sendMessageToRecipients();
+            //triggerWaitForResponse();
           },
         },
       ]
