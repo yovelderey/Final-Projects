@@ -5,7 +5,7 @@ import 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
-import { getDatabase, ref, set, onValue } from 'firebase/database';
+import { getDatabase, ref, set, update, onValue } from 'firebase/database';
 
 const firebaseConfig = {
   apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
@@ -39,6 +39,45 @@ const RSVPsfive = (props) => {
     );
     setFilteredContacts(filtered);
   };
+  useEffect(() => {
+    if (user && eventDetails.message_date_hour?.date) {
+      const firstRowRef = ref(database, `Events/${user.uid}/${id}/Table_RSVPs/0`);
+
+      // עדכון col1 בתאריך החדש
+      update(firstRowRef, { col1: eventDetails.message_date_hour.date })
+        .then(() => {
+          console.log('First row date updated successfully:', eventDetails.message_date_hour.date);
+        })
+        .catch((error) => {
+          console.error('Error updating first row date:', error);
+        });
+
+    }
+  }, [user, id, eventDetails.message_date_hour?.date]);
+  
+  useEffect(() => {
+    if (user && eventDetails.message_date_hour?.date) {
+      // המרת התאריך ל- Date Object
+      const currentDate = new Date(eventDetails.message_date_hour.date);
+  
+      // הוספת יומיים
+      currentDate.setDate(currentDate.getDate() + 2);
+  
+      // המרת התאריך חזרה לפורמט שרוצים, לדוגמה: 'YYYY-MM-DD'
+      const updatedDate = currentDate.toISOString().split('T')[0];
+  
+      const firstRowRef2 = ref(database, `Events/${user.uid}/${id}/Table_RSVPs/1`);
+  
+      // עדכון col1 בתאריך החדש
+      update(firstRowRef2, { col1: updatedDate })
+        .then(() => {
+          console.log('First row date updated successfully:', updatedDate);
+        })
+        .catch((error) => {
+          console.error('Error updating first row date:', error);
+        });
+    }
+  }, [user, id, eventDetails.message_date_hour?.date]);
   
 
 useEffect(() => {

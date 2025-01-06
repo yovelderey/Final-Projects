@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text,Image, ImageBackground,TextInput, TouchableOpacity,Modal, FlatList, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import React, { useEffect, useRef,useState } from 'react';
+import { View, Text,Animated, ImageBackground,TextInput, TouchableOpacity,Modal, FlatList, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
@@ -45,6 +45,12 @@ const RSVPs = (props) => {
   const auth = getAuth();
   const database = getDatabase();
   const [invitationImageUrl, setInvitationImageUrl] = useState(null);
+  const [daysLeft, setDaysLeft] = useState(null);
+  const [message2, setMessage2] = useState('אין כעת עדכונים'); // ברירת מחדל מעודכנת
+  const [loading, setLoading] = useState(true);
+  const [tableData, setTableData] = useState([]);
+  const [isHelpModalVisible, setHelpModalVisible] = useState(false); // הוספת state עבור המודל
+
 
   useEffect(() => {
 
@@ -132,10 +138,82 @@ const RSVPs = (props) => {
     setIsRunning(true);
   };
 
-  const startTimer_2 = () => {
-    setTimer(eventDetails.counter_contacts*10);
-    setIsRunning(true);
+  const animation = useRef(new Animated.Value(0)).current;
+
+  const targetDate = new Date(eventDetails.message_date_hour?.date);
+
+
+  useEffect(() => {
+    // חישוב הימים שנותרו עד לתאריך היעד
+    const interval = setInterval(() => {
+      const currentDate = new Date();
+      const timeDiff = targetDate.getTime() - currentDate.getTime();
+      const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+      if (timeDiff > 0) {
+        // מחשב ימים ושעות שנותרו
+        const daysDiff = Math.floor(timeDiff / (1000 * 3600 * 24));
+        const hoursDiff = Math.floor((timeDiff % (1000 * 3600 * 24)) / (1000 * 3600));
+        const minutesDiff = Math.floor((timeDiff % (1000 * 3600)) / (1000 * 60));
+        
+        if (daysDiff > 0) {
+          setDaysLeft(`ההזמנות ישלחו עוד ${daysDiff} ימים ו-${hoursDiff} שעות`);
+        } else {
+          setDaysLeft(`ההזמנות ישלחו היום בעוד ${hoursDiff} שעות ו-${minutesDiff} דקות`);
+        }
+      } else if (timeDiff === 0) {
+        setDaysLeft(`ההזמנות נשלחות היום בשעה ${eventDetails.message_date_hour?.time || "לא זמין"}`);
+      } else {
+        const daysPassed = Math.abs(Math.floor(timeDiff / (1000 * 3600 * 24)));
+        const hoursPassed = Math.abs(Math.floor((timeDiff % (1000 * 3600 * 24)) / (1000 * 3600)));
+        setDaysLeft(`ההזמנות נשלחו לפני ${daysPassed} ימים ו-${hoursPassed} שעות`);
+      }
+
+    }, 1000);
+
+    // אנימציה חד-פעמית שמופיעה עם טעינת המסך
+    Animated.timing(animation, {
+      toValue: 1,
+      duration: 4000, // זמן האנימציה
+      useNativeDriver: true,
+    }).start(); // מפעילים את האנימציה פעם אחת בלבד
+
+    return () => clearInterval(interval);
+  }, [eventDetails.eventDate]);
+
+  const animatedStyle = {
+    opacity: animation,
+    transform: [
+      {
+        scale: animation.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0.9, 1.2],
+        }),
+      },
+    ],
   };
+
+  useEffect(() => {
+    const fetchMessage = async () => {
+      const database = getDatabase();
+      const messageRef = ref(database, `notification/mesageRSVPs`); // הנתיב המעודכן
+
+      try {
+        setLoading(true); // התחלת טעינה
+        const snapshot = await get(messageRef);
+
+        if (snapshot.exists()) {
+          setMessage2(snapshot.val()); // עדכון הטקסט מהנתיב
+        }
+      } catch (error) {
+        console.error('Error fetching message:', error); // הדפסת השגיאה
+      } finally {
+        setLoading(false); // סיום הטעינה
+      }
+    };
+
+    fetchMessage();
+  }, []);
 
   const countResponses = (responses) => {
     let yes = 0;
@@ -169,10 +247,8 @@ const RSVPs = (props) => {
       }
     });
     
-    const startTimer = () => {
-      setTimer(10);
-      setIsRunning(true);
-    };
+
+  
 
     setYesCount(yes);
     setNoCount(no);
@@ -239,40 +315,59 @@ const RSVPs = (props) => {
   }, [user, id]); // הטעינה מתבצעת כאשר `user` או `id` משתנים
   
   const sendMessageToRecipients = async () => {
+
     try {
+
       setModalVisible(true);
-      startTimer();
-  
-      // שליפת ההודעה מ-Firebase
       const messageRef = ref(database, `Events/${user.uid}/${id}/message`);
+
       const messageSnapshot = await get(messageRef);
       const messageFromFirebase = messageSnapshot.val();
-  
+      console.log('-------1');
+
       if (!messageFromFirebase) {
         Alert.alert('Error', 'No message found in Firebase.');
         setModalVisible(false);
         return;
       }
-  
+      console.log('-------2');
+
       const apiUrl = 'http://localhost:3000/webhook';
-  
+      console.log('-------3');
+
       // הפקת מספרי הטלפון מאנשי הקשר
       const recipients = contacts.map((contact) => contact.phoneNumbers).filter((num) => num.trim() !== '');
       const formattedContacts = recipients.map(formatPhoneNumber);
   
+      const currentDate = new Date().toISOString().split('T')[0];
+
+      const eventDateRef = ref(database, `Events/${user.uid}/${id}/message_date_hour`);
+      await set(eventDateRef, { ...eventDetails.message_date_hour, date: currentDate});
+
+      const firstRowDateRef = ref(database, `Events/${user.uid}/${id}/Table_RSVPs/0/col1`);
+      await set(firstRowDateRef, currentDate);
       // שליחת הנתונים לשרת
+      console.log('-------4');
+      console.log('Formatted Contacts:', formattedContacts); // הדפסת רשימת אנשי הקשר המעובדים
+      console.log('Message from Firebase:', messageFromFirebase); // הדפסת ההודעה שנשלפה מ-Firebase
+      console.log('Image URL:', invitationImageUrl || ''); // הדפסת כתובת התמונה (או ערך ריק אם לא זמין)
+      
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
+        body: JSON.stringify(
+          {
           formattedContacts,
           message: messageFromFirebase,
           imageUrl: invitationImageUrl || '', // שימוש ב-URL של התמונה או ערך ריק אם לא זמין
 
-        }),
+        }
+      ),
       });
+      console.log('-------5');
+
   
       if (response.ok) {
         const result = await response.json();
@@ -297,7 +392,36 @@ const RSVPs = (props) => {
     }
   };
   
-
+  useEffect(() => {
+    if (user && id) {
+      const tableRef = ref(database, `Events/${user.uid}/${id}/Table_RSVPs`);
+  
+      // מאזין לשינויים בנתונים ב-Firebase
+      const unsubscribe = onValue(tableRef, (snapshot) => {
+        const data = snapshot.val();
+  
+        if (data) {
+          // בדיקה אם הנתונים הם אובייקט והמרתם למערך במידת הצורך
+          const formattedData = Array.isArray(data)
+            ? data
+            : Object.keys(data).map((key) => ({
+                id: key,
+                ...data[key],
+              }));
+  
+  
+          // עדכון ה-state עם הנתונים המעובדים
+          setTableData(formattedData);
+        } else {
+          console.log('No data found in Firebase for Table_RSVPs');
+          setTableData([]); // ניקוי ה-state אם אין נתונים
+        }
+      });
+  
+      // ביטול המאזין כשעוזבים את המסך
+      return () => unsubscribe();
+    }
+  }, [user, id]);
   
   const handleReset = () => {
     if (user) {
@@ -324,58 +448,61 @@ const RSVPs = (props) => {
     console.log('Refresh button finish');
 
   };
-  const handlemessage = () => {
-    Alert.alert(
-      "שליחת הודעות",
-      "האם אתה בטוח לשלוח את ההודעה לנמענים?",
-      [
-        {
-          text: "ביטול",
-          style: "cancel",
-        },
-        {
-          text: "אישור",
-          onPress: () => {
-            handleReset();
-            sendMessageToRecipients();
-          },
-        },
-      ]
-    );
-  };
 
+  const closeHelpModal = () => {
+    setHelpModalVisible(false);
+  };
 
   const handleRefresh = () => {
+    const scheduledDate = eventDetails.message_date_hour?.date || "תאריך לא זמין"; // קבלת התאריך מהנתונים
     Alert.alert(
-      "רענון",
-      " שים לב, פעולה זו מרעננת את הנותונים הקיימים בחדשים",
+      "שלח הזמנות",
+      `שים לב, פעולה זו תשלח את ההזמנות עכשיו לאורחים ותבטל את מועד ההזמנה הצפוי בתאריך ${scheduledDate}, מרגע השליחה אין אפשרות לחזור לאחור.`,
       [
         {
           text: "ביטול",
-          style: "cancel",
+          style: "destructive", // הופך את הכפתור לאדום
         },
         {
-          text: "אישור",
+          text: "שלח",
           onPress: () => {
+
             sendMessageToRecipients();
-            //triggerWaitForResponse();
           },
         },
       ]
     );
   };
+  
 
-  const renderItem = ({ item, index }) => (
-    <View style={[styles.itemContainer, { backgroundColor: index % 2 === 0 ? '#f5f5f5' : '#ffffff' }]}>
-      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+  useEffect(() => {
+    if (user && id) {
+      const tableRef = ref(database, `Events/${user.uid}/${id}/Table_RSVPs`);
+  
+      const unsubscribe = onValue(tableRef, (snapshot) => {
+        const data = snapshot.val();
+  
+        if (data) {
+          // אם הנתונים הם אובייקט, המרה למערך
+          const formattedData = Array.isArray(data)
+            ? data
+            : Object.keys(data).map((key) => ({
+                id: key,
+                ...data[key],
+              }));
+  
+          setTableData(formattedData);
+        } else {
+          console.log('No data found in Firebase for Table_RSVPs');
+          setTableData([]); // אם אין נתונים, נקה את ה-state
+        }
+      });
+  
+      return () => unsubscribe(); // ביטול המאזין
+    }
+  }, [user, id]);
+  
 
-        <View style={{ flex: 1, alignItems: 'flex-end' }}>
-          <Text style={styles.itemText}>{item.displayName}</Text>
-          <Text style={styles.itemText}>{item.phoneNumbers}</Text>
-        </View>
-      </View>
-    </View>
-  );
 
   return (
     
@@ -394,6 +521,7 @@ const RSVPs = (props) => {
         <Text style={styles.title}>אישורי הגעה</Text>
       </View>
 
+
       <TouchableOpacity style={styles.cardButton} onPress={() => props.navigation.navigate('RSVPstwo', { id })}>
         <View style={styles.cardContent}>
           <Text style={styles.arrow}>←</Text>
@@ -409,36 +537,59 @@ const RSVPs = (props) => {
         </View>
       </TouchableOpacity>
 
-      <View style={styles.counterContainer}>
-        <View style={styles.counterItemGreen}>
-          <Text style={styles.counterText}>{eventDetails.yes_caming}</Text>
-          <Text style={styles.counterLabel}>כן</Text>
-        </View>
-        <View style={styles.counterItemYellow}>
-          <Text style={styles.counterText}>{eventDetails.maybe}</Text>
-          <Text style={styles.counterLabel}>ללא מענה</Text>
-        </View>
-        <View style={styles.counterItemRed}>
-          <Text style={styles.counterText}>{eventDetails.no_cuming}</Text>
-          <Text style={styles.counterLabel}>לא</Text>
-        </View>
+    
+      <View style={styles.container}>
+        <Animated.Text style={[styles.countdownText, animatedStyle]}>
+          {daysLeft || "לא זמין"}
+        </Animated.Text>
       </View>
 
+
+
       <View style={styles.counterContainer}>
-        <View style={styles.counterItemblack}>
-          <Text style={styles.counterText}>{contacts.length}</Text>
-          <Text style={styles.counterLabel}>מוזמנים</Text>
-        </View>
-        <View style={styles.counterItemblack1}>
-          <Text style={styles.counterText}>{eventDetails.maybe}</Text>
-          <Text style={styles.counterLabel}>נשלח</Text>
-        </View>
-        <View style={styles.counterItemblack2}>
-          <Text style={styles.counterText}>{eventDetails.no_cuming}</Text>
-          <Text style={styles.counterLabel}>לא נשלח</Text>
-        </View>
-      </View>
-      <Text style={styles.header3}>ניתן לשלוח הודעה נוספת עכשיו למוזמנים, ההודעה תשלח בזה הרגע עם כיתוב שלכם </Text>
+  <View style={styles.counterItemGreen}>
+    <Text style={styles.counterText}>{eventDetails.yes_caming}</Text>
+    <Text style={styles.counterLabel}>מגיעים</Text>
+  </View>
+
+  <View style={styles.counterItemMaybe}>
+    <Text style={styles.counterText}>0</Text>
+    <Text style={styles.counterLabel}>אולי</Text>
+  </View>
+  <View style={styles.counterItemRed}>
+    <Text style={styles.counterText}>{eventDetails.no_cuming}</Text>
+    <Text style={styles.counterLabel}>לא מגיעים</Text>
+  </View>
+  <View style={styles.counterItemYellow}>
+    <Text style={styles.counterText}>{eventDetails.maybe}</Text>
+    <Text style={styles.counterLabel}>ללא מענה</Text>
+  </View>
+</View>
+
+<View style={styles.counterContainer}>
+  <View style={styles.counterItemblack}>
+    <Text style={styles.counterText}>{contacts.length}</Text>
+    <Text style={styles.counterLabel}>מוזמנים</Text>
+  </View>
+  <View style={styles.counterItemblack1}>
+    <Text style={styles.counterText}>{eventDetails.maybe}</Text>
+    <Text style={styles.counterLabel}>נשלח</Text>
+  </View>
+  <View style={styles.counterItemblack2}>
+    <Text style={styles.counterText}>{eventDetails.no_cuming}</Text>
+    <Text style={styles.counterLabel}>לא נשלח</Text>
+  </View>
+  <TouchableOpacity
+  style={styles.counterItemSMS}
+  onPress={() => props.navigation.navigate('TabsScreen', { eventDetails, contacts })}
+>
+  <Text style={styles.counterLabelTop}>הצג</Text>
+  <Text style={styles.counterLabelBottom}>הכל</Text>
+</TouchableOpacity>
+
+
+</View>
+
 
       <View style={styles.container2}>
         <TouchableOpacity onPress={handleRefresh} style={styles.triggerButton}>
@@ -446,40 +597,93 @@ const RSVPs = (props) => {
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={() => props.navigation.navigate('ResponsesScreen', { id, responses })}
+          onPress={() => setHelpModalVisible(true)}
           style={styles.triggerButton2}
         >
-          <Text style={styles.buttonText}>הצג תגובות</Text>
+          <Text style={styles.buttonText}>קבל מידע / עזרה</Text>
         </TouchableOpacity>
+
+
+
+        
       </View>
 
 
+      <View style={styles.container}>
+      {loading ? (
+        <ActivityIndicator size="large" color="#6c63ff" />
+      ) : (
+        <View style={styles.messageBox}>
+          <Text style={styles.messageText}>{message2}</Text>
+        </View>
+      )}
 
-      <Modal
-  transparent={true}
-  visible={modalVisible}
-  onRequestClose={() => setModalVisible(false)}
->
-  <View style={styles.modalContainer}>
-    <View style={styles.modalContent}>
-      <Text>אנא המתן לשליחת ההודעות</Text>
-      <ActivityIndicator size="large" color="#0000ff" />
-      <Text style={styles.timerText}>{timer > 0 ? `${timer} seconds remaining` : 'Time is up!'}</Text>
-      
-      {/* כפתור ביטול פעולה */}
-      <TouchableOpacity
-        style={styles.cancelButton}
-        onPress={() => {
-          // הוספת פונקציה לביטול שליחת ההודעות
-          setModalVisible(false);
-        }}
-      >
-        <Text style={styles.cancelButtonText}>ביטול</Text>
-      </TouchableOpacity>
       
     </View>
+
+{/* טבלה מתחת לטקסט העדכונים */}
+<View style={styles.tableContainer}>
+  <View style={styles.headerRow}>
+    <Text style={[styles.headerCell, styles.col3]}>שומש</Text>
+    <Text style={[styles.headerCell, styles.col2]}>מכסה</Text>
+    <Text style={[styles.headerCell, styles.col1]}>תאריך שליחה</Text>
+    <Text style={[styles.headerCell, styles.col4]}>שם פעולה</Text>
+    <Text style={[styles.headerCell, styles.col5]}>מספר</Text>
+
   </View>
-</Modal>
+
+  {tableData.length > 0 ? (
+    <FlatList
+  data={tableData}
+  renderItem={({ item }) => {
+    const currentDate = new Date();
+    const itemDate = new Date(item.col1); // הנחת המבנה של `col1` הוא תאריך בפורמט נתמך
+    
+    // בדיקה אם התאריך חלף
+    const isPastDate = itemDate <= currentDate;
+
+    return (
+      <View style={[styles.row, isPastDate && styles.pastDateRow]}>
+        <Text style={[styles.cell, styles.col3]}>{item.col3}</Text>
+        <Text style={[styles.cell, styles.col2]}>{item.col2}</Text>
+        <Text style={[styles.cell, styles.col1]}>{item.col1}</Text>
+        <Text style={[styles.cell, styles.col4]}>{item.col4}</Text>
+        <Text style={[styles.cell, styles.col5]}>{item.col5}</Text>
+
+      </View>
+    );
+  }}
+  keyExtractor={(item) => item.id}
+/>
+
+  ) : (
+    <Text style={{ textAlign: 'center', marginVertical: 20 }}>
+      אין נתונים להצגה
+    </Text>
+  )}
+</View>
+
+
+<Modal
+        visible={isHelpModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeHelpModal}
+      >
+        <View style={styles.helpModalContainer}>
+          <ImageBackground
+            source={require('/Users/yovelderey/check_fp/my-classic-project/assets/backgruondcontact.png')}
+            style={styles.helpModalBackground}
+          >
+            <TouchableOpacity
+              onPress={closeHelpModal}
+              style={styles.helpModalButton}
+            >
+              <Text style={styles.helpModalButtonText}>הבנתי</Text>
+            </TouchableOpacity>
+          </ImageBackground>
+        </View>
+      </Modal>
 
     </ImageBackground>
   );
@@ -519,11 +723,12 @@ const styles = StyleSheet.create({
     textAlign: 'center', // מרכז את הטקסט בתוך הרכיב
   },
   header3: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 'bold',
-    marginBottom: 10,
+
+    marginBottom: -5,
     color: '#343a40',
-    marginTop: 10, // הוסף מרווח מעל התיבה
+    marginTop: -5, // הוסף מרווח מעל התיבה
     textAlign: 'center', // מרכז את הטקסט בתוך הרכיב
   },
   input: {
@@ -584,48 +789,48 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     marginTop: 24,
   },
-  counterItemGreen: {
-    backgroundColor: '#d4edda',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    width: '30%',
-  },
-  counterItemYellow: {
-    backgroundColor: '#fff3cd',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    width: '30%',
-  },
-  counterItemRed: {
-    backgroundColor: '#f8d7da',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    width: '30%',
-  },
-  counterItemblack: {
-    backgroundColor: 'rgba(59, 187, 155, 0.9)',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    width: '30%',
-  },
-  counterItemblack1: {
-    backgroundColor: 'rgba(152, 116, 153, 0.9)',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    width: '30%',
-  },
-  counterItemblack2: {
-    backgroundColor: '#DEE2E6',
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    width: '30%',
-  },
+counterItemGreen: {
+  backgroundColor: '#d4edda',
+  borderRadius: 8,
+  padding: 8, // הקטנת הפדינג
+  alignItems: 'center',
+  width: '23%', // הקטנת הרוחב
+},
+counterItemYellow: {
+  backgroundColor: '#D2B48C',
+  borderRadius: 8,
+  padding: 8, // הקטנת הפדינג
+  alignItems: 'center',
+  width: '23%', // הקטנת הרוחב
+},
+counterItemRed: {
+  backgroundColor: '#f8d7da',
+  borderRadius: 8,
+  padding: 8, // הקטנת הפדינג
+  alignItems: 'center',
+  width: '23%', // הקטנת הרוחב
+},
+counterItemblack: {
+  backgroundColor: 'rgba(59, 187, 155, 0.9)',
+  borderRadius: 8,
+  padding: 8, // הקטנת הפדינג
+  alignItems: 'center',
+  width: '23%', // הקטנת הרוחב
+},
+ counterItemblack1: {
+  backgroundColor: 'rgba(152, 116, 153, 0.9)',
+  borderRadius: 8,
+  padding: 8, // הקטנת הפדינג
+  alignItems: 'center',
+  width: '23%', // הקטנת הרוחב
+},
+counterItemblack2: {
+  backgroundColor: '#DEE2E6',
+  borderRadius: 8,
+  padding: 8, // הקטנת הפדינג
+  alignItems: 'center',
+  width: '23%', // הקטנת הרוחב
+},
   counterText: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -634,12 +839,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#495057',
   },
-  
-  tableContainer: {
-    marginTop: -5,
-
-    borderRadius: 18,
+  counterLabel2: {
+    fontSize: 16,
+    color: '#495057',
   },
+
   tableHeader: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -688,7 +892,7 @@ const styles = StyleSheet.create({
     },
     buttonText: {
       color: '#ffffff',
-      fontSize: 16,
+      fontSize: 14,
       fontWeight: 'bold',
     },
     modalContainer: {
@@ -757,14 +961,14 @@ const styles = StyleSheet.create({
       fontSize: 20,
       color: 'white',
       fontWeight: 'bold',
-      marginBottom: 10,
+      marginBottom: -10,
     },
     cardButton: {
       backgroundColor: 'rgba(108, 99, 255, 0.1)', // צבע רקע בהיר תואם לסגנון העמוד
       borderRadius: 20,
       paddingVertical: 20,
       paddingHorizontal: 15,
-      marginVertical: 20,
+      marginVertical: 10,
       width: '90%',
       alignSelf: 'center',
       elevation: 4,
@@ -814,7 +1018,185 @@ const styles = StyleSheet.create({
       marginVertical: 20, // רווח מעל ומתחת לשורה
       width: '100%', // מוודא שכל הכפתורים יתיישרו לרוחב המסך
       paddingHorizontal: 20, // ריווח פנימי משני הצדדים
+      marginBottom: 0,
+
     },
+
+    countdownText: {
+      width: '80%', // מוודא שהטקסט לא תופס את כל הרוחב
+      fontSize: 16,
+      fontWeight: 'bold',
+      color: 'rgba(108, 99, 255, 0.9)',
+      textAlign: 'center',
+      padding: 8,
+      backgroundColor: '#fff0f5',
+      borderRadius: 7,
+      shadowColor: 'rgba(108, 99, 255, 0.9)',
+      shadowOpacity: 0.8,
+      shadowRadius: 15,
+      elevation: 10,
+      marginTop: -5,
+      marginBottom: 0,
+    },
+    container: {
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 10,
+      marginBottom: -10,
+
+    },
+    messageBox: {
+      backgroundColor: '#fff0f5', // רקע לתיבה
+      padding: 12,
+      borderRadius: 10, // פינות מעוגלות
+      shadowColor: '#000', // צל
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 3, // הצללה לאנדרואיד
+      width: '100%',
+    },
+    messageText: {
+      fontSize: 14,
+      color: '000', // צבע הטקסט
+      textAlign: 'center',
+    },
+tableContainer: {
+    marginTop: 20,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+
+  },
+  headerRow: {
+    flexDirection: 'row',
+    backgroundColor: '#6c63ff',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+    
+  },
+  headerCell: {
+    flex: 1,
+    fontSize: 14,
+    textAlign: 'right', // יישור לימין
+
+  },
+  list: {
+    maxHeight: 180, // מגביל את הגובה של הרשימה
+  },
+  listContent: {
+    paddingBottom: 60, // ריווח בתחתית הרשימה
+  },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    backgroundColor: '#f9f9f9',
+    
+  },
+  cell: {
+    flex: 1,
+    textAlign: 'right',
+    fontSize: 14,
+    color: '#333',
+    
+  },
+  col1: {
+    textAlign: 'right',
+    fontWeight: 'bold',
+    color: '#333',
+    flex: 2, // הקצאת רוחב גדול יותר לעמודה זו
+
+  },
+  col2: {
+
+    textAlign: 'center',
+    color: '#333',
+  },
+  col3: {
+    textAlign: 'center',
+    color: '#333',
+    
+  },
+  col4: {
+    textAlign: 'center',
+    color: '#333',
+    flex: 1.5, // הקצאת רוחב גדול יותר לעמודה זו
+
+  },
+  col5: {
+    textAlign: 'center',
+    color: '#333',
+    flex: 0.7, // הקצאת רוחב גדול יותר לעמודה זו
+
+  },
+  greenText: {
+  color: 'green',
+  fontWeight: 'bold',
+},
+pastDateRow: {
+  backgroundColor: 'green', // צבע רקע ירוק
+},
+helpModalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', // רקע חצי שקוף
+  },
+  helpModalBackground: {
+    width: '90%',
+    height: '70%',
+    justifyContent: 'flex-end', // הכפתור בתחתית המודל
+    alignItems: 'center',
+    borderRadius: 10,
+    overflow: 'hidden', // מונע תוכן שיוצא מהתמונה
+  },
+  helpModalButton: {
+    backgroundColor: '#6c63ff',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 20, // מרווח מתחתית המודל
+    width: '50%',
+    alignItems: 'center',
+  },
+  helpModalButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+counterItemMaybe: {
+  backgroundColor: '#f0e68c', // צבע ייחודי
+  borderRadius: 8,
+  padding: 8, // הקטנת הפדינג
+  alignItems: 'center',
+  width: '23%', // הקטנת הרוחב
+},
+counterItemSMS: {
+  backgroundColor: '#87ceeb', // צבע ייחודי
+  borderRadius: 8,
+  padding: 8, // הקטנת הפדינג
+  alignItems: 'center',
+  width: '23%', // הקטנת הרוחב
+  alignItems: 'center',
+  justifyContent: 'center', // יישור תוכן למרכז
+},
+counterLabelBottom: {
+  fontSize: 16, // גודל הטקסט התחתון
+  color: '#000', // צבע הטקסט
+
+},
+
 });
 
 export default RSVPs;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Image, FlatList, TextInput, StyleSheet, StatusBar, TouchableOpacity, ImageBackground, Alert } from 'react-native';
+import { View, Text, Modal, FlatList, TextInput,Image, StyleSheet, StatusBar, TouchableOpacity, ImageBackground, Alert } from 'react-native';
 import { firebaseConfig } from '../config';
 import { getDatabase, ref, set, get, remove } from 'firebase/database';
 import firebase from 'firebase/compat/app';
@@ -8,17 +8,23 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PieChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
+import Icon from 'react-native-vector-icons/FontAwesome';
+import XLSX from 'xlsx';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+
+
 
 const Budget = (props) => {
   const id = props.route.params.id;
   const initialData = [
     [true, 'מחיר', 'מקדמה', 'תאריך', 'הוצאה'],
-    ...Array.from({ length: 9 }, () => Array(5).fill(''))
+    ...Array.from({ length: 4 }, () => Array(5).fill(''))
   ];
 
   const [tableData, setTableData] = useState(initialData);
-  const [checked, setChecked] = useState(Array(10).fill(false));
-  const [sumNumericColumn, setSumNumericColumn] = useState(Array(10).fill(0));
+  const [checked, setChecked] = useState(Array(5).fill(false));
+  const [sumNumericColumn, setSumNumericColumn] = useState(Array(5).fill(0));
   const [spend, setSpend] = useState('');
   const [eventDetails, setEventDetails] = useState({});
   const [deleteIndex, setDeleteIndex] = useState('');
@@ -26,7 +32,8 @@ const Budget = (props) => {
   const [totalCheckedSum, setTotalCheckedSum] = useState(0); // סך הכל מחיר
   const [totalCheckedCount, setTotalCheckedCount] = useState(0); // מספר הסימונים
   const navigation = useNavigation();
-  
+  const [isCalculatorVisible, setIsCalculatorVisible] = useState(false);
+  const [calculatorInput, setCalculatorInput] = useState("");
   const database = getDatabase();
   const user = firebase.auth().currentUser;
 // הגדרת רשימת הצבעים
@@ -95,6 +102,21 @@ const fixedColors = [
     calculateTotals(newTableData);
   };
   
+  const handleCalculatorInput = (value) => {
+    if (value === "=") {
+      try {
+        const result = eval(calculatorInput); // חישוב הביטוי
+        setCalculatorInput(String(result));
+      } catch (error) {
+        Alert.alert("שגיאה", "ביטוי לא חוקי");
+      }
+    } else if (value === "C") {
+      setCalculatorInput(""); // ניקוי המסך
+    } else {
+      setCalculatorInput((prev) => prev + value); // הוספת ערך להזנה
+    }
+  };
+
   const calculateTotals = (data) => {
     const totalSum = data.reduce((sum, row) => {
       const price = row[1] || '';
@@ -199,6 +221,45 @@ const fixedColors = [
 
     fetchData();
   }, [user, id]);
+
+
+  const handleExportToExcel = async () => {
+    try {
+      // יצירת נתוני הטבלה
+      const data = tableData.map((row) => ({
+        Checked: row[0] ? 'V' : '',
+        Price: row[1],
+        Advance: row[2],
+        Date: row[3],
+        Expense: row[4],
+      }));
+  
+      // יצירת וורקבוק ושיט
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Budget Data');
+  
+      // המרת הנתונים לבינארי
+      const excelData = XLSX.write(workbook, { type: 'base64', bookType: 'xlsx' });
+  
+      // יצירת נתיב לשמירת הקובץ
+      const filePath = `${FileSystem.documentDirectory}BudgetData.xlsx`;
+  
+      // כתיבת הקובץ
+      await FileSystem.writeAsStringAsync(filePath, excelData, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+  
+      // שיתוף או פתיחת הקובץ
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(filePath);
+      } else {
+        Alert.alert('הצלחה', 'הקובץ נשמר בתיקיית המסמכים.');
+      }
+    } catch (error) {
+      Alert.alert('שגיאה', `שגיאה בייצוא הקובץ: ${error.message}`);
+    }
+  };
 
   const renderItem = ({ item, index }) => (
     <View style={styles.row}>
@@ -315,6 +376,11 @@ const fixedColors = [
         </View>
           <View style={styles.buttonRow}>
             <View style={styles.leftIcons}>
+
+            <TouchableOpacity onPress={() => setIsCalculatorVisible(true)} style={styles.calculatorButton}>
+              <Icon name="calculator" size={18} color="white" />
+            </TouchableOpacity>
+
             <TouchableOpacity
               onPress={handleAddRow}
               style={styles.removeButton}>
@@ -326,6 +392,7 @@ const fixedColors = [
               style={styles.removeButton}>
               <Text style={styles.removeButtonText}>-</Text>
             </TouchableOpacity>
+            
           </View>
         </View>
 
@@ -383,14 +450,62 @@ const fixedColors = [
 
 
         <View style={styles.buttonsContainer}>
-          <TouchableOpacity style={styles.saveButton} onPress={handleSaveToFirebase}>
-            <Text style={styles.saveButtonText}>שמור</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteBudgetItems}>
-            <Text style={styles.deleteButtonText}>מחק פריטים</Text>
-          </TouchableOpacity>
+            <TouchableOpacity style={styles.saveButton} onPress={handleSaveToFirebase}>
+              <Text style={styles.saveButtonText}>שמור</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteBudgetItems}>
+              <Text style={styles.deleteButtonText}>מחק פריטים</Text>
+            </TouchableOpacity>
+
         </View>
-      </View>
+    </View>
+    <View style={styles.exportButtonContainer}>
+    <TouchableOpacity style={styles.exportButton} onPress={handleExportToExcel}>
+      <Text style={styles.exportButtonText}>ייצוא לאקסל</Text>
+    </TouchableOpacity>
+  </View>
+
+{/* מחשבון */}
+      <Modal
+        visible={isCalculatorVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsCalculatorVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.calculatorContainer}>
+            <TextInput
+              style={styles.calculatorInput}
+              value={calculatorInput}
+              editable={false}
+              placeholder="0"
+              placeholderTextColor="#aaa"
+            />
+            <View style={styles.calculatorButtons}>
+              {["7", "8", "9", "/", "4", "5", "6", "*", "1", "2", "3", "-", "C", "0", ".", "=", "+"].map((value, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.button,
+                    value === "C" && styles.clearButton, // סגנון ייחודי לכפתור C
+                    value === "=" && styles.equalsButton, // סגנון ייחודי לכפתור =
+                  ]}
+                  onPress={() => handleCalculatorInput(value)}
+                >
+                  <Text style={styles.buttonText}>{value}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setIsCalculatorVisible(false)}
+            >
+              <Text style={styles.closeButtonText}>סגור</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
     </ImageBackground>
   );
@@ -402,9 +517,12 @@ const styles = StyleSheet.create({
   },
   buttonsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
+    justifyContent: 'space-between', // פיזור הכפתורים באופן אחיד
+    alignItems: 'center',
+    marginBottom: -40,
+    marginHorizontal: 5, // הוספת רווחים בצדדים
   },
+
   container: {
     flex: 1,
     padding: 16,
@@ -505,7 +623,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: 'center',
     marginBottom: 16,
-    width: '50%',
+    width: '47%',
     alignItems: 'center',
     textAlign: 'center',
 
@@ -520,15 +638,20 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: 'center',
     marginBottom: 16,
-    width: '50%',
+    width: '47%',
     alignItems: 'center',
     textAlign: 'center',
-    marginLeft: 8, // רווח בין כפתורים
+    marginLeft: 3, // רווח בין כפתורים
 
   },
   deleteButtonText: {
     color: '#fff',
     fontSize: 18,
+  },
+  imageback: {
+    width: 25,
+    height: 25,
+
   },
   checkbox: {
     width: 30,
@@ -606,6 +729,86 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     // מניעת שבירת השורה על ידי הקטנת האלמנט במידת הצורך
   },
+
+  buttonText: {
+    color: "#fff",
+    fontSize: 20,
+    textAlign: "center",
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  calculatorContainer: {
+    width: "90%",
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    padding: 16,
+    alignItems: "center",
+  },
+  calculatorInput: {
+    width: "100%",
+    height: 70,
+    backgroundColor: "#f0f0f0",
+    borderRadius: 5,
+    fontSize: 32,
+    textAlign: "right",
+    paddingHorizontal: 10,
+    marginBottom: 16,
+  },
+  calculatorButtons: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+button: {
+  width: "22%", // כפתור בגודל של רבע שורה עם ריווח
+  height: 70,
+  backgroundColor: "#000",
+  borderRadius: 5,
+  justifyContent: "center",
+  alignItems: "center",
+  margin: 4, // רווח סביב הכפתור
+},
+  clearButton: {
+    backgroundColor: "#FF6347",
+  },
+  closeButton: {
+    marginTop: 16,
+    backgroundColor: "#FF4500",
+    padding: 10,
+    borderRadius: 5,
+    width: "40%",
+    alignItems: "center",
+  },
+  closeButtonText: {
+    color: "#fff",
+    fontSize: 16,
+  },
+equalsButton: {
+  backgroundColor: "#32CD32", // כפתור "=" בירוק
+},
+exportButton: {
+  backgroundColor: '#4CAF50',
+  padding: 10,
+  borderRadius: 15,
+  alignItems: 'center',
+  marginBottom: 16,
+  width: '90%',
+  alignItems: 'center',
+  textAlign: 'center',
+},
+exportButtonText: {
+  color: '#fff',
+  fontSize: 18,
+},
+exportButtonContainer: {
+  justifyContent: 'center', // יישור אנכי למרכז
+  alignItems: 'center',    // יישור אופקי למרכז
+  marginVertical: 20,      // רווח אנכי
+},
 });
 
 export default Budget;

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { TouchableOpacity, Image, Text, TextInput, ImageBackground, StyleSheet, ScrollView, View, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { TouchableOpacity, Image, Text, TextInput, ImageBackground, StyleSheet, Animated, View, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
@@ -27,44 +27,71 @@ if (!firebase.apps.length){
 
 const Home = (props) => {
   const [eventName, setEventName] = useState('');
-  const [eventCategory, setEventCategory] = useState('');
-  const [eventDate, setEventDate] = useState(new Date());
+
   const [eventTime, setEventTime] = useState('');
   const [Numberofguests, setNumberofguests] = useState('');
   const [budget, setBudget] = useState('');
   const [eventLocation, setEventLocation] = useState('');
   const [eventDescription, setEventDescription] = useState('');
   const [secondOwnerName, setSecondOwnerName] = useState(''); // new state for the second owner name
-  const [firstOwnerName, setfirstOwnerName] = useState(''); // new state for the second owner name
+  const [canProceed, setCanProceed] = useState(false);
+  const [eventDate, setEventDate] = useState('');
+  const [buttonScale] = useState(new Animated.Value(1)); // משתנה לאנימציה
 
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const user = firebase.auth().currentUser;
   const database = getDatabase();
 
-  const formatDate = (date) => format(date, "dd MMMM yyyy", { locale: he });
 
   const navigation = useNavigation();
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const handleCategorySelection = (category) => {
+    setSelectedCategory(category);
+};
+
+
+useEffect(() => {
+  if (
+    eventName.trim() &&
+    selectedCategory &&
+    (selectedCategory !== 'חתונה' || (selectedCategory === 'חתונה' && secondOwnerName.trim()))
+  ) {
+    setCanProceed(true);
+  } else {
+    setCanProceed(false);
+  }
+}, [eventName, secondOwnerName, selectedCategory]);
+
+
+  // עדכון מצב הכפתור עם אנימציה
+  useEffect(() => {
+    if (
+      eventName.trim() &&
+      selectedCategory &&
+      (selectedCategory !== 'חתונה' || (selectedCategory === 'חתונה' && secondOwnerName.trim()))
+    ) {
+      setCanProceed(true);
+      Animated.spring(buttonScale, {
+        toValue: 1.1,
+        friction: 2,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      setCanProceed(false);
+      Animated.spring(buttonScale, {
+        toValue: 1,
+        friction: 2,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [eventName, secondOwnerName, selectedCategory]);
+
 
   const handleCreateEvent = () => {
-    // בדיקת שכל השדות הנדרשים מלאים
-    if (
-      !eventName ||
-      !eventCategory ||
-      !eventDate ||
-      !eventTime ||
-      !Numberofguests ||
-      !budget ||
-      !eventLocation ||
-      (eventCategory === 'חתונה' && !secondOwnerName) // לוודא שמולא השם השני אם קטגוריה היא חתונה
-    ) {
-      Alert.alert('Error', 'Please fill all fields before creating the event.');
-      return;
-    }
+  
   
     // חיבור השמות במידה והקטגוריה היא "חתונה"
-    let finalEventName = eventName;
-    if (eventCategory === 'חתונה') {
+    let finalEventName = eventName; // הגדרת המשתנה כמקומי
+    if (selectedCategory === 'חתונה') {
       finalEventName = eventName + " & " + secondOwnerName;
     }
   
@@ -74,10 +101,19 @@ const Home = (props) => {
     }
   
     const databaseRef = ref(database, `Events/${user.uid}/${finalEventName}/`);
+
+    const defaultTableData = [
+      { id: '1', col1: '00.00.0000', col2: '300', col3: '0' ,col4: 'הזמנות', col5: '1'},
+      { id: '2', col1: '00.00.0000', col2: '300', col3: '0' ,col4: 'תזכורת', col5: '2' },
+      { id: '3', col1: '00.00.0000', col2: '300', col3: '0' ,col4: 'יום חתונה', col5: '3'},
+      { id: '4', col1: '00.00.0000', col2: '300', col3: '0' ,col4: 'תודה רבה', col5: '4'},
+    ];
+
+
     const userData = {
       eventName: finalEventName,
-      eventCategory: eventCategory,
-      eventDate: eventDate.toISOString().split('T')[0],
+      eventCategory: selectedCategory,
+      eventDate: '00.00.0000',
       eventTime: eventTime,
       budget: budget,
       Numberofguests: Numberofguests,
@@ -85,19 +121,20 @@ const Home = (props) => {
       eventDescription: eventDescription,
       secondOwnerName: secondOwnerName, // include second owner name
       firstOwnerName: eventName, // include second owner name
-
       spend: ""
     };
-  
+
     set(databaseRef, userData)
       .then(() => {
         console.log('Data written to the database successfully');
-        props.navigation.navigate('Main');
+        props.navigation.navigate('HomeOne', { finalEventName }); // כאן מעבירים את הפרמטר
+
       })
       .catch((error) => {
         console.error('Error writing data to the database:', error);
       });
-  
+
+      
     set(ref(database, `Events/${user.uid}/${finalEventName}/yes_caming`), 0);
     set(ref(database, `Events/${user.uid}/${finalEventName}/maybe`), 0);
     set(ref(database, `Events/${user.uid}/${finalEventName}/no_cuming`), 0);
@@ -107,160 +144,123 @@ const Home = (props) => {
 
     const databaseRefNumberofSizeimag = ref(database, `Events/${user.uid}/${finalEventName}/NumberofSizeimage/`);
     set(databaseRefNumberofSizeimag,0)
+
+    const databaseRefTable_RSVPs = ref(database, `Events/${user.uid}/${finalEventName}/Table_RSVPs/`);
+    set(databaseRefTable_RSVPs,defaultTableData)
+
+    setEventDate('0000-00-00');
+    setEventTime('00:00');
+    setEventLocation('לא הוגדר');
+    setNumberofguests('0');
+    setBudget('0');
+    setEventDescription('אין הערות');
+
+
+
+
   };
   
 
-  const handleDateChange = (event, selectedDate) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      setEventDate(selectedDate);
-    }
-  };
+
+
+
 
   return (
-    
-    <ScrollView contentContainerStyle={styles.container}>
-        <ImageBackground
-        source={require('../assets/create_backgruond.png')} // טוען את ה-GIF מהתיקייה המקומית
-        style={styles.gif}
-        resizeMode="cover" // כדי שה-GIF יכסה את כל המסך
-      />      
-      <Text style={[styles.title, { marginTop: -780 }]}>אירוע חדש</Text>
+  <ImageBackground
+    source={require('../assets/Home_one.png')}
+    style={styles.backgroundImage}
+    resizeMode="cover"
+  >
+  <Text style={styles.title1}>יצירת אירוע חדש</Text>
 
-      <TouchableOpacity onPress={() => navigation.navigate('Main')}>
-        <Image source={require('../assets/back_icon2.png')} style={styles.imageback} />
-      </TouchableOpacity>
+  <Text style={styles.title2}>מה אתם חוגגים?</Text>
 
-      <TouchableOpacity 
-        style={styles.pickerButton} 
-        onPress={() => setShowCategoryPicker(true)}
+  {/* כפתורי קטגוריות */}
+  <View style={styles.buttonContainer}>
+  
+    {[
+      { category: 'חתונה', icon: require('../assets/rings.png') },
+      { category: 'חינה', icon: require('../assets/camel.png') },
+      { category: 'בר/ת מצווה', icon: require('../assets/children.png') },
+      { category: 'בריתה', icon: require('../assets/baby-carriage.png') },
+      { category: 'יום הולדת', icon: require('../assets/happy-birthday.png') },
+      { category: 'כנס', icon: require('../assets/conference.png') },
+      { category: 'וובינר', icon: require('../assets/webinar.png') },
+      { category: 'אחר', icon: require('../assets/more.png') },
+    ].map((item) => (
+      <TouchableOpacity
+        key={item.category}
+        style={[
+          styles.categoryButton,
+          selectedCategory === item.category && styles.selectedCategoryButton,
+        ]}
+        onPress={() => handleCategorySelection(item.category)}
       >
-        <Text style={styles.pickerText}>
-          {eventCategory ? eventCategory : 'סוג אירוע'}
-        </Text>
+        {/* אייקון */}
+        <Image source={item.icon} style={styles.categoryIcon} />
+        {/* שם קטגוריה */}
+        <Text style={styles.categoryButtonText}>{item.category}</Text>
       </TouchableOpacity>
+    ))}
+  </View>
 
-      {showCategoryPicker && (
-        <Picker
-          selectedValue={eventCategory}
-          onValueChange={(itemValue) => {
-            setEventCategory(itemValue);
-            setShowCategoryPicker(false);
-          }}
-          style={styles.picker}
+
+  <TextInput
+    style={styles.input}
+    placeholder="שם בעל האירוע"
+    value={eventName}
+    onChangeText={(text) => setEventName(text)}
+  />
+
+  {/* שדה עבור שם בעל האירוע השני */}
+  {selectedCategory === 'חתונה' && (
+    <TextInput
+      style={styles.input}
+      placeholder="שם בעלת האירוע"
+      value={secondOwnerName}
+      onChangeText={(text) => setSecondOwnerName(text)}
+    />
+  )}
+      <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+        <TouchableOpacity
+          style={[styles.nextButton, !canProceed && { backgroundColor: 'gray' }]}
+          onPress={handleCreateEvent}
+          disabled={!canProceed}
         >
-          <Picker.Item label="בחר סוג אירוע" value="" />
-          <Picker.Item label="חתונה" value="חתונה" />
-          <Picker.Item label="בר מצווה" value="בר מצווה" />
-          <Picker.Item label="כנס" value="כנס" />
-          <Picker.Item label="וובינר" value="וובינר" />
-        </Picker>
-      )}
-
-      <TextInput
-        style={styles.input}
-        placeholder="שם בעל האירוע 1"
-        value={eventName}
-        onChangeText={(text) => setEventName(text)}
-      />
-
-      {/* Only show this TextInput if the eventCategory is "חתונה" */}
-      {eventCategory === 'חתונה' && (
-        <TextInput
-          style={styles.input}
-          placeholder="שם בעל האירוע 2"
-          value={secondOwnerName}
-          onChangeText={(text) => setSecondOwnerName(text)}
-        />
-      )}
-
-      <TouchableOpacity 
-        style={styles.dateButton}
-        onPress={() => setShowDatePicker(true)}
-      >
-        <Text style={styles.dateText}>
-          {formatDate(eventDate)}
-        </Text>
-      </TouchableOpacity>
-
-      {showDatePicker && (
-        <DateTimePicker
-          value={eventDate}
-          mode="date"
-          display="default"
-          onChange={handleDateChange}
-          style={styles.picker2}
-        />
-      )}
-
-      <TextInput
-        style={styles.input}
-        placeholder="שעה"
-        value={eventTime}
-        onChangeText={(text) => setEventTime(text)}
-        keyboardType="numeric" // מקלדת מספרים בלבד
-      />
+          <Text style={styles.nextButtonText}>המשך</Text>
+        </TouchableOpacity>
+      </Animated.View>
 
 
-      <TextInput
-        style={styles.input}
-        placeholder="מיקום"
-        value={eventLocation}
-        onChangeText={(text) => setEventLocation(text)}
-      />
+    </ImageBackground>
+    
 
-      <TextInput
-        style={styles.input}
-        placeholder="מספר מוסמנים"
-        value={Numberofguests}
-        onChangeText={(text) => setNumberofguests(text)}
-        keyboardType="numeric" // מקלדת מספרים בלבד
-
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="תקציב"
-        value={budget}
-        onChangeText={(text) => setBudget(text)}
-        keyboardType="numeric" // מקלדת מספרים בלבד
-
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="הערות"
-        multiline
-        numberOfLines={4}
-        value={eventDescription}
-        onChangeText={(text) => setEventDescription(text)}
-      />
-      <Text style={styles.textnew}>אנא הקפידו למלא את כל השדות באופן מדוייק להמשך תהליך יצירת האירוע, לאחר יצירת האירוע לא ניתן לערוך אותו</Text>
-
-      <TouchableOpacity onPress={handleCreateEvent} style={styles.phoneButton}>
-        <Image source={require('../assets/started.png')} />
-      </TouchableOpacity>
-
-    </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
 
-  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 40,
   },
-  gif: {
-    width: '120%',
-    height: '105%',
-    marginTop: -100
+title2: {
+  fontSize: 19,
+  alignSelf: 'center', // ממקם את הטקסט במרכז המיכל שלו
+  marginTop: 100 
+},
+title1: {
+  fontSize: 26,
+  fontWeight: 'bold',
+  alignSelf: 'center', // ממקם את הטקסט במרכז המיכל שלו
+  marginTop: 70,
+  color: 'rgba(108, 99, 255, 0.9)',
+},
+
+  backgroundImage: {
+    flex: 1,
+    resizeMode: 'cover',
   },
   input: {
     width: '90%',
@@ -272,72 +272,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderWidth: 1,
     borderRadius: 7,
-    borderColor: 'orange',
+    borderColor: 'rgba(108, 99, 255, 0.9)',
     textAlign: 'right',
     marginBottom: 20,
+    alignSelf: 'center', // ממקם את הטקסט במרכז המיכל שלו
+
   },
-  dateButton: {
-    width: '90%',
-    height: 40,
-    borderColor: 'gray',
-    borderWidth: 1,
-    borderRadius: 5,
-    backgroundColor: 'white',
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderRadius: 7,
-    borderColor: 'orange',
-    textAlign: 'right',
-    marginBottom: 20,
+  buttonContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignSelf: 'center', // ממקם את הטקסט במרכז המיכל שלו
+
     justifyContent: 'center',
+    marginVertical: 10,
   },
-  dateText: {
-    fontSize: 16,
-    color: 'gray',
-    textAlign: 'right',
-
-  },
-  pickerButton: {
-    width: '90%',
-    height: 40,
-    borderColor: 'gray',
-    borderWidth: 1,
-    borderRadius: 5,
-    backgroundColor: 'white',
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderRadius: 7,
-    borderColor: 'orange',
-    textAlign: 'right',
-    marginBottom: 20,
-    justifyContent: 'center',
-  },
-  pickerText: {
-    fontSize: 16,
-    color: 'gray',
-    textAlign: 'right',
-
-  },
-  picker: {
-    height: 150,
-    width: '100%',
-    backgroundColor: 'white',
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderRadius: 7,
-    borderColor: 'orange',
-    textAlign: 'right',
-    marginBottom: 20,
-    },
-
-  background: {
-    flex: 1,
-    resizeMode: 'cover',
+  categoryButton: {
+    width: 120,
+    height: 85,
+    margin: 10,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: 'gray',
+    borderRadius: 10,
+  },
+  selectedCategoryButton: {
+    borderColor: 'orange',
+    borderWidth: 4,
+  },
+  categoryButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: 'black',
   },
   phoneButton: {
-    marginTop: 20,
+    marginTop: 0,
+    alignSelf: 'center', // ממקם את הטקסט במרכז המיכל שלו
+
   },
   imageback: {
     width: 40,
@@ -345,23 +317,24 @@ const styles = StyleSheet.create({
     marginTop: -130,
     marginRight: 300,
   },
-  footerText: {
-    position: 'absolute',
-    bottom: 20, // מרחק מהתחתית
-    fontSize: 13,
-    color: 'gray',
-    marginTop: 150  // לשמור על היחס המקורי של התמונה
+  categoryIcon: {
+  width: 40,
+  height: 40,
+  marginBottom: 5, // רווח בין האייקון לטקסט
+},
+nextButton: {
+  marginTop: 0,
+  backgroundColor: 'rgba(108, 99, 255, 0.9)',
+  padding: 10,
+  borderRadius: 10,
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 250,
+  height: 40,
+  elevation: 5,
+  alignSelf: 'center',
 
-  },
-  textnew: {
-    marginTop: 0,  // לשמור על היחס המקורי של התמונה
+},
 
-    textAlign: 'center', // מיישר את הטקסט למרכז
-    alignSelf: 'center', // מיישר את הרכיב עצמו במרכז המיכל
-    color: '#000',       // צבע טקסט שחור
-    fontSize: 13,        // גודל פונט
-    paddingHorizontal: 10, // ריווח אופקי לטקסט
-  },
 });
-
 export default Home;

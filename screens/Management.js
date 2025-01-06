@@ -191,25 +191,39 @@ const Management = (props) => {
     }
   };
   
-
   const pickContacts = async () => {
-    const { status } = await Contacts.requestPermissionsAsync();
-    if (status === 'granted') {
-      const { data } = await Contacts.getContactsAsync({
-        fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails],
-      });
-
-      if (data.length > 0) {
-        navigation.navigate('ContactsList', {
-          contacts: data,
-          selectedContacts,
-          onSelectContacts: handleSelectContacts, // Ensure this function is defined in the parent component
+    try {
+      console.log('מתחיל לבקש הרשאות');
+      const { status } = await Contacts.requestPermissionsAsync();
+      console.log('סטטוס ההרשאה שהתקבל:', status);
+  
+      if (status === 'granted') {
+        console.log('הרשאה ניתנה, מבצע קריאה לאנשי קשר...');
+        const { data } = await Contacts.getContactsAsync({
+          fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails],
         });
+        console.log('אנשי קשר שהובאו:', data);
+  
+        if (data.length > 0) {
+          navigation.navigate('ContactsList', {
+            contacts: data,
+            selectedContacts,
+            onSelectContacts: handleSelectContacts,
+          });
+        } else {
+          Alert.alert('שגיאה', 'לא נמצאו אנשי קשר');
+        }
+      } else {
+        console.log('הרשאה לא ניתנה');
+        Alert.alert('שגיאה', 'הרשאה לא ניתנה');
       }
-    } else {
-      alert('Permission to access contacts was denied');
+    } catch (error) {
+      console.error('שגיאה במהלך בקשת הרשאות:', error);
+      Alert.alert('שגיאה', 'אירעה שגיאה בעת ייבוא אנשי הקשר');
     }
   };
+  
+
 
   const handleSelectContacts = (contacts) => {
     setSelectedContacts(contacts);
@@ -371,7 +385,7 @@ const Management = (props) => {
 
 
             <TouchableOpacity style={styles.optionButton} onPress={() => {
-              setModalVisible2(false);
+              //setModalVisible2(false);
               pickContacts(); // פתח את פונקציית ייבוא אנשי קשר
             }}>
               <Text style={styles.optionButtonText}>ייבא אנשי קשר</Text>

@@ -106,7 +106,7 @@ const RSVPsfour = (props) => {
         await uploadBytes(storageReference, blob);
   
         // קבלת URL
-        const downloadURL = await getDownloadURL(storageReference);
+        const downloadURL = await getDownloadURL(files.items[0]);
         setUploadedImageUrl(downloadURL);
         alert('התמונה הועלתה בהצלחה!');
         setModalVisible(false);
@@ -131,7 +131,7 @@ const RSVPsfour = (props) => {
   
         // קבלת רשימת הקבצים
         const files = await listAll(listRef);
-        const downloadURL = await getDownloadURL(storageReference);
+        const downloadURL = await getDownloadURL(files.items[0]);
         setUploadedImageUrl(downloadURL); // שמירת ה-URL
 
         if (files.items.length > 0) {
