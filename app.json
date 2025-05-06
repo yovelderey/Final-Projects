@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "EasyVent",
+    "slug": "my-classic-project",
+    "version": "2.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
+    },
+    "android": {
+      "versionCode": 13,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "runtimeVersion": "1.0.0"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "78231a36-6697-4cfb-9962-4d860b37ce91"
+      }
+    },
+    "owner": "yovelderey",
+    "updates": {
+      "url": "https://u.expo.dev/78231a36-6697-4cfb-9962-4d860b37ce91"
+    }
+  }
+}
