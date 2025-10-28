@@ -1,36 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text,ImageBackground, FlatList, StyleSheet, TouchableOpacity, Image, Alert, TextInput, Modal, PermissionsAndroid, StatusBar, Platform } from 'react-native';
-import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, onValue } from 'firebase/database';
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
+
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import 'firebase/database';
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/auth';
-import 'firebase/compat/firestore';
+
 import * as FileSystem from 'expo-file-system';
 import XLSX from 'xlsx';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
 import { PieChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
+import { ref, set, onValue }         from 'firebase/database';
+import { onAuthStateChanged }        from 'firebase/auth';
+import { auth, database }            from '../firebase';   
 
 
-
-const firebaseConfig = {
-  apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
-  authDomain: "final-project-d6ce7.firebaseapp.com",
-  projectId: "final-project-d6ce7",
-  storageBucket: "final-project-d6ce7.appspot.com",
-  messagingSenderId: "1056060530572",
-  appId: "1:1056060530572:web:d08d859ca2d25c46d340a9",
-  measurementId: "G-LD61QH3VVP"
-};
-
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-}
 
 const Gift = (props) => {
   const [contacts, setContacts] = useState([]);
@@ -40,8 +24,6 @@ const Gift = (props) => {
   const [user, setUser] = useState(null);
   const id = props.route.params.id;
   const [searchQuery, setSearchQuery] = useState('');
-  const auth = getAuth();
-  const database = getDatabase();
   const [totalPrice, setTotalPrice] = useState(0); // סטייט לסכום הכולל
   const insets = useSafeAreaInsets();
   const [averagePrice, setAveragePrice] = useState(0);
@@ -331,6 +313,8 @@ const styles = StyleSheet.create({
   backgroundImage: {
     flex: 1,
     resizeMode: 'cover',
+    backgroundColor: '#fff',
+
   },
   container: {
     flex: 1,

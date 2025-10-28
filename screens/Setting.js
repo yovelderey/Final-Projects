@@ -67,7 +67,7 @@ const Setting = () => {
   const handleSignOut = async () => {
     try {
       await firebase.auth().signOut();
-      navigation.navigate('Main');
+      navigation.navigate('LoginEmail');
     } catch (error) {
       console.log('Sign out error:', error.message);
     }
@@ -130,7 +130,7 @@ const Setting = () => {
             try {
               await user.delete();
               Alert.alert('Account Deleted', 'Your account has been deleted.');
-              navigation.navigate('Login');
+              navigation.navigate('LoginEmail');
             } catch (error) {
               Alert.alert('Error', error.message);
             }

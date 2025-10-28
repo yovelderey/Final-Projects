@@ -32,6 +32,8 @@ import TabsScreen from './screens/TabsScreen';
 import HomeOne from './screens/HomeOne';
 import HomeTwo from './screens/HomeTwo';
 import HomeThree from './screens/HomeThree';
+import AdminPanel from './screens/AdminPanel';
+import OwnerDashboard from './screens/OwnerDashboard';
 
 
 const Stack = createNativeStackNavigator();
@@ -71,6 +73,8 @@ const App = () => {
         <Stack.Screen name="HomeOne" component={HomeOne} />
         <Stack.Screen name="HomeTwo" component={HomeTwo} />
         <Stack.Screen name="HomeThree" component={HomeThree} />
+        <Stack.Screen name="AdminPanel" component={AdminPanel} />
+        <Stack.Screen name="OwnerDashboard" component={OwnerDashboard} />
 
         
       </Stack.Navigator>

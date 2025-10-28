@@ -1,5 +1,5 @@
 import React, { useEffect, useRef,useState } from 'react';
-  import { View,Modal,ActivityIndicator, ImageBackground,Text,FlatList,Easing,Alert, TouchableOpacity,Image,ScrollView, StyleSheet,Dimensions,Animated } from 'react-native';
+  import { View,Modal,LogBox,TextInput,Platform, ImageBackground,Text,FlatList,Easing,Alert, TouchableOpacity,Image,ScrollView, StyleSheet,Dimensions,Animated } from 'react-native';
   import { useNavigation } from '@react-navigation/native';
   import { NavigationContainer } from '@react-navigation/native';
   import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -13,6 +13,9 @@ import React, { useEffect, useRef,useState } from 'react';
   import { StatusBar } from 'expo-status-bar';
   import * as Progress from 'react-native-progress';
   import { Ionicons } from '@expo/vector-icons';
+  import * as Print     from 'expo-print';
+  import XLSX          from 'xlsx';              //  npm i xlsx
+  import * as Sharing   from 'expo-sharing';
 
   const { width } = Dimensions.get('window');
   const images = [    
@@ -55,7 +58,15 @@ import React, { useEffect, useRef,useState } from 'react';
   const [daysLeft, setDaysLeft] = useState(null);
   const [eventDetailsspend, setEventDetailsspend] = useState({});
   const [isUploading, setIsUploading] = useState(true); // ניהול מצב טעינה
+  const [guestRows  , setGuestRows]   = useState([]);
+  const [searchTerm , setSearchTerm]  = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');      // all | green | yellow | red
 
+  /* --- ערכי דשבורד + אנימציה מעוגלת --- */
+  const [displayCash , setDisplayCash ] = useState(0);
+  const [displayTables,setDisplayTables] = useState(0);
+  const cashAnim  = useRef(new Animated.Value(0)).current;
+  const tableAnim = useRef(new Animated.Value(0)).current;
 
 useEffect(() => {
   const unsubscribe = firebase.auth().onAuthStateChanged((currentUser) => {
@@ -500,6 +511,12 @@ useEffect(() => {
   const [progress] = useState(new Animated.Value(0));
   const [storageUsed, setStorageUsed] = useState(0);
 
+const toLocalPhone = (num = '') =>
+  String(num)
+    .replace(/[^0-9]/g, '')       // מסיר תווים לא מספריים
+    .replace(/^972/, '0');        // הופך מ-972 ל-0
+
+
   useEffect(() => {
     const totalStorageUsed = Math.max(1,fileSizeMB); // סך השימוש באחסון
     setStorageUsed(totalStorageUsed); // עדכון השימוש באחסון
@@ -520,6 +537,247 @@ useEffect(() => {
   const progressColor = progressValue > 0.8 ? 'red' : '#3498db'; // צבע דינמי לפי שימוש
 
   const screenWidth = Dimensions.get('window').width * 0.9; // 90% מרוחב המסך
+
+
+/* helper – מנרמל טלפון (0→972…, מסיר תווים) */
+const normPhone = raw =>
+  String(raw ?? '')
+    .replace(/[^0-9+]/g, '')
+    .replace(/^0/, '972')
+    .replace(/^\+972/, '972');
+
+/* helper – טלפון מתוך אובייקט הודעה */
+const phoneFromMsg = m =>
+  normPhone(
+    m.formattedContacts || m.formattedContact ||
+    (Array.isArray(m.to) ? m.to[0] : m.to)    ||
+    m.toNumber || ''
+  );
+
+/* ---------- מאזינים בזמן-אמת ---------- */
+useEffect(() => {
+  if (!user) return;
+
+  /* refs */
+  const cRef = ref(database, `Events/${user.uid}/${id}/contacts`);
+  const tRef = ref(database, `Events/${user.uid}/${id}/tables`);
+  const rRef = ref(database, `Events/${user.uid}/${id}/responses`);
+  const mRef = ref(database, `whatsapp/${user.uid}/${id}`);
+
+  /* משתני עבודה */
+  let contacts={}, tables={}, responses={};
+  const sent     = new Set();
+  const pending  = new Set();
+  const errors   = new Set();
+
+  /* ------------ בניית הטבלה ------------ */
+  const rebuild = () => {
+    const seen = new Set();              // ↟ מונע כפילויות
+    const rows = [];
+
+    Object.values(contacts).forEach(c => {
+      const phone = normPhone(c.phoneNumbers);
+      if (!phone || seen.has(phone)) return;   // כפול / ריק? דלג
+      seen.add(phone);
+
+      /* סטטוס */
+      const resp = responses[c.recordID || c.id]?.response;
+/* --- status priority: error > guest-response > pending > sent > waiting --- */
+let txt, clr;
+
+if (errors.has(phone)) {                 // ① שגיאה
+  txt = 'שגיאה בשליחה';
+  clr = 'orange';
+
+} else if (resp) {                       // ② תשובת מוזמן
+  txt = resp;
+  clr = resp === 'מגיע' ? 'green'
+       : resp === 'אולי' ? 'yellow'
+       : 'red';
+
+} else if (pending.has(phone)) {         // ③ ממתין
+  txt = 'ממתין לשליחה';
+  clr = 'grey';
+
+} else if (sent.has(phone)) {            // ④ נשלח
+  txt = 'נשלח';
+  clr = 'blue';
+
+} else {                                 // ⑤ ברירת-מחדל
+  txt = 'בהמתנה';
+  clr = 'grey';
+}
+
+      /* שולחן + סכום */
+      const tbl = findTableByPhone(phone, tables);
+      const sum = Number(String(c.newPrice || c.price || 0).replace(/[^\d]/g,''));
+
+      rows.push({
+        no: rows.length+1,
+        name: c.displayName,
+        phone,
+        table    : tbl?.name   || tbl?.number || '',
+        tableKey : tbl?.key    || '',
+        statusText: txt,
+        statusClr : clr,
+        amount: sum,
+      });
+    });
+
+    setGuestRows(rows);
+
+    /* דשבורד */
+    const cash   = rows.reduce((s,r)=>s+(r.amount||0),0);
+    const tablesN= Object.keys(tables).length;
+    Animated.timing(cashAnim ,{toValue:cash  ,duration:1500,useNativeDriver:false}).start();
+    Animated.timing(tableAnim,{toValue:tablesN,duration:1500,useNativeDriver:false}).start();
+  };
+
+  /* ----- contacts / tables / responses ----- */
+  const offC = onValue(cRef, s=>{ contacts = s.val()||{}; rebuild(); });
+  const offT = onValue(tRef, s=>{ tables   = s.val()||{}; rebuild(); });
+  const offR = onValue(rRef, s=>{ responses= s.val()||{}; rebuild(); });
+
+  /* ----- הודעות WhatsApp / SMS ----- */
+  const offM = onValue(mRef, snap => {
+    sent.clear(); pending.clear(); errors.clear();
+
+    if (snap.exists()) {
+      const sev = s => (
+        /^error|failed|undelivered/.test(s) ? 3 :
+        /^pend?ing|queued/.test(s)          ? 2 :
+        s==='sent'                          ? 1 : 0
+      );
+      const worst = {};          // phone ➜ { sev , st }
+
+      Object.values(snap.val()).forEach(msg => {
+        const p = phoneFromMsg(msg);
+        if (!p) return;
+        const st = String(msg.status||'').toLowerCase().trim();
+        if (!worst[p] || sev(st) > worst[p].sev) worst[p] = { sev:sev(st), st };
+      });
+
+      Object.entries(worst).forEach(([p,{st}])=>{
+        if (/^error|failed|undelivered/.test(st)) errors .add(p);
+        else if (/^pend?ing|queued/.test(st))     pending.add(p);
+        else if (st==='sent')                     sent   .add(p);
+      });
+    }
+
+    rebuild();
+  });
+
+  return () => { offC(); offT(); offR(); offM(); };
+}, [user,id,database]);
+LogBox.ignoreLogs([
+  'VirtualizedLists should never be nested',   // משתיק את האזהרה
+]);
+/* ---------- חיפוש + סינון ---------- */
+const getFilteredRows = () =>
+  guestRows
+    .filter(r =>
+      statusFilter==='all'   ? true :
+      statusFilter==='green' ? r.statusClr==='green'  :
+      statusFilter==='yellow'? r.statusClr==='yellow' :
+      statusFilter==='red'   ? r.statusClr==='red'    : true)
+    .filter(r =>
+      r.name .toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.phone.toLowerCase().includes(searchTerm.toLowerCase()) );
+
+/* מעדכן טקסט מוצג כאשר האנימציה משתנה */
+useEffect(()=>{
+  const l1 = cashAnim .addListener(({value})=> setDisplayCash  (Math.round(value)));
+  const l2 = tableAnim.addListener(({value})=> setDisplayTables(Math.round(value)));
+  return ()=>{cashAnim.removeListener(l1); tableAnim.removeListener(l2);};
+},[]);
+
+/* ====== UTILITIES ====== */
+const formatPhone = n =>
+  (n||'').replace(/[^0-9+]/g,'').replace(/^0/,'972').replace(/^\+972/,'972');
+
+const findTableByPhone = (phone, tbls) => {
+  for (const k in tbls){
+    const guests = tbls[k]?.guests || {};
+    for (const g of Object.values(guests)){
+      if (formatPhone(g.phoneNumbers) === phone)
+        return {name: tbls[k].displayName, number: tbls[k].numberTable};
+    }
+  }
+  return null;
+};
+/* ====== useEffect טעינת נתונים בזמן-אמת ====== */
+
+
+/* ====== EXPORT ↠ EXCEL ====== */
+const exportToExcel = async () => {
+  try{
+    const rows = guestRows.map(r=>({
+      '#':r.no, 'שם':r.name, 'טלפון':r.phone,
+      'שולחן':r.table,'סטטוס':r.statusText,'סכום':r.amount
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Guests');
+
+    if (Platform.OS === 'web'){
+      /* Web: Blob + הורדה */
+      const wbout = XLSX.write(wb,{type:'array',bookType:'xlsx'});
+      const blob  = new Blob([wbout],{
+        type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = URL.createObjectURL(blob);
+      const a   = document.createElement('a');
+      a.href = url; a.download = 'guests.xlsx'; a.click();
+      URL.revokeObjectURL(url);
+    }else{
+      /* Mobile: כותב קובץ ואז share */
+      const fileUri = FileSystem.cacheDirectory+`guests_${Date.now()}.xlsx`;
+      await FileSystem.writeAsStringAsync(
+        fileUri,
+        XLSX.write(wb,{type:'base64',bookType:'xlsx'}),
+        {encoding:FileSystem.EncodingType.Base64}
+      );
+      Sharing.isAvailableAsync()
+        ? await Sharing.shareAsync(fileUri)
+        : Alert.alert('שיתוף לא זמין במכשיר זה');
+    }
+  }catch(e){
+    console.log(e);
+    Alert.alert('שגיאה ב-Excel', 'לא ניתן ליצור קובץ.');
+  }
+};
+
+/* ====== PRINT ↠ HTML TABLE ====== */
+const printTable = async () => {
+  const rowsHtml = guestRows.map(r=>`
+    <tr>
+      <td>${r.no}</td><td>${r.name}</td><td>${r.phone}</td>
+      <td>${r.table}</td><td>${r.statusText}</td>
+      <td>${r.amount? r.amount.toLocaleString('he-IL'):''}</td>
+    </tr>`).join('');
+  const html = `
+    <html dir="rtl"><head><meta charset="utf-8">
+    <style>
+      body{font-family:Arial;margin:24px}
+      table{width:100%;border-collapse:collapse}
+      th,td{border:1px solid #666;padding:6px;text-align:center}
+      th{background:#eee}
+    </style></head><body>
+      <h2 style="text-align:center">רשימת המוזמנים</h2>
+      <table><thead>
+        <tr><th>#</th><th>שם</th><th>טלפון</th>
+            <th>שולחן</th><th>סטטוס</th><th>₪</th></tr>
+      </thead><tbody>${rowsHtml}</tbody></table>
+    </body></html>`;
+
+  if (Platform.OS === 'web'){
+    const win = window.open('','_blank');
+    win.document.write(html); win.document.close();
+    setTimeout(()=>win.print(),0);
+  }else{
+    await Print.printAsync({html});
+  }
+};
 
 
   return (
@@ -656,7 +914,7 @@ useEffect(() => {
         source={require('../assets/question-mark.png')}
         style={styles.background}
       />
-      <Text style={styles.imageText5}>טרם השיבו</Text>
+      <Text style={styles.imageText5}>בהמתנה</Text>
       <Text style={styles.imageText}>{eventDetails.no_answear || 0}</Text>
     </View>
 
@@ -743,6 +1001,113 @@ useEffect(() => {
     </View>
 
 
+{/* ========== טבלת מוזמנים ========== */}
+
+
+<View style={styles.guestsWrapper}>
+
+  {/* — כותרת — */}
+  <Text style={styles.guestsTitle}>רשימת המוזמנים</Text>
+
+  <View style={styles.searchRow}>
+  <TextInput
+    style={styles.searchInput}
+    placeholder="חיפוש לפי שם / טלפון"
+    placeholderTextColor="#888"
+    value={searchTerm}
+    onChangeText={setSearchTerm}
+  />
+
+  <View style={{ flexDirection: 'row' }}>
+    <TouchableOpacity
+      style={styles.filterBtn}
+      onPress={() => {
+        const order = ['all', 'green', 'yellow', 'red'];
+        setStatusFilter(order[(order.indexOf(statusFilter) + 1) % order.length]);
+      }}>
+      <Text style={styles.filterBtnTxt}>
+        {statusFilter === 'all' ? 'הכול' :
+          statusFilter === 'green' ? 'מגיע' :
+          statusFilter === 'yellow' ? 'אולי' : 'לא מגיע'}
+      </Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity onPress={exportToExcel} style={styles.actionBtn}>
+      <Ionicons name="download-outline" size={20} color="#fff" />
+    </TouchableOpacity>
+
+    <TouchableOpacity onPress={printTable} style={styles.actionBtn}>
+      <Ionicons name="print-outline" size={20} color="#fff" />
+    </TouchableOpacity>
+  </View>
+</View>
+
+
+  {/* — כותרת טבלה — */}
+  <View style={[styles.tableHeader, styles.rtlRow]}>
+    <Text style={[styles.th,{flex:0.7}]}>#</Text>
+    <Text style={[styles.th,{flex:2.2}]}>שם</Text>
+    <Text style={[styles.th,{flex:2.4}]}>טלפון</Text>
+    <Text style={[styles.th,{flex:1.8}]}>שולחן</Text>
+    <Text style={[styles.th,{flex:1.6}]}>סטטוס</Text>
+    <Text style={[styles.th,{flex:1}]}>₪</Text>
+  </View>
+
+<View style={{ maxHeight: 500 }}>
+  <FlatList
+    data={getFilteredRows()}
+    keyExtractor={item => item.phone}
+    showsVerticalScrollIndicator={false}
+    
+
+
+    renderItem={({item,index}) => (
+      <View style={[
+        styles.tr,
+        styles.rtlRow,
+        index % 2 === 0 && styles.trAlt,
+        item.statusClr === 'green' && styles.rowGreen,
+        item.statusClr === 'yellow' && styles.rowYellow,
+        item.statusClr === 'red' && styles.rowRed,
+        item.statusClr === 'orange' && styles.rowOrange,
+      ]}>
+        <Text style={[styles.td,{flex:0.7}]}>{item.no}</Text>
+        <Text style={[styles.td,{flex:2.2}]} numberOfLines={1}>{item.name}</Text>
+        <Text style={[styles.td, { flex: 2.4 }]}>{toLocalPhone(item.phone)}</Text>
+        <Text style={[styles.td,{flex:1.8}]}>{item.table}</Text>
+        <Text style={[styles.td,{flex:1.6}]}>{item.statusText}</Text>
+        <Text style={[styles.td,{flex:1}]}>
+          {item.amount ? item.amount.toLocaleString('he-IL') : '-'}
+        </Text>
+      </View>
+    )}
+
+    ListFooterComponent={<View style={{ paddingBottom: 30 }} />}
+  />
+</View>
+
+</View>
+
+
+
+{/* ===== DASHBOARD (round + animated) ===== */}
+<View style={styles.dashboard}>
+  {/* cash circle */}
+  <View style={[styles.dashCard, styles.shadow]}>
+    <Animated.Text style={styles.circleNumber}>
+      {displayCash.toLocaleString()} ₪
+    </Animated.Text>
+    <Text style={styles.circleLabel}>סה״כ כסף</Text>
+  </View>
+
+  {/* tables circle */}
+  <View style={[styles.dashCard, styles.shadow]}>
+    <Animated.Text style={styles.circleNumber}>
+      {displayTables}
+    </Animated.Text>
+    <Text style={styles.circleLabel}>שולחנות</Text>
+  </View>
+</View>
 
 
 
@@ -1388,6 +1753,130 @@ closeModalButtonText: {
   fontWeight: 'bold',
 },
 
+guestsTitle:{
+  fontSize:18,
+  fontWeight:'bold',
+  textAlign:'center',
+  marginBottom:8,
+  color:'#333',
+},
+filterPicker:{ alignSelf:'center', width:'60%', marginBottom:10 },
+tableHeader:{
+  flexDirection:'row',
+  borderBottomWidth:1,
+  borderColor:'#ccc',
+  paddingVertical:6,
+  backgroundColor:'#6c63ff20',
+},
+th:{ fontWeight:'bold', textAlign:'center', fontSize:14 },
+tr:{ flexDirection:'row', paddingVertical:4 },
+td:{ fontSize:13, textAlign:'center' },
+/* --- טבלת מוזמנים משופרת --- */
+guestsWrapper:{
+  width:'96%',
+  alignSelf:'center',
+  backgroundColor:'#fff',
+  marginTop:-80,
+  padding:12,
+  borderRadius:14,
+  shadowColor:'#000',
+  shadowOffset:{width:0,height:3},
+  shadowOpacity:0.15,
+  shadowRadius:5,
+  elevation:4,
+},
+guestsTitle:{fontSize:19,fontWeight:'bold',textAlign:'center',marginBottom:12,color:'#333'},
+
+searchRow: {
+  flexDirection: 'row-reverse',     // מימין לשמאל: חיפוש בצד ימין
+  alignItems: 'center',
+  justifyContent: 'space-between',  // פיזור בין החיפוש לשאר
+  marginBottom: 10,
+  width: '100%',
+  paddingHorizontal: 10
+},
+
+  searchInput:{
+  flex:1,
+    height: 38,
+    backgroundColor: '#f4f4f4',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    textAlign: 'right'    
+},
+filterBtn:{
+  marginLeft:8,
+  paddingHorizontal:14,
+  height:38,
+  backgroundColor:'#6c63ff',
+  borderRadius:20,
+  alignItems:'center',
+  justifyContent:'center',
+},
+filterBtnTxt:{color:'#fff',fontSize:13,fontWeight:'600'},
+
+/* כותרת + שורות */
+tableHeader:{flexDirection:'row',backgroundColor:'#6c63ff20',
+             borderRadius:10,marginBottom:4,paddingVertical:6},
+th:{fontWeight:'700',fontSize:13,color:'#333',textAlign:'center'},
+tr:{flexDirection:'row',paddingVertical:7,paddingHorizontal:3},
+trAlt:{backgroundColor:'#fafafa'},          /* zebra alternate */
+td:{fontSize:13,textAlign:'center'},
+
+/* צביעת סטטוס */
+rowGreen :{backgroundColor:'#d4edda'},
+rowYellow:{backgroundColor:'#fff3cd'},
+rowRed   :{backgroundColor:'#f8d7da'},
+rowOrange:{backgroundColor:'#a52a2a'},   // ← שגיאה בשליחה
+
+/* ===== Dashboard styles ===== */
+dashboard:{
+  flexDirection:'row',
+  justifyContent:'space-around',
+  alignItems:'center',
+  width:'94%',
+  alignSelf:'center',
+  marginTop:18,
+  marginBottom:6,
+},
+dashCard:{
+  flex:1,
+  marginHorizontal:6,
+  backgroundColor:'#6c63ff',
+  borderRadius:14,
+  paddingVertical:18,
+  paddingHorizontal:10,
+},
+circleNumber:{
+  color:'#fff',
+  fontSize:22,
+  fontWeight:'bold',
+  textAlign:'center',
+},
+circleLabel:{
+  color:'#fff',
+  fontSize:13,
+  textAlign:'center',
+  marginTop:4,
+},
+shadow:{
+  shadowColor:'#000',
+  shadowOffset:{width:0,height:3},
+  shadowOpacity:0.18,
+  shadowRadius:4,
+  elevation:4,
+},
+rtlRow:{ flexDirection:'row-reverse' },   // הופך את סדר העמודות
+actionBtn:{
+  marginLeft:8,
+  width:38,
+  height:38,
+  borderRadius:19,
+  backgroundColor:'#6c63ff',
+  alignItems:'center',
+  justifyContent:'center',
+},
 });
 
 

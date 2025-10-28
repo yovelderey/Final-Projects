@@ -34,3 +34,44 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+# Local Netlify folder
+.netlify
+node_modules/
+dist/
+android/**/build/
+ios/build/
+.expo/
+.expo-shared/
+web-build/
+build/
+
+# signing / secrets
+android/app/debug.keystore
+*.jks
+*.keystore*
+upload_certificate.pem
+
+# misc
+.env*
+*.log
+.DS_Store
+node_modules/
+dist/
+android/**/build/
+ios/build/
+.expo/
+.expo-shared/
+web-build/
+build/
+
+# signing / secrets
+android/app/debug.keystore
+*.jks
+*.keystore*
+upload_certificate.pem
+
+# misc
+.env*
+*.log
+.DS_Store

@@ -1,38 +1,22 @@
 import React, { useEffect, useRef,useState } from 'react';
-import { View, Text,Animated, ImageBackground,TextInput, TouchableOpacity,Modal, FlatList, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import 'firebase/database';
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/auth';
-import 'firebase/compat/firestore';
-import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set,push, remove,get,update, onValue } from 'firebase/database';
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { View,ScrollView, Text,Animated,Platform, ImageBackground,TextInput, TouchableOpacity,Modal,Dimensions, FlatList, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getStorage, ref as storageRef, listAll, getDownloadURL } from 'firebase/storage';
+import { ref, set, push, remove, get, update, onValue }
+        from 'firebase/database';
+import { onAuthStateChanged }    from 'firebase/auth';
+import { auth, database }        from '../firebase';          // ⬅️ ייבוא Auth & DB
 
-const firebaseConfig = {
-  apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
-  authDomain: "final-project-d6ce7.firebaseapp.com",
-  projectId: "final-project-d6ce7",
-  storageBucket: "final-project-d6ce7.appspot.com",
-  messagingSenderId: "1056060530572",
-  appId: "1:1056060530572:web:d08d859ca2d25c46d340a9",
-  measurementId: "G-LD61QH3VVP"
-};
 
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-}
+import { ref as storageRef, listAll, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase';   // נשאר כפי שהוא
 
 
 
 const RSVPs = (props) => {
-  const [message, setMessage] = useState();
-  const [phoneNumbers, setPhoneNumbers] = useState(['']);
+
   const [responses, setResponses] = useState([]);
-  const [yesCount, setYesCount] = useState(0);
-  const [noCount, setNoCount] = useState(0);
-  const [noResponseCount, setNoResponseCount] = useState(0);
+
   const id = props.route.params.id; // Accessing the passed id
   const [contacts, setContacts] = useState([]);
   const [user, setUser] = useState(null);
@@ -45,8 +29,14 @@ const RSVPs = (props) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [timer, setTimer] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
-  const auth = getAuth();
-  const database = getDatabase();
+  const guestRows = contacts || [];
+// ==== Quick-send state (הוסף למעלה) ====
+const [qsTarget, setQsTarget] = useState('all');              // 'all' | 'specific' | 'manual'
+const [quickSpecificIds, setQuickSpecificIds] = useState([]); // מזהי נמענים שסומנו
+const [quickManualList, setQuickManualList] = useState([]);   // [{displayName, phoneNumbers, recordID}]
+const [tempManualName, setTempManualName] = useState('');
+const [tempManualPhone, setTempManualPhone] = useState('');
+
   const [invitationImageUrl, setInvitationImageUrl] = useState(null);
   const [daysLeft, setDaysLeft] = useState(null);
   const [message2, setMessage2] = useState('אין כעת עדכונים'); // ברירת מחדל מעודכנת
@@ -54,6 +44,9 @@ const RSVPs = (props) => {
   const [tableData, setTableData] = useState([]);
   const [isHelpModalVisible, setHelpModalVisible] = useState(false); // הוספת state עבור המודל
   const [planType, setPlanType] = useState('');
+/* למעלה, עם שאר ה-useState-ים */
+const [unsentList,        setUnsentList]        = useState([]);   // מערך המוזמנים שלא נשלח אליהם
+const [showUnsentModal,   setShowUnsentModal]   = useState(false); // מודאל הרשימה
 
   const bounceAnim = useRef(new Animated.Value(1)).current;
   const [isScheduled, setIsScheduled] = useState(false); // מצב האם היומן נשמר
@@ -61,7 +54,13 @@ const RSVPs = (props) => {
   const [sentReminders, setSentReminders] = useState(0);
   const [sentWeddingDay, setSentWeddingDay] = useState(0);
   const [sentThankYou, setSentThankYou] = useState(0);
-  
+  const [showSendNowModal , setShowSendNowModal] = useState(false); // מציג את המודל
+  const [quickMsg, setQuickMsg] = useState('');     // טקסט חופשי
+  const [currentChannel, setCurrentChannel] = useState('');   // ← ערוץ נוכחי
+  const [isSchedLoading, setSchedLoading] = useState(false);
+  const normPhone = p => formatPhoneNumber(p || '');
+  const [showFailedModal, setShowFailedModal] = useState(false);
+  const [failedContacts, setFailedContacts] = useState([]);
 
   const [mehsa, setmehsa] = useState();
   const [error, setError] = useState([]);
@@ -73,9 +72,57 @@ const RSVPs = (props) => {
   const [maybe, setMaybe] = useState([]);
   const [showRepeatPrompt, setShowRepeatPrompt] = useState(false);
   const [hasPromptShown, setHasPromptShown] = useState(false);
+  const [targetGroup, setTargetGroup] = useState(null); // 'all' | 'confirmed'
+  const [rowToSend, setRowToSend] = useState(null);   // האובייקט של השורה שנבחרה
+  const [customMsg, setCustomMsg] = useState('');      // טקסט ערוך במודאל
+  const [qsAddLink , setQsAddLink ] = useState(true);   // לצרף קישור אישי?
+  const [qsAddImage, setQsAddImage] = useState(false);  // לצרף תמונה?
+  const [qsSendAll,      setQsSendAll]   = useState(true);   // שלח לכולם?
+  const [qsManualPhones, setQsManualPhones] = useState('');  // רשימת מספרים ידנית
+  const [qsManualName, setQsManualName] = useState('');  // ״שם נמען ידני״
+  const screenWidth = Dimensions.get('window').width;
+  const [failedList, setFailedList] = useState([]);   // ← יאגור כשלונות
+  const [progress, setProgress] = useState({
+    current: 0,       // כמה נשלחו בפועל
+    total:   0,       // סך-הכול מוזמנים
+    secondsLeft: 0,   // אומדן שניות
+    batch: 1,         // מספר ה-שרת הנוכחי (1-based)
+    totalBatches: 1,  // כמה “שרתים” בסך-הכול
+  });
+  const [isSending,   setIsSending]   = useState(false);
+  const [cancelSending, setCancelSending] = useState(false);
+  const delay = (ms) => new Promise(res => setTimeout(res, ms));
+// ===== חישובי מצב נוכחי =====
+const confirmedList = contacts.filter(
+  c => responses[c.recordID || c.id]?.response === 'מגיע'
+);
+const maybeList = contacts.filter(
+  c => responses[c.recordID || c.id]?.response === 'אולי'
+);
+const confirmedOrMaybeList = contacts.filter(
+  c => ['מגיע','אולי'].includes(responses[c.recordID || c.id]?.response)
+);
 
-  
+  /* ⬅️ הוסף כאן – REF במקום useState */
+  const cancelSendingRef = useRef(false);
+  const getInviteImg = async () => {
+    if (invitationImageUrl) return invitationImageUrl;   // כבר קיים
+    await new Promise(r => setTimeout(r, 100));          // micro-wait
+    if (invitationImageUrl) return invitationImageUrl;   // נטען בינתיים?
+    throw new Error('⚠️ לא נמצאה תמונת הזמנה');
+  };
+// בחירת נמענים ספציפית
+const [selectedSpecificIds, setSelectedSpecificIds] = useState([]); // ids של מוזמנים שנבחרו
+const [specificSearch, setSpecificSearch] = useState('');           // חיפוש בתוך הספציפיים
 
+// רשימת מוזמנים מסוננת לחיפוש “ספציפיים”
+const filteredSpecificContacts = contacts.filter(c => {
+  const q = specificSearch.trim().toLowerCase();
+  if (!q) return true;
+  const name = (c.displayName || '').toLowerCase();
+  const phone = (c.phoneNumbers || '').toLowerCase();
+  return name.includes(q) || phone.includes(q);
+});
 
   useEffect(() => {
 
@@ -145,6 +192,15 @@ const RSVPs = (props) => {
     }
   }, [user, id]);
 
+/* מוסיפים מחדש – פעם אחת בלבד */
+useEffect(() => {
+  if (!user) return;
+  const respRef = ref(database, `Events/${user.uid}/${id}/responses`);
+  const unsub = onValue(respRef, snap => {
+    setResponses(snap.exists() ? snap.val() : {});   // ← מעדכן state
+  });
+  return () => unsub();
+}, [user, id]);
 
   useEffect(() => {
     if (user) {
@@ -210,6 +266,87 @@ const RSVPs = (props) => {
     }
   }, [sentInvitations, sentReminders, sentWeddingDay, sentThankYou, user, id]);
   
+/**
+ * quickSendNow – שליחה מיידית (SMS / WhatsApp / שניהם)
+ * @param {'sms' | 'wa' | 'both'} channel
+ */
+const quickSendNow = async (channel) => {
+  // בדיקות בסיס
+  if (!quickMsg.trim()) { Alert.alert('⚠️', 'כתוב משהו…'); return; }
+  if (!user)            { Alert.alert('⚠️', 'לא מחובר');   return; }
+
+  let recipients = [];
+
+  if (qsTarget === 'all') {
+    recipients = contacts;
+
+  } else if (qsTarget === 'specific') {
+    // שליחה רק לאלו שסומנו ברשימת הספציפיים
+    const byId = new Map(
+      contacts.map(c => [ (c.recordID || c.id), c ])
+    );
+    recipients = quickSpecificIds
+      .map(cid => byId.get(cid))
+      .filter(Boolean);
+
+    if (recipients.length === 0) {
+      Alert.alert('שים לב', 'לא נבחרו נמענים ספציפיים');
+      return;
+    }
+
+  } else if (qsTarget === 'manual') {
+    // שליחה לרשימת הידניים שנוספו עם ➕
+    recipients = quickManualList;
+    if (recipients.length === 0) {
+      Alert.alert('שים לב', 'הוסף לפחות נמען אחד באמצעות כפתור ➕');
+      return;
+    }
+  }
+
+  // שליחה לפי ערוץ
+if (channel === 'sms'  || channel === 'both') {
+  await sendBatchedMessages({ recipients, body: quickMsg, smsFlag: 'yes', actionType: 'quick' });
+}
+if (channel === 'wa'   || channel === 'both') {
+  await sendBatchedMessages({ recipients, body: quickMsg, smsFlag: 'no',  actionType: 'quick' });
+}
+
+
+  Alert.alert('✔︎', `ההודעות נשלחו ל-${recipients.length} נמענים`);
+  setShowSendNowModal(false);
+
+  // איפוס בחירה ספציפית (לא חובה)
+  setQuickSpecificIds([]);
+  setQsTarget('all');
+};
+
+
+/* ---------- מאחזר את רשימת הנמענים לפי targetGroup ---------- */
+const getRecipients = () => {
+  switch (targetGroup) {
+    case 'confirmed':
+      return contacts.filter(c => responses[c.recordID || c.id]?.response === 'מגיע');
+
+    case 'maybe':
+      return contacts.filter(c => responses[c.recordID || c.id]?.response === 'אולי');
+
+    case 'confirmedOrMaybe':
+      return contacts.filter(c => ['מגיע','אולי'].includes(responses[c.recordID || c.id]?.response));
+
+    case 'failed':
+      return contacts.filter(c => failedContacts.includes(formatPhoneNumber(c.phoneNumbers)));
+
+    // ⬅️ חדש: רק הנמענים שסימנת ידנית
+    case 'specific':
+      return contacts.filter(c => selectedSpecificIds.includes(c.recordID || c.id));
+
+    default:
+      return contacts;
+  }
+};
+
+
+
   useEffect(() => {
     if (user) {
       const messagesRef = ref(database, `whatsapp/${user.uid}/${id}`);
@@ -323,6 +460,80 @@ const RSVPs = (props) => {
     ],
   };
 
+/**
+ * מאתר את כל אנשי-הקשר שלא קיבלו הודעה ושומר אותם במשתנה state.
+ * @param {boolean} silent ­– אם true ⇢ יעדכן את failedContacts בלי לפתוח את המודל.
+ */
+const findFailedContacts = async (silent = false) => {
+  if (!user || contacts.length === 0) return;     // אין נתונים? יוצאים.
+
+  try {
+    /* 1. שולף את כל ההודעות שנשלחו מה-Firebase ושומר את המספרים ב-Set */
+    const msgRef   = ref(database, `whatsapp/${user.uid}/${id}`);
+    const snapshot = await get(msgRef);
+
+    const sentPhones = new Set();
+ if (snapshot.exists()) {
+   Object.values(snapshot.val()).forEach(msg => {
+     if (msg.status === 'sent' && msg.formattedContacts) {
+       sentPhones.add(formatPhoneNumber(msg.formattedContacts));
+     }
+   });
+ }
+
+    /* 2. יוצר מערך של כל הטלפונים (מנורמלים) מתוך contacts  */
+    const allPhones = contacts.map(c =>
+      formatPhoneNumber(typeof c === 'string' ? c : c.phoneNumbers)
+    );
+
+    /* 3. מסנן – רק מספרים שלא הופיעו ב-sentPhones */
+    const failed = allPhones.filter(p => p && !sentPhones.has(p));
+
+    /* 4. שומר ב-state */
+    setFailedContacts(failed);
+
+    /* 5. פותח את מודל “לא נשלח” אלא אם ביקשו silent */
+    if (!silent) setShowFailedModal(true);
+
+  } catch (err) {
+    console.error('findFailedContacts error:', err);
+    Alert.alert('שגיאה', 'לא ניתן היה לאחזר את רשימת הכישלונות');
+  }
+};
+
+
+
+
+
+const handleRetryFailed = async () => {
+  if (!user || failedContacts.length === 0 || !eventDetails) return;
+
+  const timestamp = new Date().toISOString();
+
+  for (let i = 0; i < failedContacts.length; i++) {
+    const phone = failedContacts[i];
+    try {
+      const newMsgRef = push(ref(database, `Events/${user.uid}/${id}/msg`));
+      await set(newMsgRef, {
+        currentUserUid: user.uid,
+        eventUserId: id,
+        formattedContacts: phone,
+        imageUrl: eventDetails.image || '',
+        message: eventDetails.message,
+        scheduleMessage: timestamp,
+        sms: "yes",
+        status: "pending",
+      });
+      console.log(`נשלח שוב ל: ${phone}`);
+    } catch (error) {
+      console.error(`שגיאה בשליחה חוזרת ל: ${phone}`, error);
+    }
+  }
+
+  Alert.alert("השליחה בוצעה מחדש למי שלא קיבל ✅");
+  setShowFailedModal(false);
+};
+
   useEffect(() => {
     if (user) {
       const planRef = ref(database, `Events/${user.uid}/${id}/plan`);
@@ -341,7 +552,6 @@ const RSVPs = (props) => {
 
   useEffect(() => {
     const fetchMessage = async () => {
-      const database = getDatabase();
       const messageRef = ref(database, `notification/mesageRSVPs`); // הנתיב המעודכן
 
       try {
@@ -416,6 +626,82 @@ const RSVPs = (props) => {
   
     return phoneNumber;
   }
+/** מחפש את כל אנשי-הקשר שלא נשלח אליהם *אף* הודעה */
+const findUnsentContacts = async () => {
+  if (!user || !contacts.length) return;
+
+  /* 1. כל המספרים שהופיעו אי-פעם בטבלת whatsapp */
+  const msgsSnap = await get(
+    ref(database, `whatsapp/${user.uid}/${id}`)
+  );
+
+  const sentPhones = new Set();
+  if (msgsSnap.exists()) {
+    Object.values(msgsSnap.val()).forEach(m => {
+      if (m.formattedContacts)
+        sentPhones.add(formatPhoneNumber(m.formattedContacts));
+    });
+  }
+
+  /* 2. סינון contacts – רק מי שלא מופיע ב-sentPhones */
+  const list = contacts.filter(c =>
+    !sentPhones.has(formatPhoneNumber(c.phoneNumbers))
+  );
+
+  setUnsentList(list);          // לשמירה ב-state
+  setShowUnsentModal(true);     // פתיחת המודאל
+};
+
+  
+/* ========= bulkSend – שליחה מיידית (SMS / WhatsApp) ========= */
+const bulkSend = async ({ body, smsFlag }) => {
+  if (!user || !contacts.length) return;
+
+  /* --- 1. נתונים קבועים שצריך רק פעם אחת --- */
+  const baseRef      = ref(database, `whatsapp/${user.uid}/${id}`);
+  const baseUrl      = "https://final-project-d6ce7.web.app";
+  const eventNameSnap = await get(ref(database, `Events/${user.uid}/${id}/eventName`));
+  const eventName     = encodeURIComponent(eventNameSnap.exists() ? eventNameSnap.val() : "אירוע");
+
+  /* --- 2. עוברים על כל איש-קשר ושולחים --- */
+  contacts
+    .map(c => ({                               // נחסוך חיפושים כפולים
+      phone : formatPhoneNumber(c.phoneNumbers),
+      name  : c.displayName || "שם לא ידוע",
+      id    : c.recordID   || Math.random().toString(36).slice(2)
+    }))
+    .filter(c => c.phone.trim() !== "")
+    .forEach(async ({ phone, name, id: guestId }) => {
+
+      /* 🔗 בונים קישור אישי */
+      const guestLink = `${baseUrl}?uid=${user.uid}&eventId=${eventName}&guestId=${guestId}`;
+
+      /* 📨 ההודעה הסופית */
+      const fullMsg = `${body}\n\nלאישור ההגעה: ${guestLink}`;
+
+      const msgData = {
+        currentUserUid  : user.uid,
+        eventUserId     : id,
+        formattedContacts: phone,
+        name,
+        imageUrl        : await getInviteImg(),
+        message         : fullMsg,
+        scheduleMessage : "2025-01-01T00:00",
+        serverId        : "",
+        sms             : smsFlag,          // "yes" או "no"
+        status          : "pending",
+        timestamp       : new Date().toISOString(),
+      };
+
+      await set(push(baseRef), msgData);
+    });
+
+  /* אפשרי: הודעה וסגירת המודאל */
+  Alert.alert("נשלח ✔︎", "ההודעות נשלחו עם הקישור האישי");
+  setRowToSend(null);          // יסגור את המודאל
+};
+
+
   const startAnimation = () => {
     bounceAnim.setValue(1); // מאפס את האנימציה
     Animated.loop(
@@ -451,7 +737,6 @@ const RSVPs = (props) => {
 
   const fetchInvitationImage = async () => {
     try {
-      const storage = getStorage();
       const folderPath = `users/${user.uid}/${id}/invitation/`;
       const listRef = storageRef(storage, folderPath);
   
@@ -480,259 +765,6 @@ const RSVPs = (props) => {
     }
   }, [user, id]); // הטעינה מתבצעת כאשר `user` או `id` משתנים
   
-
-  const sendMessageToRecipientssms = async () => {
-    try {
-        const mainSmsRef = ref(database, `Events/${user.uid}/${id}/main_sms`);
-        const mainSmsSnapshot = await get(mainSmsRef);
-
-        if (!mainSmsSnapshot.exists()) {
-            Alert.alert("Error", "המכסה לא קיימת במערכת.");
-            setModalVisible(false);
-            return;
-        }
-
-        const initialMainSms = mainSmsSnapshot.val(); // ✅ שמירת ערך המכסה ההתחלתי
-        const currentUserUid = user?.uid;
-        if (!currentUserUid) throw new Error("User not authenticated");
-
-        // שליפת הודעת ברירת מחדל מפיירבייס
-        const messageRef = ref(database, `Events/${currentUserUid}/${id}/message`);
-        const messageSnapshot = await get(messageRef);
-        const messageFromFirebase = messageSnapshot.val() || 'שלום! אנא אשר את הגעתך לאירוע שלנו בקישור הבא:';
-
-        // שליפת שם האירוע מפיירבייס
-        const eventRef = ref(database, `Events/${user.uid}/${id}/eventName`);
-        const eventSnapshot = await get(eventRef);
-        const eventName = eventSnapshot.exists() ? eventSnapshot.val() : "אירוע";
-
-        // הפקת מספרי הטלפון מאנשי הקשר
-        const recipients = contacts
-            .map((contact) => contact.phoneNumbers)
-            .filter((num) => num.trim() !== '');
-        const formattedContacts = recipients.map(formatPhoneNumber);
-
-        // כתובת בסיס של האתר שלך
-        const baseUrl = "https://final-project-d6ce7.web.app";
-
-        // נתיב ב-Firebase
-        const messageWhatsAppRef = ref(database, `whatsapp/${currentUserUid}/${id}/`);
-
-        // שליפת אנשי קשר
-        const contactsRef = ref(database, `Events/${user.uid}/${id}/contacts`);
-        const contactsSnapshot = await get(contactsRef);
-
-        if (!contactsSnapshot.exists()) {
-            console.error('❌ שגיאה: אנשי הקשר לא נמצאו ב-Firebase.');
-            Alert.alert('Error', 'לא ניתן לשלוף את אנשי הקשר.');
-            return;
-        }
-
-        const contactsData = contactsSnapshot.val() || {};
-
-        // 🔹 ספירת הודעות `sent` קיימות
-        const existingMessagesSnapshot = await get(messageWhatsAppRef);
-        let sentMessagesCount = 0;
-
-        if (existingMessagesSnapshot.exists()) {
-            const messages = existingMessagesSnapshot.val();
-            Object.values(messages).forEach((msg) => {
-                if (msg.status === "sent") {
-                    sentMessagesCount++;
-                }
-            });
-        }
-
-        // 🔹 שליחת הודעות חדשות עם קישור מותאם אישית
-        let newSentMessages = 0;
-        for (const contact of formattedContacts) {
-            const contactData = Object.values(contactsData).find(
-                (c) => formatPhoneNumber(c.phoneNumbers) === contact
-            );
-
-            const contactName = contactData?.displayName || "שם לא ידוע";
-            const guestId = contactData?.recordID || Math.random().toString(36).substring(7);
-
-            // קידוד שם האירוע כך שלא יכיל תווים בעייתיים
-            const encodedEventName = encodeURIComponent(eventName);
-
-            // יצירת קישור מותאם אישית למוזמן
-            const guestLink = `${baseUrl}?eventId=${encodedEventName}&guestId=${guestId}`;
-
-            // יצירת ההודעה עם הקישור
-            const fullMessage = `${messageFromFirebase} \n\nלאישור ההגעה: ${guestLink}`;
-
-            // שליחת הנתונים לפיירבייס
-            const newMessageRef = push(messageWhatsAppRef);
-            const messageData = {
-                currentUserUid,
-                eventUserId: id,
-                formattedContacts: contact,
-                name: contactName,
-                imageUrl: invitationImageUrl || "",
-                message: fullMessage,
-                scheduleMessage: "2025-01-01T00:00",
-                serverId: '',
-                sms: "yes",
-                status: 'pending',
-                timestamp: new Date().toISOString(),
-            };
-
-            await set(newMessageRef, messageData);
-
-            // ✅ אם ההודעה מסומנת כ-"sent", נספור אותה
-            if (messageData.status === "sent") {
-                newSentMessages++;
-            }
-        }
-
-        // ✅ חישוב `main_sms` שיוצג **ללא עדכון בפיירבייס**
-        const displayedMainSms = Math.max(0, initialMainSms - (sentMessagesCount + newSentMessages));
-
-        // ✅ עדכון `sent_msg` בפיירבייס
-        if (newSentMessages > 0) {
-            const sentMsgRef = ref(database, `Events/${user.uid}/${id}/sent_msg`);
-            await set(sentMsgRef, sentMessagesCount + newSentMessages);
-
-            console.log(`✔️ עדכון Firebase: sent_msg = ${sentMessagesCount + newSentMessages}`);
-        }
-        const imageUrlss = ref(database, `Events/${user.uid}/${id}/imageUrl/`);
-        set(imageUrlss, invitationImageUrl || "");
-
-        Alert.alert('הודעה נשלחה בהצלחה', `ההזמנות נשלחו עם קישורים אישיים למוזמנים.\n✅ מכסה נותרת: ${displayedMainSms}`);
-    } catch (error) {
-        console.error('❌ שגיאה:', error);
-        Alert.alert('Error', 'Something went wrong while sending messages.');
-    } finally {
-        setModalVisible(false);
-    }
-};
-
-  const sendMessageToRecipients = async () => {
-    try {
-        const mainSmsRef = ref(database, `Events/${user.uid}/${id}/main_sms`);
-        const mainSmsSnapshot = await get(mainSmsRef);
-
-        if (!mainSmsSnapshot.exists()) {
-            Alert.alert("Error", "המכסה לא קיימת במערכת.");
-            setModalVisible(false);
-            return;
-        }
-
-        const initialMainSms = mainSmsSnapshot.val(); // ✅ שמירת ערך המכסה ההתחלתי
-        const currentUserUid = user?.uid;
-        if (!currentUserUid) throw new Error("User not authenticated");
-
-        // שליפת הודעת ברירת מחדל מפיירבייס
-        const messageRef = ref(database, `Events/${currentUserUid}/${id}/message`);
-        const messageSnapshot = await get(messageRef);
-        const messageFromFirebase = messageSnapshot.val() || 'שלום! אנא אשר את הגעתך לאירוע שלנו בקישור הבא:';
-
-        // שליפת שם האירוע מפיירבייס
-        const eventRef = ref(database, `Events/${user.uid}/${id}/eventName`);
-        const eventSnapshot = await get(eventRef);
-        const eventName = eventSnapshot.exists() ? eventSnapshot.val() : "אירוע";
-
-        // הפקת מספרי הטלפון מאנשי הקשר
-        const recipients = contacts
-            .map((contact) => contact.phoneNumbers)
-            .filter((num) => num.trim() !== '');
-        const formattedContacts = recipients.map(formatPhoneNumber);
-
-        // כתובת בסיס של האתר שלך
-        const baseUrl = "https://final-project-d6ce7.web.app";
-
-        // נתיב ב-Firebase
-        const messageWhatsAppRef = ref(database, `whatsapp/${currentUserUid}/${id}/`);
-
-        // שליפת אנשי קשר
-        const contactsRef = ref(database, `Events/${user.uid}/${id}/contacts`);
-        const contactsSnapshot = await get(contactsRef);
-
-        if (!contactsSnapshot.exists()) {
-            console.error('❌ שגיאה: אנשי הקשר לא נמצאו ב-Firebase.');
-            Alert.alert('Error', 'לא ניתן לשלוף את אנשי הקשר.');
-            return;
-        }
-
-        const contactsData = contactsSnapshot.val() || {};
-
-        // 🔹 ספירת הודעות `sent` קיימות
-        const existingMessagesSnapshot = await get(messageWhatsAppRef);
-        let sentMessagesCount = 0;
-
-        if (existingMessagesSnapshot.exists()) {
-            const messages = existingMessagesSnapshot.val();
-            Object.values(messages).forEach((msg) => {
-                if (msg.status === "sent") {
-                    sentMessagesCount++;
-                }
-            });
-        }
-
-        // 🔹 שליחת הודעות חדשות עם קישור מותאם אישית
-        let newSentMessages = 0;
-        for (const contact of formattedContacts) {
-            const contactData = Object.values(contactsData).find(
-                (c) => formatPhoneNumber(c.phoneNumbers) === contact
-            );
-
-            const contactName = contactData?.displayName || "שם לא ידוע";
-            const guestId = contactData?.recordID || Math.random().toString(36).substring(7);
-
-            // קידוד שם האירוע כך שלא יכיל תווים בעייתיים
-            const encodedEventName = encodeURIComponent(eventName);
-
-            // יצירת קישור מותאם אישית למוזמן
-            const guestLink = `${baseUrl}?eventId=${encodedEventName}&guestId=${guestId}`;
-
-            // יצירת ההודעה עם הקישור
-            const fullMessage = `${messageFromFirebase} \n\nלאישור ההגעה: ${guestLink}`;
-
-            // שליחת הנתונים לפיירבייס
-            const newMessageRef = push(messageWhatsAppRef);
-            const messageData = {
-                currentUserUid,
-                eventUserId: id,
-                formattedContacts: contact,
-                name: contactName,
-                imageUrl: invitationImageUrl || "",
-                message: fullMessage,
-                scheduleMessage: "2025-01-01T00:00",
-                serverId: '',
-                status: 'pending',
-                timestamp: new Date().toISOString(),
-            };
-
-            await set(newMessageRef, messageData);
-
-            // ✅ אם ההודעה מסומנת כ-"sent", נספור אותה
-            if (messageData.status === "sent") {
-                newSentMessages++;
-            }
-        }
-
-        // ✅ חישוב `main_sms` שיוצג **ללא עדכון בפיירבייס**
-        const displayedMainSms = Math.max(0, initialMainSms - (sentMessagesCount + newSentMessages));
-
-        // ✅ עדכון `sent_msg` בפיירבייס
-        if (newSentMessages > 0) {
-            const sentMsgRef = ref(database, `Events/${user.uid}/${id}/sent_msg`);
-            await set(sentMsgRef, sentMessagesCount + newSentMessages);
-
-            console.log(`✔️ עדכון Firebase: sent_msg = ${sentMessagesCount + newSentMessages}`);
-        }
-        const imageUrlss = ref(database, `Events/${user.uid}/${id}/imageUrl/`);
-        set(imageUrlss, invitationImageUrl || "");
-
-        Alert.alert('הודעה נשלחה בהצלחה', `ההזמנות נשלחו עם קישורים אישיים למוזמנים.\n✅ מכסה נותרת: ${displayedMainSms}`);
-    } catch (error) {
-        console.error('❌ שגיאה:', error);
-        Alert.alert('Error', 'Something went wrong while sending messages.');
-    } finally {
-        setModalVisible(false);
-    }
-};
 
 useEffect(() => {
   if (user) {
@@ -796,153 +828,167 @@ useEffect(() => {
     }
   };
   
-  const scheduleMessages = async () => {
-    if (!user || !id || !contacts.length) return;
-  
-    const updates = {};
-    const currentUserUid = user?.uid;
-    const formattedContacts = contacts.map(contact => formatPhoneNumber(contact.phoneNumbers));
-    const timestampNow = new Date().toISOString();
-    const baseUrl = "https://final-project-d6ce7.web.app";
-  
-    const [eventSnap, messageSnap, responsesSnap] = await Promise.all([
+  /**
+ * מתזמן את כל ההודעות לפי החבילה – כולל מודאל-התקדמות, שליחה בבּאצ’ים וביטול ריצה.
+ * - שולח בקבוצות של ‎45‎ נמענים עם דיליי ‎5s‎ בין קבוצה לקבוצה
+ * - מעדכן Progress-Bar בזמן אמת
+ * - מכבד cancelSendingRef.current  (כפתור “בטל שליחה”)
+ */
+const scheduleMessages = async () => {
+  /* 0. בדיקות בסיס */
+  if (!user || !id || !contacts.length) return;
+
+  /* 1. איפוס מודאל-התקדמות */
+  const batchSize     = 30;
+  const delayPerBatch = 5000;
+  cancelSendingRef.current = false;
+  setIsSending(true);
+  setProgress({
+    current     : 0,
+    total       : contacts.length,
+    secondsLeft : Math.ceil(contacts.length / batchSize) * (delayPerBatch / 1000),
+    batch       : 1,
+    totalBatches: Math.ceil(contacts.length / batchSize),
+  });
+  setModalVisible(false);            // סוגר את חלון-היומן
+
+  try {
+    /* 2. נתונים קבועים */
+    const [
+      eventSnap,  msgSnap,   respSnap,
+      invSnap,    remSnap,   wedSnap,   thxSnap
+    ] = await Promise.all([
       get(ref(database, `Events/${user.uid}/${id}/eventName`)),
-      get(ref(database, `Events/${currentUserUid}/${id}/message`)),
+      get(ref(database, `Events/${user.uid}/${id}/message`)),
       get(ref(database, `Events/${user.uid}/${id}/responses`)),
-    ]);
-  
-    const eventName = eventSnap.exists() ? eventSnap.val() : "אירוע";
-    const messageFromFirebase = messageSnap.val() || "שלום! אנא אשר את הגעתך לאירוע שלנו בקישור הבא:";
-    const responsesData = responsesSnap.exists() ? responsesSnap.val() : {};
-  
-    const [invitationSnap, reminderSnap, weddingSnap, thankYouSnap] = await Promise.all([
       get(ref(database, `Events/${user.uid}/${id}/Table_RSVPs/0/col1`)),
       get(ref(database, `Events/${user.uid}/${id}/Table_RSVPs/1/col1`)),
       get(ref(database, `Events/${user.uid}/${id}/Table_RSVPs/2/col1`)),
       get(ref(database, `Events/${user.uid}/${id}/Table_RSVPs/3/col1`)),
     ]);
-  
-    let invitationDate = invitationSnap.val();
-    let reminderDate = reminderSnap.val();
-    let weddingDate = weddingSnap.val();
-    let thankYouDate = thankYouSnap.val();
-  
-    if (!thankYouDate && weddingDate) {
-      const nextDay = new Date(weddingDate);
-      nextDay.setDate(nextDay.getDate() + 1);
-      thankYouDate = nextDay.toISOString().split('T')[0];
-    }
-  
-    formattedContacts.forEach((contact, idx) => {
-      const messageIdBase = `msg_${idx}`;
-      const contactData = contacts.find(c => formatPhoneNumber(c.phoneNumbers) === contact);
-      const contactName = contactData?.displayName || "שם לא ידוע";
-      const guestId = contactData?.recordID || Math.random().toString(36).substring(7);
-      const encodedEventName = encodeURIComponent(eventName);
-      const guestLink = `${baseUrl}?eventId=${encodedEventName}&guestId=${guestId}`;
-      const fullMessage = `${messageFromFirebase} \n\nלאישור ההגעה: ${guestLink}`;
-      const guestResponse = Object.values(responsesData).find(r => formatPhoneNumber(r.phoneNumbers) === contact)?.response || "";
-  
-      // תמיד שולח הודעת הזמנה רגילה עם SMS
-      if (["plus", "basic", "premium"].includes(planType)) {
 
-      updates[`${messageIdBase}_1`] = {
-        currentUserUid,
-        eventUserId: id,
-        formattedContacts: contact,
-        name: contactName,
-        phoneNumber: contact,
-        imageUrl: invitationImageUrl || "",
-        message: fullMessage,
-        scheduleMessage: setSpecificTime(invitationDate, eventDetails.message_date_hour?.time, 2),
-        serverId: "",
-        sms: "yes",
-        status: "pending",
-        timestamp: timestampNow,
-      };
-    }
-    if (["digital"].includes(planType)) {
+    const eventName   = eventSnap.exists() ? eventSnap.val() : "אירוע";
+    const baseUrl     = "https://final-project-d6ce7.web.app";
+    const baseRef     = ref(database, `whatsapp/${user.uid}/${id}`);
+    const defaultMsg  = msgSnap.val() || "שלום! אנא אשר את הגעתך לאירוע שלנו בקישור הבא:";
+    const responses   = respSnap.exists() ? respSnap.val() : {};
 
-      updates[`${messageIdBase}_1`] = {
-        currentUserUid,
-        eventUserId: id,
-        formattedContacts: contact,
-        name: contactName,
-        phoneNumber: contact,
-        imageUrl: invitationImageUrl || "",
-        message: fullMessage,
-        scheduleMessage: setSpecificTime(invitationDate, eventDetails.message_date_hour?.time, 2),
-        serverId: "",
-        sms: "no",
-        status: "pending",
-        timestamp: timestampNow,
-      };
+    const dates = {
+      invite : invSnap.val(),
+      remind : remSnap.val(),
+      wedding: wedSnap.val(),
+      thanks : (() => {              // יום אחרי החתונה אם לא קיים
+        const tmp = thxSnap.val();
+        if (tmp) return tmp;
+        if (!wedSnap.val()) return null;
+        const d = new Date(wedSnap.val()); d.setDate(d.getDate() + 1);
+        return d.toISOString().split("T")[0];
+      })(),
+    };
+
+    /* 3. לולאה בבּאצ’ים */
+    const formatted = contacts.map(c => ({
+      raw     : c,
+      phone   : formatPhoneNumber(c.phoneNumbers),
+      name    : c.displayName || "שם לא ידוע",
+      guestId : c.recordID || Math.random().toString(36).slice(7)
+    })).filter(c => c.phone);
+
+    for (let start = 0; start < formatted.length; start += batchSize) {
+      if (cancelSendingRef.current) break;
+
+      const slice      = formatted.slice(start, start + batchSize);
+      const batchUpds  = {};
+      const tsNow      = new Date().toISOString();
+      const encodedEvt = encodeURIComponent(eventName);
+
+      slice.forEach((c, idx) => {
+        const idxGlobal = start + idx;
+        const idBase    = `msg_${idxGlobal}`;
+        const link      = `${baseUrl}?uid=${user.uid}&eventId=${encodedEvt}&guestId=${c.guestId}`;
+        const fullMsg   = `${defaultMsg}\n\nלאישור ההגעה: ${link}`;
+
+        /* ============ שלב 1 – הזמנה ============ */
+        const inviteObj = {
+          currentUserUid : user.uid,
+          eventUserId    : id,
+          formattedContacts: c.phone,
+          name           : c.name,
+          phoneNumber    : c.phone,
+          imageUrl       : invitationImageUrl || "",
+          message        : fullMsg,
+          scheduleMessage: setSpecificTime(dates.invite, eventDetails.message_date_hour?.time, 2),
+          serverId       : "",
+          status         : "pending",
+          timestamp      : tsNow,
+        };
+        if (["plus","basic","premium"].includes(planType))   inviteObj.sms = "yes";
+        if (["digital"].includes(planType))                  inviteObj.sms = "no";
+        batchUpds[`${idBase}_1`] = inviteObj;
+
+        /* ============ שלב 2 – תזכורת ============ */
+        if (["plus","digital","premium"].includes(planType)) {
+          batchUpds[`${idBase}_2`] = {
+            ...inviteObj,
+            imageUrl       : "",
+            message        : "היי, זוהי תזכורת לאירוע הקרוב שלכם. נשמח לראותכם!",
+            scheduleMessage: setSpecificTime(dates.remind,"15:00"),
+            sms            : "no",
+          };
+        }
+
+        /* ============ שלב 3 – יום החתונה ============ */
+        if (["digital","premium"].includes(planType)) {
+          batchUpds[`${idBase}_3`] = {
+            ...inviteObj,
+            imageUrl       : "",
+            message : buildWeddingMsg(c.phone),   
+            scheduleMessage: setSpecificTime(dates.wedding,"14:00"),
+            sms            : "no",
+          };
+        }
+
+        /* ============ שלב 4 – תודה ============ */
+        if (["plus","digital","premium"].includes(planType)) {
+          batchUpds[`${idBase}_4`] = {
+            ...inviteObj,
+            imageUrl       : "",
+            message        : "משפחה וחברים יקרים, מודים לכם מקרב לב על השתתפותכם באירוע. מקווים שנהניתם ושניפגש רק בשמחות! אוהבים המון ❤",
+            scheduleMessage: setSpecificTime(dates.thanks,"12:00"),
+            sms            : "no",
+          };
+        }
+      });
+
+      await update(baseRef, batchUpds);     // כתיבה ב-Firebase
+
+      /* 4. עדכון progress */
+      setProgress(p => ({
+        ...p,
+        current    : Math.min(p.total, p.current + slice.length),
+        batch      : p.batch + 1,
+        secondsLeft: Math.max(0, p.secondsLeft - delayPerBatch / 1000),
+      }));
+
+      if (start + batchSize < formatted.length)
+        await delay(delayPerBatch);
     }
 
-  
-      // שליחת שלבים נוספים בהתאם לתוכנית
-      if (["plus", "digital", "premium"].includes(planType)) {
-        updates[`${messageIdBase}_2`] = {
-          currentUserUid,
-          eventUserId: id,
-          formattedContacts: contact,
-          name: contactName,
-          phoneNumber: contact,
-          imageUrl: "",
-          message: "היי, זוהי תזכורת לאירוע הקרוב שלכם. נשמח לראותכם!",
-          scheduleMessage: setSpecificTime(reminderDate, "15:00"),
-          serverId: "",
-          status: "pending",
-          timestamp: timestampNow,
-        };
-      }
-  
-      if (["digital", "premium"].includes(planType)) {
-        updates[`${messageIdBase}_3`] = {
-          currentUserUid,
-          eventUserId: id,
-          formattedContacts: contact,
-          name: contactName,
-          phoneNumber: contact,
-          imageUrl: "",
-          message: "היום הגדול הגיע! נתראה באירוע.",
-          scheduleMessage: setSpecificTime(weddingDate, "14:00"),
-          serverId: "",
-          status: "pending",
-          timestamp: timestampNow,
-        };
-      }
-  
-      if (["plus","digital", "premium"].includes(planType)) {
-        updates[`${messageIdBase}_4`] = {
-          currentUserUid,
-          eventUserId: id,
-          formattedContacts: contact,
-          name: contactName,
-          phoneNumber: contact,
-          imageUrl: "",
-          message: "תודה רבה על השתתפותכם באירוע שלנו!",
-          scheduleMessage: setSpecificTime(thankYouDate, "12:00"),
-          serverId: "",
-          status: "pending",
-          timestamp: timestampNow,
-        };
-      }
-      
-    });
-  
-    const whatsappRef = ref(database, `whatsapp/${user.uid}/${id}`);
-    await update(whatsappRef, updates);
-    setModalVisible(false);
+    /* 5. השלמה */
+    await set(ref(database, `Events/${user.uid}/${id}/imageUrl/`),
+              invitationImageUrl || "");
     setIsScheduled(true);
     stopBounceAnimation();
-  
-    const imageUrls = ref(database, `Events/${user.uid}/${id}/imageUrl/`);
-    set(imageUrls, invitationImageUrl || "");
-  
-    Alert.alert("היומן נשמר בהצלחה", "ההודעות תוזמנו בהתאם לתוכנית.");
-  };
-  
+    Alert.alert("✔︎ היומן נשמר", "ההודעות הוזנו בהצלחה למערכת.");
+
+  } catch (err) {
+    console.error("scheduleMessages error:", err);
+    Alert.alert("שגיאה", "לא ניתן היה לשמור את היומן");
+  } finally {
+    setIsSending(false);        // סוגר את מודאל-ההתקדמות
+  }
+};
+
 
   const scheduleRepeatMessages = async () => {
     if (!user || !id || !contacts.length) {
@@ -976,14 +1022,16 @@ useEffect(() => {
     // תגובות משתמשים
     const responsesSnapshot = await get(ref(database, `Events/${user.uid}/${id}/responses`));
     const responses = responsesSnapshot.exists() ? responsesSnapshot.val() : {};
-  
+
+
     formattedContacts.forEach((contact, index) => {
       const messageIdBase = `msg_${index}`;
       const contactData = contacts.find(c => formatPhoneNumber(c.phoneNumbers) === contact);
       const contactName = contactData?.displayName || "שם לא ידוע";
       const guestId = contactData?.recordID || Math.random().toString(36).substring(7);
       const encodedEventName = encodeURIComponent(eventName);
-      const guestLink = `${baseUrl}?eventId=${encodedEventName}&guestId=${guestId}`;
+      const guestLink = `${baseUrl}?uid=${user.uid}&eventId=${encodedEventName}&guestId=${guestId}`;
+
       const fullMessage = `${messageFromFirebase} \n\nלאישור ההגעה: ${guestLink}`;
   
       const guestResponse = responses[guestId]?.response || "";
@@ -1057,26 +1105,6 @@ useEffect(() => {
     }
   };
   
-  const handleReset = () => {
-    if (user) {
-      console.log('Refresh button handleReset');
-
-      const maybeRef = ref(database, `Events/${user.uid}/${id}/no_answear/`);
-      set(maybeRef, 0);
-
-      const yes_caming = ref(database, `Events/${user.uid}/${id}/yes_caming/`);
-      set(yes_caming, 0);
-
-      const maybe = ref(database, `Events/${user.uid}/${id}/maybe/`);
-      set(maybe, 0);
-
-      const no_cuming = ref(database, `Events/${user.uid}/${id}/no_cuming/`);
-      set(no_cuming, 0);
-    }
-    console.log('Refresh button finish');
-
-  };
-
   const closeHelpModal = () => {
     setHelpModalVisible(false);
   };
@@ -1106,101 +1134,80 @@ useEffect(() => {
   }, [user, id, hasPromptShown]);
   
 
-  
-  const deletescheduleMessages = () => {
-    const today = new Date();
-    const invitationDateStr = eventDetails.message_date_hour?.date;
-    const invitationTimeStr = eventDetails.message_date_hour?.time;
-  
-    if (invitationDateStr && invitationTimeStr) {
-      const [year, month, day] = invitationDateStr.split('-').map(Number);
-      const [hours, minutes] = invitationTimeStr.split(':').map(Number);
-      const invitationDate = new Date(year, month - 1, day, hours, minutes);
-  
-      if (invitationDate <= today) {
-        Alert.alert("לא ניתן למחוק", "ההזמנות כבר נשלחו, לכן לא ניתן למחוק את היומן.");
-        return;
-      }
+
+const deleteScheduleMessages = async () => {
+  // הגנה: אם ההזמנה כבר נשלחה – לא מוחקים
+  const { date, time } = eventDetails.message_date_hour || {};
+  if (date && time) {
+    const alldate = new Date(`${date}T${time}:00`);
+    if (alldate <= new Date()) {
+      Alert.alert("לא ניתן למחוק", "ההזמנות כבר נשלחו.");
+      return;
     }
-  
-    Alert.alert(
-      "מחיקת יומן",
-      "האם אתה בטוח שברצונך למחוק את היומן? פעולה זו אינה ניתנת לשחזור ומאפסת את נתוני המוזמנים.",
-      [
-        {
-          text: "ביטול",
-          style: "cancel",
-        },
-        {
-          text: "מחק",
-          onPress: async () => {
-            try {
-              const scheduleRef = ref(database, `whatsapp/${user.uid}/${id}`);
-              await remove(scheduleRef);
-              setModalVisible(false);
-              resetSchedule();
-              Alert.alert("יומן נמחק", "היומן נמחק בהצלחה.");
-            } catch (error) {
-              console.error("❌ שגיאה במחיקת היומן:", error);
-              Alert.alert("שגיאה", "אירעה תקלה במחיקת היומן.");
-            }
-          },
-          style: "destructive",
-        },
-      ]
-    );
-  };
-  
-  
-  const handleRefresh = () => {
-    const scheduledDate = eventDetails.message_date_hour?.date || "תאריך לא זמין"; // קבלת התאריך מהנתונים
-    Alert.alert(
-      "שלח הזמנות",
-      `שים לב, פעולה זו תשלח את ההזמנות עכשיו לאורחים ותבטל את מועד ההזמנה הצפוי בתאריך ${scheduledDate}, מרגע השליחה אין אפשרות לחזור לאחור.`,
-      [
-        {
-          text: "ביטול",
-          style: "destructive", // הופך את הכפתור לאדום
-        },
-        {
-          text: "שלח whatsapp",
-          onPress: () => {
+  }
 
-            if (!invitationImageUrl) {
-              Alert.alert("⚠️ שגיאה", "לא ניתן לשלוח הזמנות ללא תמונה. אנא הוסף תמונה להזמנה.");
-            } else {
-              sendMessageToRecipients();
-            }         
-           },
-        },
-        {
-          text: "שלח sms",
-          onPress: () => {
+  /* ----------  WEB  ---------- */
+  if (Platform.OS === "web") {
+    const ok = window.confirm("האם אתה בטוח? פעולה זו בלתי-הפיכה.");
+    if (!ok) return;          // משתמש לחץ Cancel
+    try {
+      await remove(ref(database, `whatsapp/${user.uid}/${id}`));
+      setIsScheduled(false);
+      setModalVisible(false);
+      alert("היומן נמחק בהצלחה ✔︎");
+    } catch (e) {
+      console.error("delete error", e);
+      alert("שגיאה במחיקה");
+    }
+    return;                   // יציאה – לא להריץ Alert.alert
+  }
 
-            if (!invitationImageUrl) {
-              Alert.alert("⚠️ שגיאה", "לא ניתן לשלוח הזמנות ללא תמונה. אנא הוסף תמונה להזמנה.");
-            } else {
-              sendMessageToRecipientssms();
-            }         
-           },
-        },
-        {
-          text: "שלח sms וגם whatsapp",
-          onPress: () => {
+  /* ----------  MOBILE  ---------- */
+  Alert.alert(
+    "מחיקת יומן",
+    "האם אתה בטוח? פעולה זו בלתי-הפיכה.",
+    [
+      { text: "ביטול", style: "cancel" },
+      {
+        text: "מחק",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await remove(ref(database, `whatsapp/${user.uid}/${id}`));
+            setIsScheduled(false);
+            setModalVisible(false);
+            Alert.alert("יומן נמחק", "היומן נמחק בהצלחה.");
+          } catch (e) {
+            console.error("delete error", e);
+            Alert.alert("שגיאה", "אירעה תקלה במחיקת היומן.");
+          }
+        }
+      }
+    ]
+  );
+};
 
-            if (!invitationImageUrl) {
-              Alert.alert("⚠️ שגיאה", "לא ניתן לשלוח הזמנות ללא תמונה. אנא הוסף תמונה להזמנה.");
-            } else {
-              sendMessageToRecipients();
-              sendMessageToRecipientssms();
-
-            }         
-           },
-        },
-      ]
-    );
-  };
   
+// ==================== handleRefresh (חדש) ====================
+const handleRefresh = () => {
+  setQuickMsg('');
+  setShowSendNowModal(true);
+};
+
+
+  const sendNow = async (channel /* 'sms' | 'wa' | 'both' */) => {
+  if (!quickMsg.trim()) { Alert.alert('⚠️', 'כתוב משהו…'); return; }
+
+  if (channel === 'sms'  || channel === 'both')
+    await sendBatchedMessages({ recipients: contacts, body: quickMsg, smsFlag: 'yes' });
+
+  if (channel === 'wa'   || channel === 'both')
+     await sendBatchedMessages({ recipients: contacts, body: quickMsg, smsFlag: 'no' });
+
+  Alert.alert('✔︎', 'ההודעות נשלחו');
+  setShowSendNowModal(false);
+};
+
   useEffect(() => {
     if (user) {
         const responsesRef = ref(database, `Events/${user.uid}/${id}/responses`);
@@ -1320,6 +1327,129 @@ useEffect(() => {
     }
   }, [user, id]);
 
+
+  // --- לפני ---
+const buildWeddingPreview = () => {
+  const first = getRecipients()[0];
+  if (!first) return getDefaultMsg(rowToSend);
+  const extra = tableText(first.phoneNumbers) || '';
+  return `${getDefaultMsg(rowToSend)} ${extra}`.trim();
+};
+
+// --- אחרי ---
+
+  /** מחזיר נוסח הודעת-יום-חתונה + השולחן של נמען לדוגמה  */
+
+
+// ===== כתיבה בפיירבייס בקבוצות של 15 + דיליי 5 שניות =====
+const sendBatchedMessages = async ({ recipients, body, smsFlag,actionType = '' }) => {
+  if (!user || !id) return;
+
+  cancelSendingRef.current = false;
+  setIsSending(true);
+
+  const batchSize     = 30;
+  const delayPerBatch = 5000;
+  const totalBatches  = Math.ceil(recipients.length / batchSize);
+  const baseRef       = ref(database, `whatsapp/${user.uid}/${id}`);
+  const baseUrl       = 'https://final-project-d6ce7.web.app';
+  const evSnap = await get(ref(database, `Events/${user.uid}/${id}/eventName`));
+  const eventNameEnc  = encodeURIComponent(evSnap.exists() ? evSnap.val() : 'אירוע');
+  setCurrentChannel(
+    smsFlag === 'yes' ? 'SMS'
+    : smsFlag === 'no' ? 'WhatsApp'
+    : 'SMS + WhatsApp'
+  );
+
+  /* ➌--- התחלה – איפוס ומעבר למודל ההתקדמות */
+  setFailedList([]);
+  setCancelSending(false);
+  setIsSending(true);
+  setProgress({
+    current: 0,
+    total  : recipients.length,
+    secondsLeft: totalBatches * (delayPerBatch / 1000),
+    batch: 1,
+    totalBatches,
+  });
+
+  let sentTotal = 0;
+for (let i = 0; i < recipients.length; i += batchSize) {
+  if (cancelSendingRef.current) break;   // ← כאן בודקים
+    const batch = recipients.slice(i, i + batchSize);
+
+    await Promise.all(batch.map(async (c) => {
+      try {
+        const phone = formatPhoneNumber(c.phoneNumbers);
+        if (!phone) throw new Error('bad-phone');
+
+        const guestId = c.recordID || Math.random().toString(36).slice(2);
+        const link    = `${baseUrl}?uid=${user.uid}&eventId=${eventNameEnc}&guestId=${guestId}`;
+
+      const tableExtra = actionType === 'יום חתונה'
+          ? tableText(c.phoneNumbers)   // או buildWeddingMsg(c.phoneNumbers)
+          : '';
+
+
+ const cleanBody = body.replace(/הינכם יושבים ב.*$/m, '').trim();
+
+ // ➋ מוסיף את השולחן (רק פעם אחת) לאורח הנוכחי
+const msg =
+  `${cleanBody}${tableExtra}` +
+  (
+    qsAddLink &&
+    actionType !== 'quick' &&                 // ⬅️ מונע קישור בשליחה מהירה
+    !['תודה רבה','תזכורת','יום חתונה'].includes(actionType)
+      ? `\n\nלאישור ההגעה: ${link}`
+      : ''
+  );
+
+
+await set(push(baseRef), {
+  currentUserUid: user.uid,
+  eventUserId: id,
+  formattedContacts: phone,
+  name: c.displayName || 'שם לא ידוע',
+  imageUrl: (actionType === 'quick' ? '' : await getInviteImg()),  // ⬅️ בלי תמונה בשליחה מהירה
+  message: msg,
+  scheduleMessage: '2025-01-01T00:00',
+  serverId: '',
+  sms: smsFlag,
+  status: 'pending',
+  timestamp: new Date().toISOString(),
+});
+
+      } catch (err) {
+        setFailedList((prev) => [...prev, { name: c.displayName, phone: c.phoneNumbers }]);
+      }
+    }));
+
+    /* ⬅️ עדכון-progress */
+    sentTotal += batch.length;
+    setProgress({
+      current: sentTotal,
+      total: recipients.length,
+      secondsLeft: Math.max(0,
+        (totalBatches - (i / batchSize + 1)) * (delayPerBatch / 1000)),
+      batch: (i / batchSize) + 2,
+      totalBatches,
+    });
+
+    if (i + batchSize < recipients.length) await delay(delayPerBatch);
+  }
+
+  /* ⬅️ סיום */
+  setIsSending(false);
+  if (!cancelSending) {
+    const ok = failedList.length === 0;
+    Alert.alert(ok ? '✔︎' : 'הסתיים (עם כשלונות)',
+                ok ? 'כל ההודעות נשלחו' : 'חלק מהנמענים נכשלו - ראה ברשימה');
+  }
+};
+
+
+
+
   useEffect(() => {
     if (user) {
         const mainSmsRef = ref(database, `Events/${user.uid}/${id}/main_sms`);
@@ -1344,6 +1474,108 @@ useEffect(() => {
     }
 }, [user, id]);
 
+const handleConfirmSchedule = async () => {
+  try {
+    setSchedLoading(true);          // spinner קטן על הכפתור
+    await scheduleMessages();       // הפונקציה הקיימת שלך
+    setModalVisible(false);         // סגור את המודאל ידנית
+  } catch (err) {
+    console.error('schedule error:', err);
+    Alert.alert('שגיאה', 'לא ניתן היה לשמור את היומן');
+  } finally {
+    setSchedLoading(false);
+  }
+};
+
+/** מחלץ את שמות בני הזוג מתוך נוסח ההזמנה */
+/** מחלץ את שמות בני/ות הזוג מתוך נוסח ההזמנה */
+const extractCoupleNames = (invitationText = '') => {
+  const m = invitationText.match(/החתונה של\s+(.+?)\s+שתיערך/);
+  if (!m) return null;                                   // לא נמצא
+  const namesPart = m[1].trim();                         
+
+  // חותכים רק על רווח + ו' (ולא על כל ו' בתוך שם)
+  const parts = namesPart.split(/\s+ו/);                 
+  return parts.map(p => p.trim()).filter(Boolean);       // ניקוי רווחים
+};
+// ➊ למעלה, יחד עם ה-useState הקיימים
+const [tables, setTables] = useState({});   // כל השולחנות
+
+// ➋ useEffect חדש – נטען את /tables ונאזין לעדכונים
+useEffect(() => {
+  if (!user || !id) return;
+
+  const tRef = ref(database, `Events/${user.uid}/${id}/tables`);
+  const off  = onValue(tRef, snap => {
+    setTables(snap.exists() ? snap.val() : {});
+  });
+
+  return () => off();   // ניקוי מאזין
+}, [user, id]);
+// מגדירים פונקציה (או useMemo) שתמצא לכל אורח את השולחן שלו
+// מחוץ לכל פונקציה אחרת – רק פעם אחת
+const getTableInfo = (guestPhone) => {
+  const norm = formatPhoneNumber(guestPhone); // מנרמל 0→972 וכו'
+  for (const tblKey in tables) {
+    const tbl    = tables[tblKey];
+    const guests = tbl?.guests ?? {};
+    for (const g of Object.values(guests)) {
+      if (formatPhoneNumber(g.phoneNumbers) === norm) {
+        return { number: tbl.numberTable || '', name: tbl.displayName || '' };
+      }
+    }
+  }
+  return null;
+};
+
+
+/**  מחזיר הודעת-“יום החתונה” מותאמת אישית  */
+const buildWeddingMsg = (phone) => {
+  // שמות בני הזוג – אם רוצים לשלב
+  const [name1 = 'הזוג', name2 = 'המאושר'] =
+        extractCoupleNames(eventDetails.message) || [];
+
+  // מידע על השולחן (אם שובץ)
+                     info.name;
+ // מציג קודם את שם-השולחן; אם אין – מספר
+const label = info.name || info.number || '';
+
+ return `היום הגדול הגיע! מחכים לראותכם באירוע, הינכם יושבים ב${label}`;
+};
+
+
+
+const findTableByPhone = (phone) => {
+  const norm = normPhone(phone);
+  for (const tKey in tables) {
+    const tbl = tables[tKey];
+    const guests = tbl?.guests ?? {};
+    for (const g of Object.values(guests)) {
+      if (normPhone(g.phoneNumbers) === norm) {
+        return {                    // ← מספיק המידע הזה
+          number: tbl.numberTable  || '',
+          name  : tbl.displayName  || ''
+        };
+      }
+    }
+  }
+  return null;                      // לא שובץ
+};
+
+/* ---------- טקסט “שולחן … ” ---------- */
+// מחזיר טקסט יום-חתונה + **שם** השולחן בלבד
+const tableText = (phone) => {
+  const info = getTableInfo(phone);     // מאתר את פרטי השולחן של הטלפון
+  if (!info) return '';                 // אורח שלא שובץ
+
+  // קודם כל שם השולחן; אם אין – מספר
+  const label = info.name || info.number || '';
+  return ` הינכם יושבים ב${label}`;   // ← בלי “היום הגדול הגיע!”
+};
+
+
+
+
 //לא נשלח
 const [failedMessages, setFailedMessages] = useState(0);
 useEffect(() => {
@@ -1357,7 +1589,9 @@ useEffect(() => {
                 const messages = snapshot.val();
 
                 // 🔹 סופרים **רק הודעות עם status === "error"**
-                errorCount = Object.values(messages).filter(msg => msg.status === "error").length;
+                errorCount = Object.values(messages).filter(msg => 
+                    msg.status === "error" || msg.status === "error_quota"
+                ).length;
             }
 
             setFailedMessages(errorCount); // ✅ שמירת מספר ההודעות שנכשלו
@@ -1411,8 +1645,95 @@ useEffect(() => {
   }
 }, [user, id, contacts]);
 
+useEffect(() => {
+  if (!user || !id) return;
+  const whatsappRef = ref(database, `whatsapp/${user.uid}/${id}`);
+  return onValue(whatsappRef, async snapshot => {
+    if (!snapshot.exists()) return;
+    const msgs = Object.values(snapshot.val());
+    const sentCount = msgs.filter(m => m.status === "sent").length;
+
+    // תשמור ב־Firebase
+    const sentMsgRef = ref(database, `Events/${user.uid}/${id}/sent_msg`);
+    await set(sentMsgRef, sentCount);
+  });
+}, [user, id]);
 
 
+
+// helper – מחזיר טקסט ברירת-מחדל בהתאם לשם הפעולה
+const getDefaultMsg = (row) => {
+  switch (row?.col4) {            // col4 = שם פעולה
+    case 'הזמנות':
+      return eventDetails.message || '';              // ההזמנה המקורית
+case 'תזכורת': {
+  const [name1 = 'הזוג', name2 = 'המאושר'] =
+        extractCoupleNames(eventDetails.message) || [];
+  return `היי, זוהי תזכורת לאירוע הקרוב שלכם. נשמח לראותכם, אוהבים ${name1} ו${name2}!`;
+
+    }
+case 'יום חתונה': {
+  const [name1 = 'הזוג', name2 = 'המאושר'] =
+        extractCoupleNames(eventDetails.message) || [];
+  return `🎉 היום הגדול הגיע! ${name1} ו${name2} מחכים לראותכם בחופה 🙌`;
+}
+
+
+    case 'תודה רבה':
+      return 'משפחה וחברים יקרים, מודים לכם מקרב לב על השתתפותכם באירוע. מקווים שנהניתם ושניפגש רק בשמחות! אוהבים המון ❤';
+    default:
+      return row?.col4 || '';
+  }
+};
+
+/* ---------- state ---------- */
+const [latestReply, setLatestReply] = useState(null);   // {guestName,response,dateTime}
+const [showGeneral, setShowGeneral] = useState(true);   // true ⇒ מציגים message2
+
+/* ---------- מאזין ---------- */
+useEffect(() => {
+  if (!user || !id) return;
+
+  const respRef = ref(database, `Events/${user.uid}/${id}/responses`);
+  const off = onValue(respRef, snap => {
+    if (!snap.exists()) return;
+
+    // מוצא את התגובה עם ה-timestamp האחרון
+    const latest = Object.values(snap.val())
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+
+    if (latest) {
+      const dt = new Date(latest.timestamp);
+
+      const dateStr = dt.toLocaleDateString('he-IL', {
+        year: 'numeric', month: '2-digit', day: '2-digit'
+      });            // 27/07/2025
+
+      const timeStr = dt.toLocaleTimeString('he-IL', {
+        hour: '2-digit', minute: '2-digit'
+      });            // 18:42
+
+      setLatestReply({
+        guestName: latest.guestName || 'אורח/ת',
+        response : latest.response  || '—',
+        dateTime : `${dateStr} ${timeStr}`          // תאריך + שעה
+      });
+    }
+  });
+
+  return () => off();
+}, [user, id]);
+
+/* ---------- מחליף תצוגה כל 5 שניות ---------- */
+useEffect(() => {
+  const t = setInterval(() => setShowGeneral(p => !p), 5000);
+  return () => clearInterval(t);
+}, []);
+
+const updatesText =
+  showGeneral || !latestReply
+    ? message2
+    : `${latestReply.guestName} סימן/ה "${latestReply.response}" בתאריך ${latestReply.dateTime.replace(' ', ' בשעה ')}`;
 
   return (
     
@@ -1421,7 +1742,20 @@ useEffect(() => {
       source={require('../assets/send_mesege_back.png')}
       style={styles.backgroundImage}
     >
+
+
+ <ScrollView
+   style={{ flex: 1 }}
+   contentContainerStyle={{ paddingBottom: insets.bottom + 40, flexGrow: 1 }}
+   showsVerticalScrollIndicator={false}
+   keyboardShouldPersistTaps="handled"
+   nestedScrollEnabled
+ >
+
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+
+
+
         <TouchableOpacity
           onPress={() => props.navigation.navigate('ListItem', { id })}
           style={styles.backButton}
@@ -1544,16 +1878,16 @@ useEffect(() => {
           disabled={contacts.length > mehsa} // חסימה אם אין מספיק במכסה
       >
           <Text style={styles.buttonText}>
-              {contacts.length > mehsa ? "אין מספיק במכסה" : "שלח הודעה עכשיו"}
+              {contacts.length > mehsa ? "אין מספיק במכסה" : "שלח הודעה מותאמת"}
           </Text>
       </TouchableOpacity>
 
 
         <TouchableOpacity
-          onPress={() => setHelpModalVisible(true)}
+  onPress={findFailedContacts}      // ← מפעיל את הלולאה
           style={styles.triggerButton2}
         >
-          <Text style={styles.buttonText}>קבל מידע / עזרה</Text>
+          <Text style={styles.buttonText}>📤 למי לא נשלח?</Text>
         </TouchableOpacity>
 
 
@@ -1567,7 +1901,7 @@ useEffect(() => {
         <ActivityIndicator size="large" color="#6c63ff" />
       ) : (
         <View style={styles.messageBox}>
-          <Text style={styles.messageText}>{message2}</Text>
+            <Text style={styles.messageText}>{updatesText}</Text>
         </View>
       )}
 
@@ -1577,6 +1911,7 @@ useEffect(() => {
 {/* טבלה מתחת לטקסט העדכונים */}
 <View style={styles.tableContainer}>
   <View style={styles.headerRow}>
+    <Text style={[styles.headerCell, styles.colSendHdr]}>שלח</Text>  
     <Text style={[styles.headerCell, styles.col3]}>שומש</Text>
     <Text style={[styles.headerCell, styles.col2]}>מכסה</Text>
     <Text style={[styles.headerCell, styles.col1]}>תאריך שליחה</Text>
@@ -1599,15 +1934,46 @@ useEffect(() => {
       const itemDate = new Date(item.col1);
       const isPastDate = itemDate <= currentDate;
 
-      return (
-        <View style={[styles.row, isPastDate && styles.pastDateRow]}>
-          <Text style={[styles.cell, styles.col3]}>{item.col3}</Text>
-          <Text style={[styles.cell, styles.col2]}>{item.col2}</Text>
-          <Text style={[styles.cell, styles.col1]}>{item.col1}</Text>
-          <Text style={[styles.cell, styles.col4]}>{item.col4}</Text>
-          <Text style={[styles.cell, styles.col5]}>{item.col5}</Text>
-        </View>
-      );
+return (
+    <View style={[styles.row, isPastDate && styles.pastDateRow]}>
+      {/* עמודת הכפתור משמאל */}
+{/* עמודת הכפתור בטבלת היומן */}
+<View style={styles.sendCol}>
+  <TouchableOpacity
+    style={styles.sendBtn12}
+    onPress={() => {
+      /* 1. שורה זו תיפתח במודל */
+      setRowToSend(item);
+
+      /* 2. בסיס ההודעה */
+      const baseMsg = getDefaultMsg(item);      // תמיד מחזיר משפט פתיחה אחד
+
+      /* 3. תוספת “שולחן …” (רק אם זו הודעת יום-חתונה) */
+      let extra = '';
+      if (item.col4 === 'יום חתונה') {
+        const firstRecipient = getRecipients()[0];           // הנמען הראשון לפי הסינון
+        if (firstRecipient) {
+          extra = tableText(firstRecipient.phoneNumbers);    // “ הינכם יושבים ב…”
+        }
+      }
+
+      /* 4. שמירת הטקסט במודל */
+      setCustomMsg(`${baseMsg}${extra}`.trim());
+    }}
+  >
+    <Text style={styles.sendTxt}>שלח</Text>
+  </TouchableOpacity>
+</View>
+
+
+      {/* שאר העמודות כמו קודם */}
+      <Text style={[styles.cell, styles.col3]}>{item.col3}</Text>
+      <Text style={[styles.cell, styles.col2]}>{item.col2}</Text>
+      <Text style={[styles.cell, styles.col1]}>{item.col1}</Text>
+      <Text style={[styles.cell, styles.col4]}>{item.col4}</Text>
+      <Text style={[styles.cell, styles.col5]}>{item.col5}</Text>
+    </View>
+  );
     }}
     keyExtractor={(item) => item.id}
   />
@@ -1664,11 +2030,13 @@ useEffect(() => {
       </Modal>
       <Animated.View style={[styles.centeredContainer, { transform: [{ scale: bounceAnim }] }]}>
     <TouchableOpacity
-        style={[
-            styles.animatedButton,
-            isScheduled && styles.scheduledButton, // שינוי צבע כשהיומן נשמר
-            contacts.length > mehsa ? { backgroundColor: "gray" } : {} // אם אין מספיק מכסה – אפור
-        ]}
+  style={[
+    /*  ❌  style=[ ...] – גורם לקריסה  */
+    styles.animatedButton,
+    { marginTop: screenWidth > 600 ? 0 : 20 },
+    isScheduled && styles.scheduledButton,
+    contacts.length > mehsa && { backgroundColor: 'gray' },
+  ]}
         onPress={() => {
             if (contacts.length > mehsa) {
                 Alert.alert("⚠️ שגיאה", "אין מספיק במכסה לתזמון הודעות.");
@@ -1691,7 +2059,6 @@ useEffect(() => {
         </Text>
     </TouchableOpacity>
 </Animated.View>
-
 
 
 <Modal
@@ -1726,7 +2093,7 @@ useEffect(() => {
       </>
 
     )}
-      {/* תזכורת – מוצג רק אם לא basic ולא no plan */}
+      
       {(planType === 'plus' || planType === 'digital' || planType === 'premium') && (
         <>
           <Text style={styles.modalTitle22}>-------------------------------------</Text>
@@ -1736,7 +2103,7 @@ useEffect(() => {
         </>
       )}
 
-      {/* יום החתונה + תודה – רק ב-digital או premium */}
+     
       {(planType === 'digital' || planType === 'premium') && (
         <>
           <Text style={styles.modalTitle22}>-------------------------------------</Text>
@@ -1747,13 +2114,13 @@ useEffect(() => {
         </>
       )}
 
-      {/* יום החתונה + תודה – רק ב-digital או premium */}
+     
       {(planType === 'digital' || planType === 'premium' ||planType === 'plus') && (
         <>
           <Text style={styles.modalTitle22}>-------------------------------------</Text>
           <Text style={styles.modalTitle}>יום אחרי החתונה:</Text>
           <Text style={styles.modalText3}>תאריך שליחה: {eventDetails4} בשעה 10:00</Text>
-          <Text style={styles.modalText2}>תודה רבה על השתתפותכם באירוע שלנו!</Text>
+          <Text style={styles.modalText2}>משפחה וחברים יקרים, מודים לכם מקרב לב על השתתפותכם באירוע. מקווים שנהניתם ושניפגש רק בשמחות! אוהבים המון ❤</Text>
         </>
       )}
       <Text style={styles.modalTitle22}>-------------------------------------</Text>
@@ -1762,21 +2129,23 @@ useEffect(() => {
         {!isScheduled && (
           <TouchableOpacity
             style={styles.confirmButton}
-            onPress={async () => {
-              await scheduleMessages();            // שולח את הסבב הראשון
-            }}
+            disabled={isSchedLoading}
+            onPress={handleConfirmSchedule}   // ← במקום scheduleMessages
           >
-            <Text style={styles.buttonText}>מאשר יומן הודעות</Text>
+            {isSchedLoading
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.buttonText}>מאשר יומן הודעות</Text>}
           </TouchableOpacity>
+
 
         )}
         {isScheduled && (
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={deletescheduleMessages}
-          >
-            <Text style={styles.buttonText}>מחק יומן</Text>
-          </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.cancelButton}
+        onPress={deleteScheduleMessages}   
+      >
+        <Text style={styles.buttonText}>מחק יומן</Text>
+      </TouchableOpacity>
         )}
         <TouchableOpacity
           style={styles.cancelButton}
@@ -1826,6 +2195,514 @@ useEffect(() => {
 )}
 
 
+<Modal
+  visible={!!rowToSend}
+  transparent          // רקע שקוף
+  animationType="slide"
+  onRequestClose={() => setRowToSend(null)}
+>
+  <View style={styles.modalOverlay}>
+
+    {/* קופסת-הדיאלוג */}
+    <View style={styles.modalBox}>
+
+      {/* ===== כותרת ===== */}
+      <Text style={styles.modalHeadline}>
+        {(() => {
+          switch (rowToSend?.col4) {
+            case 'הזמנות'   : return 'שלח הזמנה';
+            case 'יום חתונה': return 'שלח הודעת יום-חתונה';
+            case 'תזכורת'   : return 'שלח תזכורת';
+            default         : return 'שלח הודעה';
+          }
+        })()}
+      </Text>
+
+      {/* ===== טקסט הודעה ===== */}
+      <TextInput
+        style={styles.modalInput}
+        multiline
+        value={customMsg}
+        onChangeText={setCustomMsg}
+        placeholder="כתוב הודעה..."
+        placeholderTextColor="#999"
+      />
+
+      {/* ===== בחירת קבוצת יעד ===== */}
+      <Text style={styles.modalSubHdr}>בחר את קבוצת היעד לשליחה:</Text>
+
+<View style={styles.choiceRow}>
+  {[
+    { key: 'all',       label: `לכולם (${contacts.length})` },
+    { key: 'confirmed', label: `מגיע (${confirmedList.length})` },
+    { key: 'maybe',     label: `אולי (${maybeList.length})` },
+    { key: 'confirmedOrMaybe', label: `מגיע + אולי (${confirmedOrMaybeList.length})` },
+    { key: 'failed',    label: `לא נשלח (${failedContacts.length})` },
+    /* ✅ חדש: ספציפיים */
+    { key: 'specific',  label: `לנמענים ספציפיים` },
+  ].map(opt => (
+    <TouchableOpacity
+      key={opt.key}
+      style={[styles.radioBtn, targetGroup === opt.key && styles.radioBtnSelected]}
+      onPress={async () => {
+        if (opt.key === 'failed') await findFailedContacts(true);
+        setTargetGroup(opt.key);
+      }}
+    >
+      <Text style={styles.radioText}>{opt.label}</Text>
+    </TouchableOpacity>
+  ))}
+</View>
+
+{/* ✅ בחירת “נמענים ספציפיים” */}
+{targetGroup === 'specific' && (
+  <View style={styles.specificBox}>
+    <Text style={styles.inputLabel}>בחר נמענים לשליחה</Text>
+    <TextInput
+      style={styles.specificSearchInput}
+      placeholder="חפש לפי שם/טלפון…"
+      placeholderTextColor="#999"
+      value={specificSearch}
+      onChangeText={setSpecificSearch}
+    />
+    <Text style={styles.specificCounter}>
+      נבחרו: {selectedSpecificIds.length}
+    </Text>
+
+    <FlatList
+      data={filteredSpecificContacts}
+      keyExtractor={item => item.recordID || item.id}
+      style={styles.specificList}
+      renderItem={({ item }) => {
+        const id = item.recordID || item.id;
+        const selected = selectedSpecificIds.includes(id);
+        const status  = responses[id]?.response;
+        let rowBg = '#fff';
+        if (status === 'מגיע') rowBg = '#d4edda';
+        else if (status === 'אולי') rowBg = '#fff3cd';
+        else if (status === 'לא מגיע') rowBg = '#f8d7da';
+
+        return (
+          <TouchableOpacity
+            onPress={() => {
+              setSelectedSpecificIds(prev =>
+                selected ? prev.filter(x => x !== id) : [...prev, id]
+              );
+            }}
+            style={[
+              styles.specificItem,
+              { backgroundColor: rowBg },
+              selected && styles.specificItemSelected
+            ]}
+          >
+            <Text style={styles.specificCheck}>{selected ? '✔︎' : '◻︎'}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.specificName}>{item.displayName}</Text>
+              <Text style={styles.specificPhone}>{item.phoneNumbers}</Text>
+            </View>
+            {!!status && <Text style={styles.specificStatus}>{status}</Text>}
+          </TouchableOpacity>
+        );
+      }}
+    />
+    {selectedSpecificIds.length > 0 && (
+      <TouchableOpacity
+        onPress={() => setSelectedSpecificIds([])}
+        style={styles.specificClearBtn}
+      >
+        <Text style={styles.specificClearTxt}>נקה בחירה</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+)}
+
+
+      {/* ===== רשימת נמענים ===== */}
+      <Text style={styles.recipientsTitle}>נמענים:</Text>
+<FlatList
+  data={
+    targetGroup === 'specific'
+      ? contacts.filter(c => selectedSpecificIds.includes(c.recordID || c.id))
+      : getRecipients()
+  }
+  keyExtractor={(c) => String(c.recordID || c.id || c.phoneNumbers)}
+  style={styles.recipientsList}
+  renderItem={({ item }) => {
+    const guestId = item.recordID || item.id;
+    const status  = responses[guestId]?.response;
+    let backgroundColor = '#fff';
+    if (status === 'מגיע')        backgroundColor = '#d4edda';
+    else if (status === 'אולי')   backgroundColor = '#fff3cd';
+    else if (status === 'לא מגיע') backgroundColor = '#f8d7da';
+
+    return (
+      <View style={[styles.recipientRowBox, { backgroundColor }]}>
+        <Text style={styles.recipientRow}>
+          • {item.displayName} ({item.phoneNumbers}) – {status || 'לא השיב'}
+        </Text>
+      </View>
+    );
+  }}
+/>
+
+
+      <Text style={styles.noticeText}>ההודעות יישלחו ברגע זה.</Text>
+
+      {/* ===== כפתורי שליחה ===== */}
+      <View style={styles.actionsRow}>
+        {[
+          {flag:'yes', label:'שלח SMS'},
+          {flag:'no',  label:'שלח WhatsApp'},
+          {flag:'both',label:'שלח שניהם'},
+        ].map(btn => (
+          <TouchableOpacity
+            key={btn.flag}
+            style={styles.sendBtn}
+            onPress={async () => {
+              if (!targetGroup) {
+                Alert.alert('שים לב', 'יש לבחור קבוצת יעד לפני השליחה');
+                return;
+              }
+
+              const recipients = targetGroup === 'specific'
+                ? contacts.filter(c => selectedSpecificIds.includes(c.recordID || c.id))
+                : getRecipients();
+
+              if (recipients.length === 0) {
+                Alert.alert('אין נמענים', 'לא נבחרו נמענים ספציפיים');
+                return;
+              }
+
+              if (btn.flag === 'both') {
+                await sendBatchedMessages({ recipients, body: customMsg, smsFlag: 'yes', actionType: rowToSend?.col4 || '' });
+                await sendBatchedMessages({ recipients, body: customMsg, smsFlag: 'no',  actionType: rowToSend?.col4 || '' });
+              } else {
+                await sendBatchedMessages({
+                  recipients,
+                  body: customMsg,
+                  smsFlag: btn.flag === 'yes' ? 'yes' : 'no',
+                  actionType: rowToSend?.col4 || '',
+                });
+              }
+              Alert.alert('✔︎', 'ההודעה נשלחה');
+              setRowToSend(null);
+            }}
+
+
+          >
+            <Text style={styles.sendBtnTxt}>{btn.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* ===== סגירה ===== */}
+      <TouchableOpacity
+        style={styles.closeBtn}
+        onPress={() => setRowToSend(null)}
+      >
+        <Text style={styles.closeBtnTxt}>סגור</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
+
+<Modal
+  visible={showSendNowModal}
+  transparent
+  animationType="slide"
+  onRequestClose={() => setShowSendNowModal(false)}
+>
+  <View style={styles.modalOverlay}>
+    <View style={styles.quickModalBox}>
+      
+      <Text style={styles.quickTitle}>שליחת הודעה מיידית</Text>
+
+      {/* הודעה + מונה תווים */}
+      <Text style={styles.quickLabel}>תוכן ההודעה</Text>
+      <TextInput
+        style={styles.quickMsgInput}
+        multiline
+        value={quickMsg}
+        onChangeText={setQuickMsg}
+        placeholder="כתוב הודעה מותאמת אישית…"
+        placeholderTextColor="#999"
+        maxLength={100}     // ⬅️ הגבלה ל-100 תווים
+        textAlignVertical="top"
+      />
+      <View style={styles.quickCharRow}>
+        <Text
+          style={[
+            styles.quickCharText,
+            quickMsg.length >= 100 && { color: '#dc2626', fontWeight: '700' }
+          ]}
+        >
+          {quickMsg.length}/100
+        </Text>
+      </View>
+
+
+      {/* יעד השליחה */}
+      <Text style={styles.quickLabel}>בחר יעד</Text>
+      <View style={styles.quickTargetRow}>
+        {[
+          { key: 'all',      label: `לכולם (${contacts.length})` },
+          { key: 'specific', label: 'לנמענים ספציפיים' },
+          { key: 'manual',   label: 'למספרים ידניים' },
+        ].map(opt => (
+          <TouchableOpacity
+            key={opt.key}
+            style={[
+              styles.quickTargetBtn,
+              qsTarget === opt.key && styles.quickTargetBtnSelected
+            ]}
+            onPress={() => setQsTarget(opt.key)}
+          >
+            <Text
+              style={[
+                styles.quickTargetText,
+                qsTarget === opt.key && styles.quickTargetTextSelected
+              ]}
+            >
+              {opt.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* בחירת נמענים ספציפיים */}
+      {qsTarget === 'specific' && (
+        <>
+          <Text style={styles.quickSelectListTitle}>בחר נמענים:</Text>
+          <FlatList
+            data={contacts}
+            keyExtractor={(c) => (c.recordID || c.id)}
+            style={styles.quickSelectList}
+            renderItem={({ item }) => {
+              const cid = item.recordID || item.id;
+              const selected = quickSpecificIds.includes(cid);
+              return (
+                <TouchableOpacity
+                  onPress={() => {
+                    setQuickSpecificIds(prev =>
+                      selected ? prev.filter(x => x !== cid) : [...prev, cid]
+                    );
+                  }}
+                  style={styles.quickSelectRow}
+                >
+                  <Text style={styles.quickSelectCheck}>{selected ? '✔︎' : '◻︎'}</Text>
+                  <Text style={styles.quickSelectName}>
+                    {item.displayName} ({item.phoneNumbers})
+                  </Text>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        </>
+      )}
+
+      {/* הוספת נמען ידני */}
+      {qsTarget === 'manual' && (
+        <>
+          <Text style={styles.quickLabel}>הוספת נמען</Text>
+          <View style={styles.quickAddRow}>
+            {/* ➕ ירוק בצד שמאל */}
+            <TouchableOpacity
+              style={styles.quickPlusBtn}
+              onPress={() => {
+                const raw = (tempManualPhone || '').trim();
+                if (!raw) { Alert.alert('שגיאה','הכנס מספר טלפון'); return; }
+                const phone = formatPhoneNumber(raw);
+                const name  = (tempManualName || raw).trim();
+
+                const exists = quickManualList.some(r => formatPhoneNumber(r.phoneNumbers) === phone);
+                if (exists) { Alert.alert('מידע','הנמען כבר קיים'); return; }
+
+                setQuickManualList(prev => [
+                  ...prev,
+                  { displayName: name, phoneNumbers: phone, recordID: `manual_${phone}` }
+                ]);
+                setTempManualName('');
+                setTempManualPhone('');
+              }}
+            >
+              <Text style={styles.quickPlusBtnText}>➕</Text>
+            </TouchableOpacity>
+
+            {/* שדות קלט מימין ל-➕ */}
+            <TextInput
+              style={[styles.quickInput, {flex: 1.1, marginLeft: 6}]}
+              placeholder="טלפון"
+              placeholderTextColor="#999"
+              keyboardType="phone-pad"
+              value={tempManualPhone}
+              onChangeText={setTempManualPhone}
+              textAlign="right"
+            />
+            <TextInput
+              style={[styles.quickInput, {flex: 0.9}]}
+              placeholder="שם"
+              placeholderTextColor="#999"
+              value={tempManualName}
+              onChangeText={setTempManualName}
+              textAlign="right"
+              
+            />
+          </View>
+
+          {/* תצוגת נמענים ידניים שנוספו */}
+          {quickManualList.length > 0 && (
+            <>
+              <Text style={styles.quickManualListTitle}>נמענים שנוספו:</Text>
+              <View style={styles.quickManualList}>
+                {quickManualList.map(rec => (
+                  <Text key={rec.recordID} style={styles.quickManualItem}>
+                    • {rec.displayName} ({rec.phoneNumbers})
+                  </Text>
+                ))}
+              </View>
+            </>
+          )}
+        </>
+      )}
+
+      {/* תצוגת נמענים שיישלח אליהם בפועל */}
+      {(() => {
+        const previewRecipients =
+          qsTarget === 'all'
+            ? contacts
+            : qsTarget === 'specific'
+              ? contacts.filter(c => quickSpecificIds.includes(c.recordID || c.id))
+              : quickManualList;
+
+        const disabled = !quickMsg.trim() || previewRecipients.length === 0;
+
+        return (
+          <>
+            <Text style={styles.quickRecipientsCount}>
+              נבחרו {previewRecipients.length} נמענים
+            </Text>
+
+            <View style={styles.quickActionsRow}>
+              <TouchableOpacity
+                style={[styles.quickSendBtn, disabled && styles.quickSendBtnDisabled]}
+                disabled={disabled}
+                onPress={() => quickSendNow('wa')}
+              >
+                <Text style={styles.quickSendBtnTxt}>שלח WhatsApp</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.quickSendBtn, disabled && styles.quickSendBtnDisabled]}
+                disabled={disabled}
+                onPress={() => quickSendNow('sms')}
+              >
+                <Text style={styles.quickSendBtnTxt}>שלח SMS</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.quickSendBtn, disabled && styles.quickSendBtnDisabled]}
+                disabled={disabled}
+                onPress={() => quickSendNow('both')}
+              >
+                <Text style={styles.quickSendBtnTxt}>שלח שניהם</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        );
+      })()}
+
+      {/* סגירה */}
+      <TouchableOpacity
+        style={styles.quickCloseBtn}
+        onPress={() => setShowSendNowModal(false)}
+      >
+        <Text style={styles.quickCloseBtnTxt}>סגור</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
+
+
+<Modal visible={isSending} transparent animationType="fade"
+       onRequestClose={() => setCancelSending(true)}>
+  <View style={styles.modalOverlay}>
+    <View style={styles.modalContent}>
+      <Text style={styles.modalHeadline}>
+        שולח לשרת {progress.batch} מתוך {progress.totalBatches}
+      </Text>
+      <Text style={styles.modalText}>ערוץ: {currentChannel}</Text>
+      <Text style={styles.modalText}>
+        {progress.current} / {progress.total} מוזמנים
+      </Text>
+      <Text style={styles.modalText}>
+        זמן נותר ≈ {progress.secondsLeft} ש׳
+      </Text>
+
+      <View style={styles.progressBarBackground}>
+        <View style={[
+          styles.progressBarFill,
+          { width: `${(progress.current / progress.total) * 100}%` }]}
+        />
+      </View>
+
+      {failedList.length > 0 && (
+        <>
+          <Text style={[styles.modalText, { marginTop: 10 }]}>לא נשלח אל:</Text>
+          <FlatList
+            data={failedList}
+            keyExtractor={(_, i) => i.toString()}
+            style={{ maxHeight: 100, alignSelf: 'stretch' }}
+            renderItem={({ item }) => (
+              <Text style={{ textAlign: 'right', fontSize: 13 }}>
+                • {item.name || 'לא ידוע'} ({item.phone})
+              </Text>
+            )}
+          />
+        </>
+      )}
+
+    <TouchableOpacity
+      style={styles.cancelButton}
+      onPress={() => {
+        cancelSendingRef.current = true;   // ← חובה!
+        setCancelSending(true);            // רק כדי לעדכן את ה-UI (לא את הלולאה)
+      }}>
+      <Text style={styles.buttonText}>בטל שליחה</Text>
+    </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
+
+<Modal visible={showFailedModal} transparent animationType="slide">
+  <View style={styles.modalOverlay}>
+    <View style={styles.modalContainer}>
+      <Text style={styles.modalTitle}>🚫 הודעות שלא נשלחו</Text>
+
+      <View style={styles.failedListContainer}>
+        <ScrollView>
+          {failedContacts.map((contact, index) => (
+            <Text key={index} style={styles.failedContactText}>📱 {contact}</Text>
+          ))}
+        </ScrollView>
+      </View>
+
+      <Text style={styles.failedCountText}>
+        סה"כ לא נשלחו: {failedContacts.length} מתוך {contacts.length}
+      </Text>
+
+      <TouchableOpacity onPress={handleRetryFailed} style={styles.modalButton}>
+        <Text style={styles.modalButtonText}>🔁 שלח שוב רק למי שלא נשלח</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => setShowFailedModal(false)} style={styles.modalClose}>
+        <Text style={styles.modalCloseText}>❌ סגור</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
+
+</ScrollView>
+
     </ImageBackground>
   );
 };
@@ -1849,7 +2726,7 @@ const styles = StyleSheet.create({
   backButton: {
     position: 'absolute',
     left: 20,
-    bottom: 20,
+    bottom: 10,
   },
   backButtonText: {
     fontSize: 29,
@@ -2245,6 +3122,7 @@ tableContainer: {
     textAlign: 'right', // יישור לימין
 
   },
+  
   list: {
     maxHeight: 180, // מגביל את הגובה של הרשימה
   },
@@ -2278,13 +3156,13 @@ tableContainer: {
   },
   col2: {
 
-    textAlign: 'center',
+  textAlign: 'right',   // מיישר לימין
     color: '#333',
   },
   col3: {
-    textAlign: 'center',
     color: '#333',
-    
+    textAlign: 'right',   // מיישר לימין
+
   },
   col4: {
     textAlign: 'center',
@@ -2372,7 +3250,6 @@ animatedButton: {
     shadowRadius: 14,
     elevation: 15,
     width: "80%",
-    marginTop: 0,
 
   },
   scheduledButton: {
@@ -2464,6 +3341,682 @@ modalText: {
   textAlign: "center",
   marginBottom: 20,
 },
+// ⬅️ הוסף (או עדכן) ב-StyleSheet
+modalBox: {
+  width: '90%',
+  backgroundColor: '#fff',
+  borderRadius: 16,
+  padding: 20,
+  alignItems: 'center',
+},
+
+modalHeadline: {
+  fontSize: 22,
+  fontWeight: 'bold',
+  color: '#6c63ff',
+  marginBottom: 12,
+  textAlign: 'center',
+},
+
+modalInput: {
+  width: '100%',
+  minHeight: 110,
+  borderWidth: 1,
+  borderColor: '#ccc',
+  borderRadius: 10,
+  padding: 10,
+  textAlignVertical: 'top',
+  marginBottom: 12,
+},
+
+recipientsList: { maxHeight: 100, alignSelf: 'stretch' },
+
+recipientRow: { fontSize: 14, textAlign: 'right' },
+
+noticeText: { fontSize: 14, marginTop: 10, marginBottom: 14, textAlign: 'center' },
+
+actionsRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  width: '100%',
+  marginBottom: 12,
+},
+
+sendBtn: {
+  flex: 1,
+  backgroundColor: '#28a745',
+  paddingVertical: 6,
+  marginHorizontal: 4,
+  borderRadius: 14,
+  alignItems: 'center',
+  width: '115%',       // יתפוס את כל רוחב sendCol
+
+},
+
+sendBtnTxt: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+
+closeBtn: {
+  backgroundColor: '#dc3545',
+  borderRadius: 10,
+  paddingVertical: 10,
+  paddingHorizontal: 20,
+},
+
+closeBtnTxt: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+qsOptionsRow:{flexDirection:'row',justifyContent:'space-around',
+              marginBottom:12,width:'100%'},
+qsOption    :{flexDirection:'row',alignItems:'center'},
+qsCheck     :{fontSize:18,color:'#6c63ff',marginHorizontal:4},
+qsLabel     :{fontSize:14},
+qsTargetRow:  { flexDirection:'row',justifyContent:'space-around',
+                width:'100%',marginBottom:10 },
+qsManualInput:{ width:'100%',borderWidth:1,borderColor:'#ccc',
+                borderRadius:8,padding:8,marginBottom:10,
+                textAlign:'right' },
+                inputLabel: {
+  alignSelf: 'flex-start',
+  fontSize: 14,
+  fontWeight: 'bold',
+  marginBottom: 4,
+  color: '#333'
+},
+progressBarBackground: {
+  height: 10,
+  width: '100%',
+  backgroundColor: '#ccc',
+  borderRadius: 5,
+  marginTop: 10,
+},
+progressBarFill: {
+  height: 10,
+  backgroundColor: '#28a745',
+  borderRadius: 5,
+},
+
+radioBtn: {
+  borderWidth: 1,
+  borderColor: '#ccc',
+  borderRadius: 10,
+  padding: 10,
+  margin: 5,
+  backgroundColor: '#eee',
+},
+radioBtnSelected: {
+  backgroundColor: '#ffcc00',
+  borderColor: '#ff9900',
+},
+radioText: {
+  fontSize: 16,
+  textAlign: 'center',
+},
+recipientRowBox: {
+  paddingVertical: 6,
+  paddingHorizontal: 10,
+  marginVertical: 2,
+  borderRadius: 8,
+},
+recipientRow: {
+  fontSize: 15,
+  textAlign: 'right',
+},
+
+modalOverlay: {
+  flex: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: 'rgba(0,0,0,0.55)',      // שכבה כהה-שקופה
+},
+
+modalBox: {
+  width: '90%',
+  maxHeight: '90%',
+  backgroundColor: '#ffffff',
+  borderRadius: 18,
+  paddingHorizontal: 16,
+  paddingVertical : 20,
+  elevation : 10,                            // Android shadow
+  shadowColor: '#000',                       // iOS shadow
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.25,
+  shadowRadius: 8,
+},
+
+/* כותרות ---------------------------------------------------------------- */
+modalHeadline: {
+  fontSize: 22,
+  fontWeight: 'bold',
+  color: '#6c63ff',
+  textAlign: 'center',
+  marginBottom: 12,
+},
+
+modalSubHdr: {
+  fontSize: 15,
+  fontWeight: '500',
+  color: '#333',
+  textAlign: 'center',
+  marginVertical: 8,
+},
+
+/* שדה טקסט -------------------------------------------------------------- */
+modalInput: {
+  borderWidth: 1,
+  borderColor: '#ddd',
+  borderRadius: 10,
+  minHeight: 100,
+  padding: 10,
+  fontSize: 15,
+  textAlignVertical: 'top',
+  marginBottom: 14,
+  backgroundColor: '#fafafa',
+},
+
+/* רדיו-כפתורים ----------------------------------------------------------- */
+choiceRow: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  justifyContent: 'space-between',
+  marginBottom: 12,
+},
+
+radioBtn: {
+  borderWidth: 1,
+  borderColor: '#bbb',
+  borderRadius: 10,
+  paddingVertical: 6,
+  paddingHorizontal: 10,
+  marginVertical: 4,
+  flexGrow: 1,
+  marginHorizontal: 3,
+  backgroundColor: '#f4f4f4',
+},
+
+radioBtnSelected: {
+  backgroundColor: '#6c63ff30',
+  borderColor: '#6c63ff',
+},
+
+radioText: {
+  fontSize: 14,
+  textAlign: 'center',
+  color: '#333',
+},
+
+/* רשימת נמענים ----------------------------------------------------------- */
+recipientsTitle: {
+  alignSelf: 'flex-start',
+  fontSize: 15,
+  fontWeight: 'bold',
+  marginBottom: 4,
+  color: '#333',
+  textAlign: 'right',
+  alignItems: "right",
+  alignSelf : 'right',
+
+},
+
+
+recipientsList: {
+  maxHeight: 120,
+  alignSelf : 'stretch',
+  marginBottom: 8,
+},
+
+recipientRowBox: {
+  borderRadius: 8,
+  paddingVertical: 4,
+  paddingHorizontal: 6,
+  marginVertical: 2,
+},
+
+recipientRow: {
+  fontSize: 14,
+  textAlign: 'right',
+},
+
+/* טקסט הבהרה ------------------------------------------------------------- */
+noticeText: {
+  fontSize: 13,
+  color: '#666',
+  textAlign: 'center',
+  marginBottom: 8,
+},
+
+/* כפתורי פעולה ----------------------------------------------------------- */
+actionsRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  marginBottom: 12,
+},
+
+sendBtn: {
+  flex: 1,
+  backgroundColor: '#6c63ff',
+  paddingVertical: 8,
+  marginHorizontal: 4,
+  borderRadius: 12,
+  alignItems: 'center',
+},
+
+sendBtnTxt: {
+  color: '#fff',
+  fontSize: 14,
+  fontWeight: 'bold',
+},
+sendBtn12: {
+  backgroundColor: '#6c63ff',
+
+  /* ריווח וגודל */
+  paddingVertical: 10,
+  paddingHorizontal: 16,  // פחות רוחב מכל צד
+  minWidth: 50,          // לא “תשבר” בצדדים
+  maxWidth: 80,          // שלא תתפרש על כל השורה
+
+  /* פינות וצל */
+  borderRadius: 24,       // עיגול ברור יותר
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 2 },
+  shadowOpacity: 0.15,
+  shadowRadius: 4,
+  elevation: 3,           // אנדרואיד
+
+  /* מיקום בטור הכפתורים */
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginHorizontal: 4,
+},
+
+
+/* כפתור סגירה ------------------------------------------------------------ */
+closeBtn: {
+  alignSelf: 'center',
+  backgroundColor: '#e63946',
+  paddingVertical: 8,
+  paddingHorizontal: 24,
+  borderRadius: 14,
+  marginTop: 4,
+},
+
+closeBtnTxt: {
+  color: '#fff',
+  fontSize: 14,
+  fontWeight: 'bold',
+},
+modalOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.6)',
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+
+modalContainer: {
+  width: '90%',
+  backgroundColor: '#fff',
+  borderRadius: 12,
+  padding: 20,
+  alignItems: 'center',
+  elevation: 10,
+},
+
+modalTitle: {
+  fontSize: 20,
+  fontWeight: 'bold',
+  marginBottom: 10,
+  textAlign: 'center',
+},
+
+failedListContainer: {
+  maxHeight: 200,
+  width: '100%',
+  backgroundColor: '#f9f9f9',
+  borderRadius: 8,
+  padding: 10,
+  borderWidth: 1,
+  borderColor: '#ddd',
+  marginBottom: 10,
+},
+
+failedContactText: {
+  fontSize: 14,
+  color: '#333',
+  marginVertical: 2,
+},
+
+failedCountText: {
+  fontSize: 16,
+  marginBottom: 15,
+  color: '#555',
+},
+
+modalButton: {
+  backgroundColor: '#4CAF50',
+  paddingVertical: 10,
+  paddingHorizontal: 20,
+  borderRadius: 8,
+  marginBottom: 10,
+},
+
+modalButtonText: {
+  color: 'white',
+  fontWeight: 'bold',
+  fontSize: 16,
+},
+
+modalClose: {
+  paddingVertical: 8,
+  paddingHorizontal: 16,
+},
+
+modalCloseText: {
+  color: '#888',
+  fontSize: 14,
+},
+specificBox: {
+  alignSelf: 'stretch',
+  backgroundColor: '#fafafa',
+  borderWidth: 1,
+  borderColor: '#eee',
+  borderRadius: 12,
+  padding: 10,
+  marginBottom: 10,
+},
+specificSearchInput: {
+  borderWidth: 1,
+  borderColor: '#ddd',
+  borderRadius: 8,
+  paddingVertical: 8,
+  paddingHorizontal: 10,
+  marginBottom: 8,
+  backgroundColor: '#fff',
+  textAlign: 'right',
+},
+specificCounter: {
+  fontSize: 13,
+  color: '#666',
+  textAlign: 'right',
+  marginBottom: 6,
+},
+specificList: {
+  maxHeight: 180,
+  alignSelf: 'stretch',
+},
+specificItem: {
+  flexDirection: 'row-reverse',
+  alignItems: 'center',
+  borderWidth: 1,
+  borderColor: '#e6e6e6',
+  borderRadius: 10,
+  paddingVertical: 8,
+  paddingHorizontal: 10,
+  marginVertical: 4,
+},
+specificItemSelected: {
+  borderColor: '#6c63ff',
+  backgroundColor: '#F3F2FF',
+},
+specificCheck: {
+  fontSize: 18,
+  color: '#6c63ff',
+  marginLeft: 8,
+  marginRight: 4,
+},
+specificName: {
+  fontSize: 14,
+  color: '#222',
+  textAlign: 'right',
+},
+specificPhone: {
+  fontSize: 12,
+  color: '#666',
+  textAlign: 'right',
+},
+specificStatus: {
+  fontSize: 12,
+  color: '#444',
+  marginHorizontal: 6,
+},
+specificClearBtn: {
+  alignSelf: 'flex-start',
+  backgroundColor: '#eee',
+  paddingVertical: 6,
+  paddingHorizontal: 10,
+  borderRadius: 8,
+  marginTop: 6,
+},
+/* ===== Quick Send Modal (Styled) ===== */
+quickOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.55)',
+  justifyContent: 'center',
+  alignItems: 'center',
+},
+quickSheet: {
+  width: '92%',
+  maxHeight: '92%',
+  backgroundColor: '#fff',
+  borderRadius: 18,
+  padding: 16,
+  elevation: 8,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 6 },
+  shadowOpacity: 0.2,
+  shadowRadius: 12,
+},
+quickHeader: {
+  flexDirection: 'row-reverse',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  marginBottom: 8,
+},
+quickTitle: {
+  fontSize: 20,
+  fontWeight: '800',
+  color: '#6c63ff',
+},
+quickClose: {
+  fontSize: 20,
+  color: '#666',
+  paddingHorizontal: 8,
+},
+
+quickModalBox: {
+  width: '92%',
+  maxHeight: '92%',
+  backgroundColor: '#fff',
+  borderRadius: 16,
+  padding: 16,
+  elevation: 10,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.25,
+  shadowRadius: 8,
+},
+quickTitle: {
+  fontSize: 22,
+  fontWeight: 'bold',
+  color: '#6c63ff',
+  textAlign: 'center',
+  marginBottom: 12,
+},
+quickLabel: {
+  alignSelf: 'flex-end',
+  fontSize: 14,
+  fontWeight: '700',
+  marginBottom: 6,
+  color: '#333',
+},
+quickMsgInput: {
+  borderWidth: 1,
+  borderColor: '#ddd',
+  borderRadius: 10,
+  minHeight: 100,
+  padding: 10,
+  backgroundColor: '#fafafa',
+},
+quickCharRow: {
+  width: '100%',
+  alignItems: 'flex-start',
+  marginTop: 6,
+  marginBottom: 8,
+},
+quickCharText: {
+  fontSize: 12,
+  color: '#666',
+},
+
+/* chips row – ימין */
+quickChipsRow: {
+  flexDirection: 'row-reverse',
+  justifyContent: 'flex-start',
+  gap: 8,
+  marginBottom: 12,
+},
+quickChip: {
+  borderWidth: 1,
+  borderColor: '#ddd',
+  paddingVertical: 6,
+  paddingHorizontal: 10,
+  borderRadius: 999,
+  backgroundColor: '#fff',
+  marginLeft: 8,
+},
+quickChipActive: {
+  backgroundColor: '#F3F2FF',
+  borderColor: '#6c63ff',
+},
+quickChipText: { fontSize: 13, color: '#333' },
+quickChipTextActive: { color: '#6c63ff', fontWeight: '700' },
+
+/* target row */
+quickTargetRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  marginBottom: 10,
+  gap: 6,
+},
+quickTargetBtn: {
+  flex: 1,
+  borderWidth: 1,
+  borderColor: '#bbb',
+  borderRadius: 10,
+  paddingVertical: 8,
+  alignItems: 'center',
+  backgroundColor: '#f4f4f4',
+},
+quickTargetBtnSelected: {
+  backgroundColor: '#6c63ff30',
+  borderColor: '#6c63ff',
+},
+quickTargetText: { fontSize: 14, color: '#333' },
+quickTargetTextSelected: { color: '#333', fontWeight: '700' },
+
+/* specific list */
+quickSelectListTitle: {
+  alignSelf: 'flex-end',
+  fontSize: 14,
+  fontWeight: '700',
+  marginVertical: 6,
+  color: '#333',
+},
+quickSelectList: {
+  maxHeight: 150,
+  alignSelf: 'stretch',
+  borderWidth: 1,
+  borderColor: '#eee',
+  borderRadius: 10,
+  backgroundColor: '#fff',
+  padding: 6,
+  marginBottom: 6,
+},
+quickSelectRow: {
+  flexDirection: 'row-reverse',
+  alignItems: 'center',
+  paddingVertical: 6,
+},
+quickSelectCheck: { fontSize: 16, marginLeft: 8, color: '#6c63ff' },
+quickSelectName: { fontSize: 14, color: '#333', textAlign: 'right', flex: 1 },
+
+/* manual add */
+quickAddRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginBottom: 6,
+},
+quickPlusBtn: {
+  backgroundColor: '#22c55e',  // ירוק
+  borderRadius: 10,
+  paddingVertical: 10,
+  paddingHorizontal: 14,
+  marginRight: 8, // כדי שיישאר בצד שמאל ויפה עם השדות
+},
+quickPlusBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+quickInput: {
+  borderWidth: 1,
+  borderColor: '#ddd',
+  borderRadius: 10,
+  paddingHorizontal: 10,
+  paddingVertical: 8,
+  backgroundColor: '#fff',
+},
+
+quickManualListTitle: {
+  alignSelf: 'flex-end',
+  fontSize: 14,
+  fontWeight: '700',
+  marginTop: 6,
+  marginBottom: 4,
+  color: '#333',
+},
+quickManualList: {
+  alignSelf: 'stretch',
+  backgroundColor: '#f9f9f9',
+  borderRadius: 10,
+  borderWidth: 1,
+  borderColor: '#eee',
+  padding: 8,
+},
+quickManualItem: {
+  fontSize: 14,
+  color: '#333',
+  textAlign: 'right',
+  marginVertical: 2,
+},
+
+/* recipients & actions */
+quickRecipientsCount: {
+  fontSize: 13,
+  color: '#555',
+  textAlign: 'center',
+  marginTop: 8,
+  marginBottom: 10,
+},
+quickActionsRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  gap: 6,
+  marginBottom: 8,
+},
+quickSendBtn: {
+  flex: 1,
+  backgroundColor: '#6c63ff',
+  paddingVertical: 10,
+  borderRadius: 12,
+  alignItems: 'center',
+},
+quickSendBtnDisabled: {
+  backgroundColor: '#c7c7c7',
+},
+quickSendBtnTxt: { color: '#fff', fontWeight: '700' },
+
+quickCloseBtn: {
+  alignSelf: 'center',
+  backgroundColor: '#e63946',
+  paddingVertical: 8,
+  paddingHorizontal: 24,
+  borderRadius: 14,
+  marginTop: 6,
+},
+quickCloseBtnTxt: { color: '#fff', fontWeight: '700' },
 
 });
 

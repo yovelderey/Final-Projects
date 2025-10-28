@@ -1,44 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, ImageBackground, StyleSheet, TouchableOpacity, Image, Alert, TextInput, Modal, Button, PermissionsAndroid, StatusBar, Platform } from 'react-native';
-import { getDatabase, ref, push, remove, set } from 'firebase/database';
-import { getAuth, onAuthStateChanged } from 'firebase/auth'; // Import auth methods
-import { onValue } from 'firebase/database';
-import { initializeApp, getApps } from 'firebase/app';
+
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Contacts from 'expo-contacts';
 import { useNavigation } from '@react-navigation/native';
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import 'firebase/database'; // Import the Realtime Database module
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/auth';
-import 'firebase/compat/firestore';
+
 import { Picker } from '@react-native-picker/picker';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as XLSX from 'xlsx';
 import * as DocumentPicker from 'expo-document-picker';
+import { ref, push, remove, set, onValue } from 'firebase/database';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, database } from '../firebase';   // ← התאֵם את הנתיב
 
 
-const firebaseConfig = {
-  apiKey: "AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag",
-  authDomain: "final-project-d6ce7.firebaseapp.com",
-  projectId: "final-project-d6ce7",
-  storageBucket: "final-project-d6ce7.appspot.com",
-  messagingSenderId: "1056060530572",
-  appId: "1:1056060530572:web:d08d859ca2d25c46d340a9",
-  measurementId: "G-LD61QH3VVP"
-};
-
-if (!firebase.apps.length) {
-  firebase.initializeApp(firebaseConfig);
-}
-
-if (!getApps().length) {
-  initializeApp(firebaseConfig);
-}
-
-// קבלת ה-Auth instance
-const database = getDatabase();
 
 const Management = (props) => {
   const [contacts, setContacts] = useState([]);
@@ -52,7 +28,6 @@ const Management = (props) => {
   const [selectedContacts, setSelectedContacts] = useState([]);
   const navigation = useNavigation();
   const [searchQuery, setSearchQuery] = useState('');
-  const auth = getAuth();
   const [modalVisible2, setModalVisible2] = useState(false);
   const [selectedPrefix, setSelectedPrefix] = useState(''); // ברירת מחדל לקידומת
 

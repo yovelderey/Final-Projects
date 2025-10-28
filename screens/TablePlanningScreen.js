@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,146 +8,172 @@ import {
   PanResponder,
   Alert,
   Dimensions,
-  FlatList,
   StatusBar,
   Modal,
+  Animated,
+  Easing,
+  Platform,
+  FlatList,
 } from 'react-native';
-import { getDatabase, ref, set,remove, onValue } from 'firebase/database';
+import { getDatabase, ref, set, onValue, remove, get } from 'firebase/database';
 import firebase from 'firebase/compat/app';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Sharing from 'expo-sharing';
+import { captureRef } from 'react-native-view-shot';
+import * as Print from 'expo-print';
+
+const RESOLUTIONS = [0.75, 1, 1.25, 1.5, 2]; // רמות "רזולוציה" (סקייל) לתמונת הרקע
 
 const TablePlanningScreen = ({ navigation, route }) => {
-
   const database = getDatabase();
-  const user = firebase.auth().currentUser?.uid; // מזהה המשתמש הנוכחי
-  const [size, setSize] = useState(55);       // גודל ברירת מחדל של הכפתור
-  const [textSize, setTextSize] = useState(9); // גודל ברירת מחדל של הטקסט
-  const [color, setColor] = useState('#4CAF50'); // צבע ברירת מחדל ירוק
-  const [rotation, setRotation] = useState(0); // סיבוב ברירת מחדל של 0 מעלות
-  const insets = useSafeAreaInsets();
-  const [isLocked, setIsLocked] = useState(false); // מצב נעילה
-  const [showLockMessage, setShowLockMessage] = useState(false);
-  const screenHeight = Dimensions.get('window').height;
-  const minY = 175;           // הגובה המינימלי לגרירה (לדוגמה: 100 פיקסלים)
-  const maxY = screenHeight - 210; // הגובה המקסימלי לגרירה (לדוגמה: 200 פיקסלים מתחתית המסך)
-  const [responses, setResponses] = useState({});
+  const user = firebase.auth().currentUser?.uid;
 
-  const { id, selectedImage, tableData,selectedSize } = route.params || {}; // קבלת הנתונים
+  const insets = useSafeAreaInsets();
+  const screenHeight = Dimensions.get('window').height;
+  const screenWidth = Dimensions.get('window').width;
+  const stageRef = useRef(null);
+
+  const TOP_UI_OFFSET = 80;     // מקום לטופ-בר
+  const TOOLBAR_HEIGHT = 72;    // גובה הסרגל בתחתית
+  const HEADER_GAP = 16;        // ⬅️ רווח בין "ניהול שולחנות" לתמונה
+  // ---- גובה הבמה (אזור התמונה והשולחנות) ----
+
+  const stageHeight = Math.max(
+    300,
+    Math.min(
+      Math.round(screenHeight * 0.65),
+      screenHeight - (TOP_UI_OFFSET + TOOLBAR_HEIGHT + insets.top + insets.bottom + 24)
+    )
+  );
+
+  // ---- סטייט ----
+  const [size, setSize] = useState(55);
+  const [textSize, setTextSize] = useState(9);
+  const [color, setColor] = useState('#4CAF50');
+  const [rotation, setRotation] = useState(0);
+  const [isLocked, setIsLocked] = useState(false);
+  const [showLockMessage, setShowLockMessage] = useState(false);
+  const [responses, setResponses] = useState({});
+  const [blinkAnim] = useState(new Animated.Value(0));
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  // רזולוציית תמונת רקע (סקייל)
+  const [bgScaleIndex, setBgScaleIndex] = useState(1); // התחל ב-x1 (האיבר השני במערך)
+
+  const { id, selectedImage, tableData } = route.params || {};
+  const screenRef = useRef(null);
+
+  // טבלאות – אתחול לפי מרכז ה-stage (לא מרכז חלון מלא)
   const [tables, setTables] = useState(
-    tableData.map((table) => ({
+    (tableData || []).map((table) => ({
       ...table,
-      x: Dimensions.get('window').width / 2 - 50, // מיקום ברירת מחדל
-      y: Dimensions.get('window').height / 2 - 50,
+      x: screenWidth / 2 - 50,
+      y: stageHeight / 2 - 50,
     }))
   );
-  const [imageLoaded, setImageLoaded] = useState(false);
-  // שמירת מיקומי השולחנות בפיירבייס
 
+  // ===== CSS להדפסה + מניעת חסימת לחיצות (Web בלבד) =====
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    const style = document.createElement('style');
+    style.id = 'print-css';
+    style.innerHTML = `
+      @page { size: A4; margin: 10mm; }
+
+      @media screen {
+        #print-root { position: relative !important; }
+        #print-stage { position: relative !important; overflow: hidden !important; }
+        #print-bg {
+          position: absolute !important;
+          inset: 0 !important;
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: cover !important;
+          z-index: -1 !important;
+          pointer-events: none !important;
+        }
+      }
+
+      @media print {
+        body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        #print-toolbar, #print-topbar, #print-back, #print-lockmsg, #print-instructions { display: none !important; }
+        #print-root { position: relative !important; background: transparent !important; }
+        #print-stage { position: relative !important; overflow: hidden !important; }
+        #print-bg {
+          position: absolute !important;
+          inset: 0 !important;
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: cover !important;
+          z-index: 0 !important;
+          pointer-events: none !important;
+          transform: none !important; /* הדפסה תמיד בקנה מידה 1 */
+        }
+      }
+    `;
+    document.head.appendChild(style);
+
+    return () => {
+      const s = document.getElementById('print-css');
+      if (s) document.head.removeChild(s);
+    };
+  }, [insets.top, insets.bottom]);
+
+  // ===== אנימציית אזהרה =====
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(blinkAnim, { toValue: 1, duration: 500, easing: Easing.linear, useNativeDriver: true }),
+        Animated.timing(blinkAnim, { toValue: 0, duration: 500, easing: Easing.linear, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [blinkAnim]);
+
+  // ===== פונקציות עזר =====
   const saveTablesToFirebase = () => {
     if (!user) {
       Alert.alert('שגיאה', 'משתמש לא מחובר');
       return;
     }
-
     const tablesRef = ref(database, `Events/${user}/${id}/tablesPlace`);
     set(tablesRef, tables).catch((error) =>
       Alert.alert('שגיאה בשמירת השולחנות:', error.message)
     );
   };
 
-// פונקציה כללית לשמירת כל ההגדרות בפיירבייס
-const saveSettingsToFirebase = (updatedSettings) => {
+  const saveSettingsToFirebase = (updatedSettings) => {
     if (!user) return;
-  
     const settingsRef = ref(database, `Events/${user}/${id}/settings`);
-    set(settingsRef, {
-      ...updatedSettings,
-    }).catch((error) => Alert.alert('שגיאה בשמירת ההגדרות:', error.message));
+    set(settingsRef, { ...updatedSettings }).catch((error) =>
+      Alert.alert('שגיאה בשמירת ההגדרות:', error.message)
+    );
   };
 
-  
-  const renderTableIcon = (size) => {
-    switch (size) {
-      case 12:
-        return <Image source={require('../assets/meroba-removebg-preview.png')} style={styles.tableIcon} />;
-      case 14:
-        return <Image source={require('../assets/malben1-removebg-preview.png')} style={styles.tableIcon} />;
-      case 18:
-        return <Image source={require('../assets/malben2-removebg-preview.png')} style={styles.tableIcon} />;
-      case 16:
-        return <Image source={require('../assets/igol1-removebg-preview.png')} style={styles.tableIcon} />;
-      case 10:
-        return <Image source={require('../assets/igol2-removebg-preview.png')} style={styles.tableIcon} />;
-      case 24:
-        return <Image source={require('../assets/malben4-removebg-preview.png')} style={styles.tableIcon} />;
-      default:
-        return <View style={[styles.table, { backgroundColor: color }]} />;
+  const renderTableIcon = (sizeVal) => {
+    switch (sizeVal) {
+      case 12: return <Image pointerEvents="none" source={require('../assets/meroba-removebg-preview.png')} style={styles.tableIcon} />;
+      case 14: return <Image pointerEvents="none" source={require('../assets/malben1-removebg-preview.png')} style={styles.tableIcon} />;
+      case 18: return <Image pointerEvents="none" source={require('../assets/malben2-removebg-preview.png')} style={styles.tableIcon} />;
+      case 16: return <Image pointerEvents="none" source={require('../assets/igol1-removebg-preview.png')} style={styles.tableIcon} />;
+      case 10: return <Image pointerEvents="none" source={require('../assets/igol2-removebg-preview.png')} style={styles.tableIcon} />;
+      case 24: return <Image pointerEvents="none" source={require('../assets/malben4-removebg-preview.png')} style={styles.tableIcon} />;
+      default : return <View pointerEvents="none" style={[styles.shapeFill, { backgroundColor: color }]} />;
     }
   };
-  
 
-const centerTables = () => {
-  Alert.alert(
-    'מרכוז השולחנות',
-    ' פעולה זו תמרכז את השולחנות למרכז ותמחק את הסידור הנוכחי.',
-    [
-      {
-        text: 'ביטול',
-        style: 'cancel',
-      },
-      {
-        text: 'אישור',
-        onPress: () => {
-          const centerX = Dimensions.get('window').width / 2 - size / 2;
-          const centerY = Dimensions.get('window').height / 2 - size / 2;
-
-          setTables((prevTables) =>
-            prevTables.map((table) => ({
-              ...table,
-              x: centerX,
-              y: centerY,
-            }))
-          );
-
-          saveTablesToFirebase(); // שמירת המיקומים החדשים בפיירבייס
-        },
-      },
-    ],
-    { cancelable: true }
-  );
-};
-
-
-const increaseSize = () => {
-  if (size < 115) { // הגבלה מקסימלית של 115
-    const newSize = size + 10;
-    const newTextSize = textSize + 2;
-    setSize(newSize);
-    setTextSize(newTextSize);
-    saveSettingsToFirebase({ size: newSize, textSize: newTextSize, color, rotation });
-  } else {
-    Alert.alert('גודל מקסימלי', 'לא ניתן להגדיל את השולחן מעבר');
-  }
-};
-
-  // פונקציה לנעילה עם הודעה מוקפצת
-  const toggleLock = () => {
-    const newLockState = !isLocked;
-    setIsLocked(newLockState);
-  
-    // הצגת ההודעה רק כאשר המנעול ננעל
-    if (newLockState) {
-      setShowLockMessage(true);
-  
-      // הסתרת ההודעה אחרי 5 שניות
-      setTimeout(() => {
-        setShowLockMessage(false);
-      }, 5000);
+  const increaseSize = () => {
+    if (size < 115) {
+      const newSize = size + 10;
+      const newTextSize = textSize + 2;
+      setSize(newSize);
+      setTextSize(newTextSize);
+      saveSettingsToFirebase({ size: newSize, textSize: newTextSize, color, rotation });
+    } else {
+      Alert.alert('גודל מקסימלי', 'לא ניתן להגדיל את השולחן מעבר');
     }
   };
-  
 
-  // פונקציה להקטנת גודל השולחנות
   const decreaseSize = () => {
     const newSize = size > 20 ? size - 10 : size;
     const newTextSize = textSize > 8 ? textSize - 2 : textSize;
@@ -155,26 +181,36 @@ const increaseSize = () => {
     setTextSize(newTextSize);
     saveSettingsToFirebase({ size: newSize, textSize: newTextSize, color, rotation });
   };
-  
-  // פונקציה לשינוי צבע השולחנות
+
   const changeColor = () => {
-    const colors = ['red', 'green', 'black'];
+    const colors = ['red', 'green', 'black', '#4CAF50'];
     const newColor = colors[(colors.indexOf(color) + 1) % colors.length];
     setColor(newColor);
     saveSettingsToFirebase({ size, textSize, color: newColor, rotation });
   };
-  
-  // פונקציה לסיבוב השולחנות
+
   const rotateTables = () => {
     const newRotation = rotation + 90;
     setRotation(newRotation);
     saveSettingsToFirebase({ size, textSize, color, rotation: newRotation });
   };
-  
 
+  const toggleLock = () => {
+    const newLockState = !isLocked;
+    setIsLocked(newLockState);
+    if (newLockState) {
+      setShowLockMessage(true);
+      setTimeout(() => setShowLockMessage(false), 5000);
+    }
+  };
+
+  const cycleResolution = () => {
+    setBgScaleIndex((i) => (i + 1) % RESOLUTIONS.length);
+  };
+
+  // ===== טעינת הגדרות =====
   useEffect(() => {
     if (!user) return;
-  
     const settingsRef = ref(database, `Events/${user}/${id}/settings`);
     onValue(settingsRef, (snapshot) => {
       const data = snapshot.val();
@@ -182,496 +218,636 @@ const increaseSize = () => {
         setSize(data.size || 55);
         setTextSize(data.textSize || 9);
         setColor(data.color || '#4CAF50');
-        setRotation(data.rotation || 0); // טעינת הסיבוב
+        setRotation(data.rotation || 0);
       }
     });
   }, [user, id]);
-    
 
-  // טעינת מיקומי השולחנות מהפיירבייס
+  // ===== טעינת שולחנות + מיקומים =====
   useEffect(() => {
     if (!user) return;
-  
+
     const tablesPlaceRef = ref(database, `Events/${user}/${id}/tablesPlace`);
     const tablesRef = ref(database, `Events/${user}/${id}/tables`);
-  
+
     let tablePositions = [];
     let tableNames = {};
-  
-    // פונקציה למיזוג הנתונים
-    const mergeData = () => {
 
+    const mergeData = () => {
       const mergedTables = tableNames
         ? Object.entries(tableNames).map(([key, table]) => {
-            const position = tablePositions.find((tablePos) => tablePos.id === key);
-            const guests = table?.guests ? Object.keys(table.guests).length : 0;
+            const position = (tablePositions || []).find(
+              (tablePos) => String(tablePos.id) === String(key)
+            );
+
+            const guestsList = table?.guests ? Object.values(table.guests) : [];
+            const guestsCount = guestsList.length;
 
             return {
               id: key,
-              name: table.name, // גישה לשם
-              size: table.size, // גישה לגודל
-              guests, // מספר האורחים
-
-              x: position ? position.x : Dimensions.get('window').width / 2 - 50,
-              y: position ? position.y : Dimensions.get('window').height / 2 - 50,
+              name: table.name || table.displayName || `שולחן ${key}`,
+              size:
+                typeof table.size === 'number'
+                  ? table.size
+                  : Number(table.size) || table.size || null,
+              guestsList,
+              guests: guestsCount,
+              muteWarning: !!table.muteWarning,
+              x: position ? position.x : screenWidth / 2 - 50,
+              y: position ? position.y : stageHeight / 2 - 50,
             };
           })
         : [];
-    
+
       setTables(mergedTables);
     };
-    
 
-    // מאזין לנתוני המיקומים
     onValue(tablesPlaceRef, (snapshot) => {
       const data = snapshot.val();
       tablePositions = data || [];
       mergeData();
     });
-  
-    // מאזין לשמות השולחנות ומעדכן אוטומטית בעת שינוי
+
     onValue(tablesRef, (snapshot) => {
       const data = snapshot.val();
       tableNames = data
-      ? Object.fromEntries(
-          Object.entries(data).map(([key, table]) => [
-            key, // מפתח (key)
-            {    // ערך (value) – אובייקט עם כל המידע הרצוי
-              name: table.displayName || `שולחן ${key}`,
-              size: table.size || `גודל ${key}`,
-              guests: table.guests || {}, // טוען את האורחים
-
-            },
-          ])
-        )
-      : {};
-    
+        ? Object.fromEntries(
+            Object.entries(data).map(([key, table]) => [
+              key,
+              {
+                name: table.name || table.displayName || `שולחן ${key}`,
+                size: table.size ?? null,
+                guests: table.guests || {},
+                muteWarning: !!table.muteWarning,
+              },
+            ])
+          )
+        : {};
       mergeData();
     });
-  }, [user, id]);
-  
-  const panResponders = tables.map((table) =>
-  PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onPanResponderMove: (e, gestureState) => {
-      setTables((prevTables) =>
-        prevTables.map((t) => {
-          if (t.id === table.id) {
-            // חישוב המיקום החדש עם הגבלת הגובה
-            const newY = t.y + gestureState.dy;
-            const limitedY = Math.max(minY, Math.min(newY, maxY));
+  }, [user, id, stageHeight]);
 
-            return { ...t, x: t.x + gestureState.dx, y: limitedY };
-          }
-          return t;
-        })
-      );
-    },
-    onPanResponderRelease: () => {
-      saveTablesToFirebase(); // שמירת המיקום בפיירבייס לאחר שחרור
-    },
-  })
-);
-  const [selectedTableGuests, setSelectedTableGuests] = useState([]);
-  const [maxTablesFromSeatedAtTable, setMaxTablesFromSeatedAtTable] = useState(0);
-
-useEffect(() => {
-  if (user) {
-    const maxTablesRef = ref(database, `Events/${user}/${id}/tables`);
-    onValue(maxTablesRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        setMaxTablesFromSeatedAtTable(Object.keys(data).length);
-      } else {
-        setMaxTablesFromSeatedAtTable(0);
-      }
-    });
-  }
-}, [user, id]);
-const deleteSpecificGuest = (guestId) => {
-  if (!user) {
-    Alert.alert('שגיאה', 'משתמש לא מחובר.');
-    return;
-  }
-
-  if (!id) {
-    Alert.alert('שגיאה', 'אירוע לא נמצא.');
-    return;
-  }
-
-  if (!selectedTable || !selectedTable.id) {
-    Alert.alert('שגיאה', 'לא נבחר שולחן.');
-    console.log("❌ שגיאה: selectedTable חסר או לא תקין", selectedTable);
-    return;
-  }
-
-  // נתיב לשולחן שממנו מוחקים את האורח
-  const tablePath = `Events/${user}/${id}/tables/${selectedTable.id}/guests`;
-  const tableRef = ref(database, tablePath);
-
-  console.log("📌 נתיב למחיקה:", tablePath);
-
-  // 🔥 שלב 1: קבלת המערך הקיים של האורחים
-  onValue(tableRef, (snapshot) => {
-    const data = snapshot.val();
-    
-    if (!data || !Array.isArray(data)) {
-      console.log("❌ אין אורחים במערך, לא ניתן למחוק.");
-      Alert.alert("אין אורחים למחיקה.");
-      return;
-    }
-
-    // 🔥 שלב 2: סינון האורח שצריך להימחק
-    const updatedGuests = data.filter((guest) => guest.recordID !== guestId);
-
-    // 🔥 שלב 3: עדכון המערך בלי האורח שנמחק
-    set(tableRef, updatedGuests)
-      .then(() => {
-        console.log(`✅ נמחק בהצלחה: ${guestId} מהשולחן ${selectedTable.id}`);
-        Alert.alert('האורח נמחק בהצלחה!');
-        
-        // 🔄 עדכון ה־state
-        setGuests(updatedGuests);
-      })
-      .catch((error) => {
-        console.error('❌ שגיאה במחיקת האורח:', error);
-        Alert.alert('שגיאה במחיקת האורח:', error.message);
+  // ===== הדפסה במובייל: צילום ה־View ושליחה ל־Print =====
+  const printScreenMobile = async () => {
+    try {
+      const base64 = await captureRef(stageRef, {
+        format: 'png',
+        quality: 1,
+        result: 'base64',
       });
-  }, { onlyOnce: true }); // מאזין חד-פעמי כדי למנוע רענון אינסופי
-};
 
-
-
-
-/////////////////////////////////////////////////
-
-  // הוספת שולחן חדש
-  const addTable = () => {
-    const newTableId = tables.length + 1;
-    const newTable = {
-      id: newTableId,
-      name: `שולחן ${newTableId}`,
-      x: Dimensions.get('window').width / 2 - 50,
-      y: Dimensions.get('window').height / 2 - 50,
-    };
-    setTables([...tables, newTable]);
+      const html = `
+        <html dir="rtl">
+          <head>
+            <meta charset="utf-8" />
+            <style>
+              @page { size: A4; margin: 10mm; }
+              html, body { margin: 0; padding: 0; background: #fff; }
+              img { width: 100%; height: auto; display: block; }
+            </style>
+          </head>
+          <body>
+            <img src="data:image/png;base64,${base64}" />
+          </body>
+        </html>
+      `;
+      await Print.printAsync({ html });
+    } catch (err) {
+      // גיבוי: יצירת PDF ושיתוף
+      try {
+        const base64 = await captureRef(stageRef, {
+          format: 'png',
+          quality: 1,
+          result: 'base64',
+        });
+        const html = `
+          <html dir="rtl">
+            <head>
+              <meta charset="utf-8" />
+              <style>
+                @page { size: A4; margin: 10mm; }
+                html, body { margin: 0; padding: 0; background: #fff; }
+                img { width: 100%; height: auto; display:block; }
+              </style>
+            </head>
+            <body>
+              <img src="data:image/png;base64,${base64}" />
+            </body>
+          </html>
+        `;
+        const file = await Print.printToFileAsync({ html });
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf', dialogTitle: 'שיתוף/שמירת PDF' });
+        } else {
+          Alert.alert('PDF נוצר', 'אין שיתוף זמין במכשיר. קובץ נשמר בנתיב:\n' + file.uri);
+        }
+      } catch (err2) {
+        Alert.alert('שגיאת הדפסה', err2?.message || 'לא ניתן להדפיס במכשיר זה.');
+      }
+    }
   };
-  
+
+  // ===== גרירת שולחנות (יתחיל רק כשלא נעול) =====
+  const panResponders = tables.map((table) =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => !isLocked,
+      onMoveShouldSetPanResponder: (_, g) =>
+        !isLocked && (Math.abs(g.dx) > 2 || Math.abs(g.dy) > 2),
+      onPanResponderMove: (e, g) => {
+        if (isLocked) return;
+        setTables((prevTables) =>
+          prevTables.map((t) => {
+            if (t.id === table.id) {
+              const newX = t.x + g.dx;
+              const newY = t.y + g.dy;
+              const limitedX = Math.max(0, Math.min(newX, screenWidth - size));
+              const limitedY = Math.max(0, Math.min(newY, stageHeight - size));
+              return { ...t, x: limitedX, y: limitedY };
+            }
+            return t;
+          })
+        );
+      },
+      onPanResponderRelease: () => {
+        if (!isLocked) saveTablesToFirebase();
+      },
+    })
+  );
+
+  // ===== מודאל שולחן =====
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedTable, setSelectedTable] = useState(null);
   const [SizeTable, setSizeTable] = useState(null);
-
   const [guests, setGuests] = useState([]);
 
-// פונקציה לפתיחת ה-Modal עם המידע של השולחן שנבחר
-const openTableModal = (table) => {
+  const toggleMuteWarning = async (table) => {
+    if (!user || !table?.id) return;
+    try {
+      const tableRef = ref(database, `Events/${user}/${id}/tables/${table.id}/muteWarning`);
+      await set(tableRef, !table.muteWarning);
+      setSelectedTable((prev) => (prev ? { ...prev, muteWarning: !prev.muteWarning } : prev));
+    } catch (e) {
+      Alert.alert('שגיאה', e?.message || 'לא ניתן לעדכן השתקה');
+    }
+  };
+
+  const openTableModal = (table) => {
     if (!user) {
       Alert.alert('שגיאה', 'משתמש לא מחובר');
       return;
     }
-
     setSelectedTable(table);
 
     const guestsRef = ref(database, `Events/${user}/${id}/tables/${table.id}/guests`);
     onValue(guestsRef, (snapshot) => {
       const data = snapshot.val();
-      if (data) {
-        setGuests(Object.values(data));
-      } else {
-        setGuests([]);
-      }
+      setGuests(data ? Object.values(data) : []);
       setModalVisible(true);
     });
 
     const tableRef = ref(database, `Events/${user}/${id}/tables/${table.id}`);
     onValue(tableRef, (snapshot) => {
       const data = snapshot.val();
-      if (data) {
-        setSizeTable(data.size || 'אין נתונים'); // שמירה של גודל השולחן
-      } else {
-        setSizeTable('אין נתונים');
-      }
+      setSizeTable(data ? data.size || 'אין נתונים' : 'אין נתונים');
     });
-    
   };
 
-  // פונקציה לסגירת ה-Modal
   const closeModal = () => {
     setModalVisible(false);
     setSelectedTable(null);
     setGuests([]);
   };
-  // הסרת שולחן
-  const removeLastTable = () => {
-    if (tables.length === 0) return;
-    const updatedTables = tables.slice(0, -1);
-    setTables(updatedTables);
-    saveTablesToFirebase();
-  };
 
+  // ✅ מחיקת מוזמן אמיתית מהשולחן (פיירבייס)
+// ✅ מחיקת מוזמן ששורדת רענון: קורא את כל guests, מסנן ושומר חזרה
+const deleteSpecificGuest = (recordID) => {
+  if (!user || !selectedTable?.id) return;
+
+  Alert.alert('מחיקת אורח', 'למחוק את האורח מהשולחן?', [
+    { text: 'בטל', style: 'cancel' },
+    {
+      text: 'מחק',
+      style: 'destructive',
+      onPress: async () => {
+        try {
+          const guestsRef = ref(
+            database,
+            `Events/${user}/${id}/tables/${selectedTable.id}/guests`
+          );
+
+          // קורא את כל רשימת האורחים לשולחן
+          const snap = await get(guestsRef);
+          if (!snap.exists()) {
+            // אין מה למחוק – הסתיימנו
+            setGuests((prev) => prev.filter((g) => g.recordID !== recordID));
+            return;
+          }
+
+          const data = snap.val();
+          let newValue = null;
+
+          if (Array.isArray(data)) {
+            // guests כמערך
+            const filtered = data.filter((g) => g && g.recordID !== recordID);
+            newValue = filtered.length ? filtered : null;
+          } else if (data && typeof data === 'object') {
+            // guests כאובייקט מפתחות רנדומליים
+            const keptEntries = Object.entries(data).filter(
+              ([, v]) => v && v.recordID !== recordID
+            );
+            newValue = keptEntries.length ? Object.fromEntries(keptEntries) : null;
+          }
+
+          // שומר חזרה את הרשימה המסוננת (או null אם התרוקן)
+          await set(guestsRef, newValue);
+
+          // עדכון מקומי מיידי לחוויה זריזה
+          setGuests((prev) => prev.filter((g) => g.recordID !== recordID));
+          // עדכון מיידי גם באובייקט השולחנות על המסך (מונה/רשימה)
+          setTables((prev) =>
+            prev.map((t) =>
+              t.id === selectedTable.id
+                ? {
+                    ...t,
+                    guests: Math.max(0, (t.guests || 0) - 1),
+                    guestsList: (t.guestsList || []).filter(
+                      (g) => g?.recordID !== recordID
+                    ),
+                  }
+                : t
+            )
+          );
+        } catch (e) {
+          Alert.alert('שגיאה', e?.message || 'מחיקה נכשלה');
+        }
+      },
+    },
+  ]);
+};
+
+
+  // ===== תגובות =====
   useEffect(() => {
     if (!user) return;
-  
     const responsesRef = ref(database, `Events/${user}/${id}/responses`);
     onValue(responsesRef, (snapshot) => {
       const data = snapshot.val();
-      if (data) {
-        setResponses(data);
-      } else {
-        setResponses({});
-      }
+      setResponses(data || {});
     });
   }, [user, id]);
-  
-  
-  
-  return (
-    <View style={styles.container}>
 
-    
-      {/* תצוגת התמונה או הודעה במקרה שאין */}
-      {selectedImage ? (
-        <Image
-          source={{ uri: selectedImage }}
-          style={styles.image}
-          onLoad={() => setImageLoaded(true)}
-        />
-      ) : (
-        <Text style={styles.noImageText}>נא להעלות תמונה</Text>
-      )}
+  return (
+    <View nativeID="print-root" ref={screenRef} style={styles.container}>
       <StatusBar backgroundColor="#FFC0CB" barStyle="dark-content" />
-      <View style={[styles.topBar, { paddingTop: insets.top }]}>
+
+      {/* טופ־בר (מוסתר בפרינט) */}
+      <View nativeID="print-topbar" style={[styles.topBar, { paddingTop: insets.top }]}>
         <Text style={styles.title}>ניהול שולחנות</Text>
       </View>
 
-      <TouchableOpacity style={styles.topRightButtons} onPress={() => navigation.goBack()  }>
-          <Text style={styles.backButtonText}>חזור ←</Text>
-      </TouchableOpacity>
+      {/* אזור הבמה: תמונת רקע + שולחנות */}
+      <View
+        nativeID="print-stage"
+        ref={stageRef}
+        collapsable={false}
+        renderToHardwareTextureAndroid
+        style={[styles.stage, { height: stageHeight, marginTop: TOP_UI_OFFSET + HEADER_GAP }]} // ⬅️ כאן
+      >
+        {selectedImage ? (
+          <Image
+            nativeID="print-bg"
+            source={{ uri: selectedImage }}
+            pointerEvents="none"
+            onLoad={() => setImageLoaded(true)}
+            style={[
+              styles.printBg,
+              { transform: [{ scale: RESOLUTIONS[bgScaleIndex] }] } // ⬅️ רזולוציה/סקייל שניתן לדפדף
+            ]}
+            resizeMode="cover"
+          />
+        ) : (
+          <Text style={styles.noImageText}>נא להעלות תמונה</Text>
+        )}
 
-      <View style={styles.buttonsContainer}>
+        {/* שולחנות (מעל הרקע) */}
+        {imageLoaded &&
+          tables.map((table, index) => {
+            const isFull =
+              typeof table.size === 'number' && typeof table.guests === 'number'
+                ? table.guests >= table.size
+                : false;
+
+            const hasWarningGuest = table.guestsList?.some(
+              (g) =>
+                responses[g.recordID]?.response === 'לא מגיע' ||
+                responses[g.recordID]?.response === 'אולי'
+            );
+
+            const shouldWarn = hasWarningGuest && !table.muteWarning;
+
+            return (
+              <View
+                key={table.id}
+                {...(!isLocked ? panResponders[index]?.panHandlers : {})}
+                style={[
+                  styles.table,
+                  {
+                    transform: [
+                      { translateX: table.x },
+                      { translateY: table.y },
+                      { rotate: `${rotation}deg` },
+                    ],
+                    width: size,
+                    height: size,
+                  },
+                ]}
+              >
+                <View style={styles.fullSizeTouchable}>
+                  {/* טקסט מעל הכול, לא תופס קליקים */}
+                  <View pointerEvents="none" style={styles.textOverlay}>
+                    <Text style={[styles.tableText, { fontSize: size * 0.2 }]}>
+                      {table.name || `שולחן ${index + 1}`}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.modalTitle2,
+                        { color: isFull ? 'rgb(195, 23, 51)' : 'rgb(144, 238, 144)' },
+                      ]}
+                    >
+                      {table.size ? `${table.guests ?? 0}/${table.size}` : 'אין נתונים על גודל השולחן'}
+                    </Text>
+                  </View>
+
+                  {/* אזהרה/אייקון – לא תופס קליקים */}
+                  {shouldWarn ? (
+                    <View pointerEvents="none" style={styles.warningOverlay}>
+                      <Animated.Text
+                        style={[
+                          styles.warningText,
+                          {
+                            fontSize: Math.min(96, Math.max(28, size * 0.9)),
+                            opacity: blinkAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0.3, 1],
+                            }),
+                          },
+                        ]}
+                      >
+                        ⚠️
+                      </Animated.Text>
+                    </View>
+                  ) : (
+                    renderTableIcon(table.size)
+                  )}
+
+                  {/* שכבת לחיצה שקופה – תופסת לחיצות רק כשהנעול פעיל */}
+                  <TouchableOpacity
+                    style={styles.touchOverlay}
+                    pointerEvents={isLocked ? 'auto' : 'none'}
+                    activeOpacity={1}
+                    onPress={() => { if (isLocked) openTableModal(table); }}
+                  />
+                </View>
+              </View>
+            );
+          })}
+      </View>
+
+      {/* מודאל */}
+      <Modal visible={modalVisible} transparent animationType="fade">
+        <View style={styles.modalContainer}>
+          <View style={[styles.modalContent, { width: screenWidth > 800 ? '40%' : '92%' }]}>
+            {selectedTable && (
+              <>
+                <Text style={styles.modalTitle}>{selectedTable.name || 'פרטי שולחן'}</Text>
+                <Text style={styles.modalSubTitle}>{`מספר אורחים: ${guests.length}`}</Text>
+                <Text style={styles.modalSubTitle}>
+                  {SizeTable ? `גודל השולחן: ${SizeTable}` : 'אין נתונים על גודל השולחן'}
+                </Text>
+
+                <View style={styles.muteRow}>
+                  <Text style={styles.explainText}>
+                    ההתראה מופיעה כי אחד או יותר מהמוזמנים סימנו "אולי" או "לא מגיע".
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.muteBtn,
+                      selectedTable?.muteWarning ? styles.muteOff : styles.muteOn,
+                    ]}
+                    onPress={() => toggleMuteWarning(selectedTable)}
+                  >
+                    <Text style={styles.muteBtnText}>
+                      {selectedTable?.muteWarning ? 'בטל השתקה' : 'השתק התראה'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* ✅ רשימת מוזמנים עם גלילה וגובה מקסימלי */}
+                <View style={{ maxHeight: Math.min(380, Math.round(screenHeight * 0.5)) }}>
+                  <FlatList
+                    data={guests}
+                    keyExtractor={(item, i) => item?.recordID || String(i)}
+                    showsVerticalScrollIndicator
+                    renderItem={({ item, index }) => {
+                      const responseStatus = responses[item.recordID]?.response;
+                      let bgColor = '#9e9e9e';   // default grey
+                      let nameColor = '#fff';     // default white text
+
+                      if (responseStatus === 'מגיע')  { bgColor = '#4CAF50'; nameColor = '#fff'; }
+                      else if (responseStatus === 'לא מגיע') { bgColor = '#FF6F61'; nameColor = '#fff'; }
+                      else if (responseStatus === 'אולי') { bgColor = '#FFD700'; nameColor = '#000'; }
+
+                      return (
+                        <View key={index.toString()} style={[styles.guestRow, { backgroundColor: bgColor }]}>
+                          {/* כפתור מחיקה תמידי לכל מוזמן */}
+                          <TouchableOpacity
+                            style={styles.deleteGuestButton}
+                            onPress={() => deleteSpecificGuest(item.recordID)}
+                          >
+                            <Text style={styles.deleteButtonText}>מחק</Text>
+                          </TouchableOpacity>
+                          <Text style={[styles.guestName, { color: nameColor }]}>
+                            {item.displayName || 'ללא שם'}
+                          </Text>
+                        </View>
+                      );
+                    }}
+                    ListEmptyComponent={<Text style={{ textAlign: 'center', padding: 10 }}>אין אורחים בשולחן</Text>}
+                  />
+                </View>
+
+                <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
+                  <Text style={styles.closeButtonText}>סגור</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* סרגל כפתורים בתחתית (מוסתר בפרינט) */}
+      <View
+        nativeID="print-toolbar"
+        style={[styles.toolbar, { paddingBottom: Math.max(8, insets.bottom) }]}
+      >
+        {/* כפתור חזור (מוסתר בפרינט) */}
+        <TouchableOpacity nativeID="print-back" style={styles.toolbarIcon2} onPress={() => navigation.goBack()}>
+          <Text style={styles.backButtonText}>חזור ←</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.button} onPress={increaseSize}>
-          <Image source={require('../assets/zoomin.png')} style={styles.imageback2} />
+          <Image source={require('../assets/zoomin.png')} style={styles.toolbarIcon} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.button} onPress={decreaseSize}>
-          <Image source={require('../assets/zoomout.png')} style={styles.imageback2} />
+          <Image source={require('../assets/zoomout.png')} style={styles.toolbarIcon} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.button} onPress={centerTables}>
-          <Image source={require('../assets/placeholder.png')} style={styles.imageback2} />
+        {/* 🔁 כפתור "רזולוציה" */}
+        <TouchableOpacity style={styles.button} onPress={cycleResolution}>
+          <Image source={require('../assets/rezolo.png')} style={styles.toolbarIcon} />
         </TouchableOpacity>
-
-        <TouchableOpacity style={styles.button} onPress={changeColor}>
-          <Image source={require('../assets/colorpalette.png')} style={styles.imageback2} />
-        </TouchableOpacity>
+        <Text style={styles.resLabel}>x{RESOLUTIONS[bgScaleIndex].toFixed(2)}</Text>
 
         <TouchableOpacity style={styles.button} onPress={rotateTables}>
-          <Image source={require('../assets/rotating.png')} style={styles.imageback2} />
+          <Image source={require('../assets/rotating.png')} style={styles.toolbarIcon} />
         </TouchableOpacity>
-        
+
         <TouchableOpacity style={styles.button} onPress={toggleLock}>
           <Image
             source={isLocked ? require('../assets/lock.png') : require('../assets/lockopen.png')}
-            style={styles.imageback2}
+            style={styles.toolbarIcon}
           />
         </TouchableOpacity>
 
+        {/* כפתור הדפסה (מובייל) */}
+        <TouchableOpacity style={styles.button} onPress={printScreenMobile}>
+          <Image source={require('../assets/printing.png')} style={styles.toolbarIcon} />
+        </TouchableOpacity>
       </View>
 
-
-    <Modal visible={modalVisible} transparent={true} animationType="fade">
-  <View style={styles.modalContainer}>
-    <View style={styles.modalContent}>
-      {selectedTable && (
-        <>
-          <Text style={styles.modalTitle}>{selectedTable.name || 'פרטי שולחן'}</Text>
-          <Text style={styles.modalSubTitle}>{`מספר אורחים: ${guests.length}`}</Text>
-          <Text style={styles.modalSubTitle}>{SizeTable ? `גודל השולחן: ${SizeTable}` : 'אין נתונים על גודל השולחן'}</Text>
-
-
-
-          <FlatList
-  data={guests}
-  keyExtractor={(item, index) => index.toString()}
-  renderItem={({ item }) => {
-    let guestColor = 'gray'; // ברירת מחדל
-
-    // מחפש את הסטטוס בפיירבייס לפי ה-recordID של האורח
-    const responseStatus = responses[item.recordID]?.response;
-
-    if (responseStatus === 'מגיע') {
-      guestColor = '#4CAF50'; // ירוק
-    } else if (responseStatus === 'לא מגיע') {
-      guestColor = '#FF6F61'; // אדום
-    } else if (responseStatus === 'אולי') {
-      guestColor = '#FFD700'; // צהוב
-    }
-
-    return (
-      <View style={[styles.guestContainer, { backgroundColor: guestColor }]}>
-        {/* כפתור מחיקה בצד שמאל */}
-        {responseStatus === 'לא מגיע' && (
-          <TouchableOpacity style={styles.deleteGuestButton} onPress={() => deleteSpecificGuest(item.recordID)}>
-            <Text style={styles.deleteButtonText}>מחק</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* שם האורח בצד ימין */}
-        <Text style={styles.guestName}>{item.displayName || 'ללא שם'}</Text>
-      </View>
-    );
-  }}
-/>
-
-
-
-
-
-          <TouchableOpacity style={styles.closeButton} onPress={closeModal}>
-            <Text style={styles.closeButtonText}>סגור</Text>
-          </TouchableOpacity>
-        </>
+      {/* הודעת נעילה (מוסתר בפרינט) */}
+      {showLockMessage && (
+        <View nativeID="print-lockmsg" style={styles.lockMessage}>
+          <Text style={styles.lockMessageText}>🔒 נעילת רשימת אורחים - מופעל</Text>
+        </View>
       )}
+
+      {/* הוראות שימוש (מוסתר בפרינט) */}
+      <View nativeID="print-instructions" style={{ marginBottom: TOOLBAR_HEIGHT + 12 }}>
+        <Text style={styles.centeredText}>הוראות שימוש</Text>
+        <Text style={styles.centeredText2}>
+          לפניך 6 כלים: נעילה – נועל הזזה, סיבוב – מסובב את השולחנות, רזולוציה – מדפדף בין גדלים שונים של תמונת הרקע,
+          זכוכיות מגדלת – זום אין/אאוט. ניתן להזיז ולמקם את השולחנות על פני התרשים לקבלת התאמה לסקיצה.
+        </Text>
+      </View>
     </View>
-  </View>
-</Modal>
-
-      {imageLoaded && 
-      tables.map((table, index) => {
-        let isDragging = false;
-        const isFull = table.guests >= table.size; // בדיקה אם השולחן מלא
-
-return (
-  <View
-    key={table.id}
-    {...panResponders[index]?.panHandlers}
-    style={[
-      styles.table,
-      {
-        transform: [
-          { translateX: table.x },
-          { translateY: table.y },
-          { rotate: `${rotation}deg` },
-        ],
-        width: size,
-        height: size,
-      },
-    ]}
-  >
-    <View style={styles.fullSizeTouchable}>
-
-    <View style={styles.textOverlay}>
-      <Text style={[styles.tableText, { fontSize: size * 0.2 }]}>
-        {table.name || `שולחן ${index + 1}`}
-      </Text>
-      <Text style={[styles.modalTitle2,{ color: isFull ? 'rgb(195, 23, 51)' : 'rgb(144, 238, 144)' },]}>
-        {table.size ? `${table.guests}/${table.size}` : 'אין נתונים על גודל השולחן'}
-      </Text>
-    </View>
-
-      {/* אייקון מותאם לפי גודל */}
-      {renderTableIcon(table.size)}
-
-      <TouchableOpacity
-  style={[
-    styles.touchableArea,
-    isLocked && { 
-      zIndex: 100, // מביא את הכפתור לקדמת המסך כאשר נעול
-      elevation: 10, // עבור אנדרואיד כאשר נעול
-      position: 'relative', // כאשר נעול
-    },
-  ]}      
-  activeOpacity={1}
-        onPressIn={() => (isDragging = false)}
-        onPressOut={() => {
-          if (!isDragging && isLocked) {
-            openTableModal(table);
-          }
-        }}
-      >
-      
-      <Text style={[styles.tableText, { fontSize: size * 0.2 }]}>
-        {table.name || `שולחן ${index + 1}`}
-      </Text>
-      <Text style={styles.modalTitle2}>
-        {table.size ? `                                ` : 'אין נתונים על גודל השולחן'}
-      </Text>
-
-
-      </TouchableOpacity>
-    </View>
-  </View>
-);
-})
-}
-{showLockMessage && (
-  <View style={styles.lockMessage}>
-    <Text style={styles.lockMessageText}>🔒 נעילת רשימת אורחים - מופעל</Text>
-  </View>
-)}
-
-    <Text style={styles.centeredText}>הוראות שימוש</Text>
-    <Text style={styles.centeredText2}>לפניך 6 כלים, מנעול - נעילת שינוי מיקום השולחנות, סיבוב - לסובב את השולחנות, צבע - לצבוע את השולחנות, מיקוד - מרכז את השולחנות למרכז, זכוכיות מגדלת - זום אין זום אאוט. את השולחנות ניתן להזיז ולמקמם אותם על פני התרשים אולם שמוצג לפניכם כדי לקבל תאימות מרבית לסקיצה שלכם</Text>
-
-
-    </View>
-    
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  image: {
+  container: { flex: 1, backgroundColor: '#fff', position: 'relative' },
+
+  // אזור במה מוקטן (הרקע + השולחנות יושבים כאן)
+  stage: {
     width: '100%',
-    height: '80%',
-    resizeMode: 'contain',
+    alignSelf: 'stretch',
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: 8,
   },
-  noImageText: {
-    textAlign: 'center',
-    fontSize: 18,
-    color: '#888',
-    marginTop: 20,
+
+  // תמונת רקע בתוך ה-stage
+  printBg: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    width: '100%',
+    height: '100%',
   },
+
+  noImageText: { textAlign: 'center', fontSize: 18, color: '#888', marginTop: 20 },
+
   table: {
     position: 'absolute',
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 7,
-    overflow: 'hidden',    // מונע חריגה של התוכן מהכפתור
-    minWidth: 30,          // גודל מינימלי לכפתור
-    minHeight: 30,         // גודל מינימלי לכפתור
+    overflow: 'hidden',
+    minWidth: 30,
+    minHeight: 30,
+    zIndex: 10, // מעל הרקע
   },
-  
+  fullSizeTouchable: { flex: 1, width: '100%', height: '100%' },
+
+  // שכבה שממלאת את כל משטח השולחן (ברירת מחדל לצורה)
+  shapeFill: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 7,
+    zIndex: 10,
+  },
+
+  // שכבת הלחיצה השקופה – הכי גבוהה
+  touchOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+  },
+
   tableText: {
     color: '#fff',
     fontWeight: 'bold',
     textAlign: 'center',
-    flexShrink: 1,         // מאפשר לטקסט להתכווץ בתוך גבולות הכפתור
-    maxWidth: '90%',   
-        // מגביל את רוחב הטקסט
+    flexShrink: 1,
+    maxWidth: '90%',
   },
-  buttonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: -565,
 
-  },
-  button: {
-    padding: 0,
-    borderRadius: 0,
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  // טופ-בר
+  title: { fontSize: 24, fontWeight: 'bold' },
+  topBar: {
+    width: '100%',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)', // רקע כהה עם שקיפות
-    paddingHorizontal: 20,
+    paddingVertical: 10,
+    position: 'absolute',
+    top: 0,
+    zIndex: 100,
+    backgroundColor: 'transparent',
+  },
+
+  backButtonText: { fontSize: 18, color: '#000', marginBottom: 0 },
+
+  // סרגל כפתורים בתחתית
+  toolbar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 72,
+    backgroundColor: '#ffffffee',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e5e5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    zIndex: 200,
+  },
+  button: { padding: 6, borderRadius: 8 },
+  toolbarIcon: { width: 28, height: 28 },
+  toolbarIcon2: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    minWidth: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  resLabel: { fontSize: 14, color: '#333', fontWeight: '700' },
+
+  modalContainer: {
+    flex: 1, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)', paddingHorizontal: 20,
   },
   modalContent: {
-    width: '100%',
     maxHeight: '80%',
     backgroundColor: '#fff',
     borderRadius: 20,
@@ -680,182 +856,81 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
-    elevation: 10, // הצללה לאנדרואיד
+    elevation: 10,
   },
   modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
-    paddingBottom: 10,
+    fontSize: 24, fontWeight: 'bold', color: '#333', textAlign: 'center',
+    marginBottom: 10, borderBottomWidth: 1, borderBottomColor: '#ddd', paddingBottom: 10,
   },
-  modalSubTitle: {
-    fontSize: 18,
-    color: '#555',
-    textAlign: 'center',
-    marginBottom: 15,
-  },
+  modalTitle2: { fontSize: 16, fontWeight: 'bold' },
+  modalSubTitle: { fontSize: 18, color: '#555', textAlign: 'center', marginBottom: 15 },
 
-  guestContainer: {
-    backgroundColor: '#f0f0f0',
-    padding: 15,
-    borderRadius: 12,
-    
-    marginVertical: 5,
-    shadowColor: '#ccc',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2, // הצללה לאנדרואיד
-  },
-  guestName: {
-    fontSize: 16,
-    textAlign: 'right',   // מיישר את הטקסט לימין
+  muteRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  explainText: { flex: 1, color: '#444', fontSize: 14, textAlign: 'right' },
+  muteBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10 },
+  muteOn: { backgroundColor: '#FFB74D' },
+  muteOff: { backgroundColor: '#90CAF9' },
+  muteBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
 
-    color: '#444',
-    fontWeight: '500',
+  guestRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
+    padding: 12, borderRadius: 10, marginVertical: 5,
+    shadowColor: '#ccc', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1, shadowRadius: 4, elevation: 2,
   },
+  guestName: { fontSize: 16, textAlign: 'right', flex: 1 },
+  deleteGuestButton: {
+    backgroundColor: '#D32F2F',
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+    borderRadius: 5,
+    marginRight: 'auto'
+  },
+  deleteButtonText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+
   closeButton: {
-    backgroundColor: '#808080',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 25,
-    marginTop: 20,
-    alignSelf: 'center',
-    width: '50%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 5,
+    backgroundColor: '#808080', paddingVertical: 12, paddingHorizontal: 20,
+    borderRadius: 25, marginTop: 20, alignSelf: 'center', width: '50%',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 6, elevation: 5,
   },
-  closeButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  topBar: {
-    width: '100%',
-    alignItems: 'center',
-    paddingVertical: 10,
+  closeButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold', textAlign: 'center' },
+
+  centeredText: { fontSize: 20, textAlign: 'center', marginTop: 12, fontWeight: 'bold' },
+  centeredText2: { fontSize: 15, textAlign: 'center', marginHorizontal: 12 },
+
+  lockMessage: {
     position: 'absolute',
-    top: 0,
+    bottom: 90, // מעל הסרגל
+    left: 0, right: 0,
+    backgroundColor: '#000',
+    padding: 10, marginHorizontal: 20,
+    borderRadius: 10, alignItems: 'center',
+    opacity: 0.8, zIndex: 300,
   },
-  imageback: {
-    width: 40,
-    height: 40,
-    position: 'absolute', // מאפשר מיקום מוחלט
-    top: -595,              // לדוגמה: מיקום 10 פיקסלים מלמעלה
-    right: 340,            // לדוגמה: מיקום 10 פיקסלים מימין
+  lockMessageText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+
+  tableIcon: {
+    width: '100%', height: '100%', resizeMode: 'contain',
+    position: 'absolute', zIndex: 10,
   },
-  imageback2: {
-    width: 28,
-    height: 28,
-    position: 'absolute', // מאפשר מיקום מוחלט
+  textOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center', alignItems: 'center',
+    zIndex: 20,
+    paddingHorizontal: 2,
   },
-touchableArea: {
-  flex: 1,
-  justifyContent: 'center',
-  alignItems: 'center',
-  width: '100%',
-  height: '100%',
-  
-},
-centeredText: {
-  fontSize: 20,
-  textAlign: 'center',
-  marginTop: 550, // רווח מעל הטקסט
-  fontWeight: 'bold', // הופך את הטקסט לבולד
-
-},
-centeredText2: {
-  fontSize: 15,
-  textAlign: 'center',
-},
-lockMessage: {
-  position: 'absolute',
-  bottom: 30,
-  left: 0,
-  right: 0,
-  backgroundColor: '#000',
-  padding: 10,
-  marginHorizontal: 20,
-  borderRadius: 10,
-  alignItems: 'center',
-  opacity: 0.8,
-  zIndex: 1,
-},
-
-lockMessageText: {
-  color: '#fff',
-  fontSize: 16,
-  fontWeight: 'bold',
-},
-tableIcon: {
-  width: '100%',
-  height: '100%',
-  resizeMode: 'contain',
-  position: 'absolute', // מוודא שהאייקון ממוקם כהלכה
-  zIndex: 10,          // מביא את התמונה לקדמת המסך
-},
-textOverlay: {
-  position: 'absolute', // מיקום מוחלט מעל האייקון
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  justifyContent: 'center', // ממרכז את הטקסט
-  alignItems: 'center',     // ממרכז את הטקסט
-  zIndex: 20,               // מביא את הטקסט לקדמת המסך
-},
-
-backButtonText: {
-  fontSize: 18,
-  color: '#000',
-  marginBottom: 0,
-
-},
-topRightButtons: {
-  position: 'absolute', 
-  left: 10,
-  top: 70,
-
-},
-guestContainer: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'flex-end', // דוחף את שם האורח לצד ימין ואת הכפתור לצד שמאל
-  padding: 12,
-  borderRadius: 10,
-  marginVertical: 5,
-},
-guestName: {
-  fontSize: 16,
-  color: '#fff',
-  textAlign: 'right', // יישור לימין
-  flex: 1, // מבטיח שהשם יתפוס את כל הרוחב הנותר
-},
-deleteGuestButton: {
-  backgroundColor: '#D32F2F', // אדום כהה
-  paddingVertical: 5,
-  paddingHorizontal: 12,
-  borderRadius: 5,
-  marginRight: 'auto', // דוחף את הכפתור לצד שמאל
-},
-deleteButtonText: {
-  color: '#fff',
-  fontSize: 14,
-  fontWeight: 'bold',
-},
-
+  warningOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 15,
+  },
+  warningText: {
+    fontSize: 30, fontWeight: 'bold', color: '#fff',
+    textAlign: 'center', includeFontPadding: false, textAlignVertical: 'center',
+  },
 });
 
 export default TablePlanningScreen;
