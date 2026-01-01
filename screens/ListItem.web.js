@@ -24,6 +24,7 @@ import * as Sharing from 'expo-sharing';
 import XLSX, { utils, writeFileXLSX } from 'xlsx';
 import { enableLogging } from 'firebase/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFonts } from 'expo-font';
 
 // ===== נכסי ברירת־מחדל לקרוסלה =====
 const imagesFallback = [
@@ -959,18 +960,66 @@ useEffect(() => {
             {`${eventDetails.eventDate || ''}  ●  ${eventDetails.eventName || ''}  ●  ${eventDetails.eventLocation || ''}`}
           </Text>
         </View>
-        <View style={[styles.headerActions, { width: ACTIONS_W }]}>
-          <Pressable onPress={cycleThemeMode} onLongPress={() => setThemeMode('auto')} hitSlop={hit}
-            style={[styles.headerIconBtn,{ width: headerBtnSize, height: headerBtnSize, backgroundColor: COLORS.chipBg, borderColor: COLORS.chipBorder, borderWidth: StyleSheet.hairlineWidth }]}
-            accessibilityRole="button" accessibilityLabel={themeA11yLabel}>
-            <Ionicons name={themeIconName} size={iconSize} color={COLORS.text} />
-          </Pressable>
-          <Pressable onPress={() => { const phone='972542455869'; Linking.openURL(`https://wa.me/${phone}`).catch(()=>Alert.alert('שגיאה','לא ניתן לפתוח WhatsApp')); }} hitSlop={hit}
-            style={[styles.headerIconBtn,{ width: headerBtnSize, height: headerBtnSize, backgroundColor: COLORS.chipBg, borderColor: COLORS.chipBorder, borderWidth: StyleSheet.hairlineWidth }]}
-            accessibilityRole="button" accessibilityLabel="פתיחת וואטסאפ">
-            <Ionicons name="logo-whatsapp" size={iconSize} color={COLORS.text} />
-          </Pressable>
-        </View>
+<View style={[styles.headerActions, { width: ACTIONS_W }]}>
+  {/* Theme button (image from assets) */}
+  <Pressable
+    onPress={cycleThemeMode}
+    onLongPress={() => setThemeMode('auto')}
+    hitSlop={hit}
+    style={[
+      styles.headerIconBtn,
+      {
+        width: headerBtnSize,
+        height: headerBtnSize,
+        backgroundColor: COLORS.chipBg,
+        borderColor: COLORS.chipBorder,
+        borderWidth: StyleSheet.hairlineWidth,
+      },
+    ]}
+    accessibilityRole="button"
+    accessibilityLabel={themeA11yLabel}
+  >
+    <Image
+      source={
+        themeMode === 'auto'
+          ? require('../assets/automatic.png')
+          : isDark
+          ? require('../assets/nightmode.png')
+          : require('../assets/lightmode.png')
+      }
+      style={{ width: iconSize + 6, height: iconSize + 6, resizeMode: 'contain' }}
+    />
+  </Pressable>
+
+  {/* WhatsApp button (image from assets) */}
+  <Pressable
+    onPress={() => {
+      const phone = '972542455869';
+      Linking.openURL(`https://wa.me/${phone}`).catch(() =>
+        Alert.alert('שגיאה', 'לא ניתן לפתוח WhatsApp')
+      );
+    }}
+    hitSlop={hit}
+    style={[
+      styles.headerIconBtn,
+      {
+        width: headerBtnSize,
+        height: headerBtnSize,
+        backgroundColor: COLORS.chipBg,
+        borderColor: COLORS.chipBorder,
+        borderWidth: StyleSheet.hairlineWidth,
+      },
+    ]}
+    accessibilityRole="button"
+    accessibilityLabel="פתיחת וואטסאפ"
+  >
+    <Image
+      source={require('../assets/whatsapp.png')}
+      style={{ width: iconSize + 8, height: iconSize + 8, resizeMode: 'contain' }}
+    />
+  </Pressable>
+</View>
+
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollViewContainer}>
