@@ -1,4 +1,4 @@
-// AdminPanel.js — דשבורד ניהול + מדידת תעבורה ושמירה לפיירבייס
+// AdminPanel.js — דשבורד ניהול + מדידת תעבורה + תכנית הודעות (main_sms)
 // תומך ב־override של uid דרך route.params.uid (מ־OwnerDashboard)
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -19,6 +19,14 @@ import { Ionicons } from '@expo/vector-icons';
 // ======================== CONFIG ========================
 const ADMIN_PASS = '31123112';
 
+// כמה להכפיל × מספר המוזמנים לכל תוכנית
+const PLAN_FACTORS = {
+  basic: 0.40,          // = total2
+  plus: 0.65,           // = total3
+  digital: 0.80,        // = total4
+  complementary: 1.70,  // = total
+};
+
 // ======================== NET METER + HELPERS ========================
 const _TextEncoder = typeof TextEncoder !== 'undefined' ? TextEncoder : null;
 const _enc = _TextEncoder ? new _TextEncoder() : null;
@@ -32,7 +40,6 @@ const _bytesOf = (v) => {
 const _MB = (b) => (b / 1e6);
 const _pad = (n, w = 2) => String(n).padStart(w, '0');
 
-// UTC keys
 const keyMinute = (d = new Date()) => {
   const y = d.getUTCFullYear(), m = _pad(d.getUTCMonth() + 1), dd = _pad(d.getUTCDate());
   const hh = _pad(d.getUTCHours()), mm = _pad(d.getUTCMinutes());
@@ -81,9 +88,6 @@ const NetMeter = {
         dt, rateRead, rateWrite, rateUpload,
         totalRead: this.totals.read, totalWrite: this.totals.write, totalUpload: this.totals.upload,
       };
-
-      // השבת הדפסת קונסול אם לא רוצים ספאם
-      // console.log('[NET 2s]', this.lastStats);
 
       this.last = { t: now, read: this.totals.read, write: this.totals.write, upload: this.totals.upload };
       this.listeners.forEach((cb) => { try { cb(this.lastStats); } catch {} });
@@ -253,19 +257,76 @@ const bumpVisitCounters = async (db, uid, eventId) => {
   } catch {}
 };
 
+// ======================== HELPERS: Guests + Plan Quota ========================
+const fetchGuestCount = async (db, uid, eventId) => {
+  // נסיון 0: Numberofguests (כמו אצלך "400")
+  const nSnap = await db.ref(`Events/${uid}/${eventId}/Numberofguests`).get();
+  if (nSnap.exists()) {
+    const n = parseInt(nSnap.val(), 10);
+    if (!Number.isNaN(n) && n >= 0) return n;
+  }
+
+  // נסיון 1: guests
+  const g1 = await db.ref(`Events/${uid}/${eventId}/guests`).get();
+  if (g1.exists()) {
+    const val = g1.val() || {};
+    return Object.keys(val).length;
+  }
+
+  // נסיון 2: formattedContacts
+  const g2 = await db.ref(`Events/${uid}/${eventId}/formattedContacts`).get();
+  if (g2.exists()) {
+    const val = g2.val() || {};
+    return Object.keys(val).length;
+  }
+
+  return 0;
+};
+
+const clamp = (n, min = 0, max = 999999) => Math.max(min, Math.min(max, n));
+
+// כתיבה קומפקטית: תמיד מספר ב-main_sms + מטא ב-main_sms_meta
+const writeMainSmsCompat = async (db, uid, eventId, quota, meta) => {
+  await meteredSet(db.ref(`Events/${uid}/${eventId}/main_sms`), quota);
+  await meteredSet(db.ref(`Events/${uid}/${eventId}/main_sms_meta`), { quota, ...meta });
+};
+
+const recomputeAndWriteQuota = async (planType, targetUid, id) => {
+  if (!targetUid || !id) return;
+  const db = firebase.database();
+
+  const Numberofguests = await fetchGuestCount(db, targetUid, id);
+  const factor = PLAN_FACTORS[planType] ?? PLAN_FACTORS.basic;
+  const quotaRaw = Math.ceil(Numberofguests * factor);
+  const quota = clamp(quotaRaw, 0, 999999);
+
+  await writeMainSmsCompat(db, targetUid, id, quota, {
+    guests: Numberofguests,
+    factor,
+    plan: planType,
+    updatedAt: Date.now(),
+    source: 'auto-plan-change',
+  });
+
+  // לוג לאודיט
+  const key = db.ref().push().key;
+  await db.ref(`Events/${targetUid}/${id}/__admin/audit/${key}`).set({
+    ts: Date.now(),
+    action: `עודכנה מכסה ב-main_sms: ${quota} (guests=${Numberofguests}, plan=${planType}, factor=${factor})`
+  });
+};
+
 // ======================== COMPONENT ========================
 export default function AdminPanel() {
   const route = useRoute();
   const navigation = useNavigation();
   const id = route?.params?.id;
 
-  // ⬇⬇⬇ תוספת קריטית: תמיכה ב־uid חיצוני מה-OwnerDashboard
-  const overrideUid = route?.params?.uid;                // אם הגענו מדשבורד בעלים
-  const authUser = firebase.auth().currentUser;          // יכול להיות null כשיוצאים מה־OwnerDashboard
-  const targetUid = overrideUid || authUser?.uid;        // זה ה-uid לשימוש בכל הנתיבים
-  // אם overrideUid קיים – מדלגים על סיסמת המנהל
+  // uid: יכול להגיע מבחוץ (OwnerDashboard) או מהמשתמש המחובר
+  const overrideUid = route?.params?.uid;
+  const authUser = firebase.auth().currentUser;
+  const targetUid = overrideUid || authUser?.uid;
   const autoAuthorize = Boolean(overrideUid);
-  // ⬆⬆⬆-----------------------------------------
 
   const { width } = useWindowDimensions();
   const isMobile = width < 600;
@@ -274,6 +335,10 @@ export default function AdminPanel() {
   const [authorized, setAuthorized] = useState(autoAuthorize);
   const [pass, setPass] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // תכנית הודעות
+  const [plan, setPlan] = useState({ type: 'basic' }); // הערך בפועל מהמסד
+  const [pendingPlanType, setPendingPlanType] = useState('basic'); // בחירה במסך לפני/אחרי שמירה
 
   // היום מתוך היסטוריית byDay (מצטבר בין סשנים)
   const [todayTraffic, setTodayTraffic] = useState({ readMB: 0, writeMB: 0, uploadMB: 0 });
@@ -367,6 +432,14 @@ export default function AdminPanel() {
       });
     }));
 
+    // PLAN: קריאה מהמסד ועדכון סטייט
+    const pRef = db.ref(`Events/${targetUid}/${id}/plan/type`);
+    offs.push(pRef.on('value', (s) => {
+      const t = (s.val() || 'basic').toString();
+      setPlan({ type: t });
+      setPendingPlanType(t); // מסנכרן את בחירת ה־UI למצב הקיים
+    }));
+
     // היום מתוך היסטוריית byDay/<YYYY-MM-DD>/totals
     const dRef = db.ref(`Events/${targetUid}/${id}/__metrics/byDay/${todayKeyUTC()}/totals`);
     offs.push(dRef.on('value', (s) => {
@@ -430,33 +503,53 @@ export default function AdminPanel() {
       setLoading(false);
     })();
 
+    // ===== עדכון מכסה אוטומטי כשמספר המוזמנים משתנה =====
+    // Numberofguests (מחרוזת/מספר)
+    const nGuestsRef = db.ref(`Events/${targetUid}/${id}/Numberofguests`);
+    offs.push(nGuestsRef.on('value', async () => {
+      await recomputeAndWriteQuota((plan?.type) || 'basic', targetUid, id);
+    }));
+    // guests
+    const guestsRef = db.ref(`Events/${targetUid}/${id}/guests`);
+    offs.push(guestsRef.on('value', async () => {
+      await recomputeAndWriteQuota((plan?.type) || 'basic', targetUid, id);
+    }));
+    // formattedContacts
+    const fcRef = db.ref(`Events/${targetUid}/${id}/formattedContacts`);
+    offs.push(fcRef.on('value', async () => {
+      await recomputeAndWriteQuota((plan?.type) || 'basic', targetUid, id);
+    }));
+
     return () => {
       try { offs.forEach((off) => { try { typeof off === 'function' ? off() : null; } catch {} }); } catch {}
       db.goOffline(); db.goOnline();
     };
-  }, [authorized, targetUid, id]);
+  }, [authorized, targetUid, id, plan?.type]);
 
-  // EXPORT
-  const exportVisits = async () => {
-    const csv = [
-      'category,value',
-      `today,${visits.today}`,
-      `week,${visits.week}`,
-      `month,${visits.month}`,
-      `lastAt,${fmtDate(visits.lastAt)}`
-    ].join('\n');
+  // בחירה מיידית של תכנית + חישוב ושמירת main_sms
+  const applyPlanInstant = async (nextType) => {
+    if (!targetUid || !id) return;
+    const db = firebase.database();
 
-    const fileUri = FileSystem.cacheDirectory + `visits_${Date.now()}.csv`;
-    await FileSystem.writeAsStringAsync(fileUri, csv, { encoding: FileSystem.EncodingType.UTF8 });
-    if (Platform.OS !== 'web') await Sharing.shareAsync(fileUri);
-    else {
-      const link = document.createElement('a');
-      link.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-      link.download = `visits_${Date.now()}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
+    await meteredSet(db.ref(`Events/${targetUid}/${id}/plan`), {
+      type: nextType,
+      updatedAt: Date.now()
+    });
+
+    await recomputeAndWriteQuota(nextType, targetUid, id);
+    setPendingPlanType(nextType);
+
+    const key = db.ref().push().key;
+    await db.ref(`Events/${targetUid}/${id}/__admin/audit/${key}`).set({
+      ts: Date.now(),
+      action: `תוכנית עודכנה ל-${nextType} (לחיצה מיידית)`
+    });
+  };
+
+  // (נשאר למי שרוצה כפתור שמירה, אבל לא חובה)
+  const savePlan = async () => {
+    await applyPlanInstant(pendingPlanType || 'basic');
+    Alert.alert('עודכן', `נשמרה תכנית: ${(pendingPlanType || 'basic').toUpperCase()}`);
   };
 
   // UI PRIMITIVES
@@ -500,7 +593,7 @@ export default function AdminPanel() {
     </Pressable>
   );
 
-  // GUARDS — כאן הבדיקה היא על targetUid (לא על user)
+  // GUARDS
   if (!targetUid || !id) {
     return (<View style={s.wrap}><Text style={s.title}>לא נמצא uid או id</Text></View>);
   }
@@ -589,10 +682,62 @@ export default function AdminPanel() {
           <StatRow label="7 ימים" value={fmt(visits.week)} />
           <StatRow label="30 ימים" value={fmt(visits.month)} />
           <StatRow label="כניסה אחרונה" value={fmtDate(visits.lastAt)} />
-          <TouchableOpacity onPress={exportVisits} style={[styles.secondaryBtn, { marginTop: 10 }]}>
+          <TouchableOpacity onPress={async () => {
+            const csv = [
+              'category,value',
+              `today,${visits.today}`,
+              `week,${visits.week}`,
+              `month,${visits.month}`,
+              `lastAt,${fmtDate(visits.lastAt)}`
+            ].join('\n');
+
+            const fileUri = FileSystem.cacheDirectory + `visits_${Date.now()}.csv`;
+            await FileSystem.writeAsStringAsync(fileUri, csv, { encoding: FileSystem.EncodingType.UTF8 });
+            if (Platform.OS !== 'web') await Sharing.shareAsync(fileUri);
+            else {
+              const link = document.createElement('a');
+              link.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+              link.download = `visits_${Date.now()}.csv`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }
+          }} style={[styles.secondaryBtn, { marginTop: 10 }]}>
             <Ionicons name="download-outline" size={16} color="#0EA5E9" />
             <Text style={[styles.secondaryBtnText, { color:'#0EA5E9' }]}>ייצוא CSV</Text>
           </TouchableOpacity>
+        </Section>
+
+        {/* Plan */}
+        <Section title="תכנית הודעות" icon="paper-plane-outline" color="#6366F1">
+          <View style={[styles.row, { marginBottom: 6, flexWrap:'wrap', gap: 6, justifyContent:'flex-start' }]}>
+            {[
+              { key:'basic', label:'basic ×0.40' },
+              { key:'plus', label:'plus ×0.65' },
+              { key:'digital', label:'digital ×0.80' },
+              { key:'complementary', label:'complementary ×1.70' },
+            ].map((opt) => (
+              <Chip
+                key={opt.key}
+                text={opt.label}
+                active={pendingPlanType === opt.key}
+                onPress={() => applyPlanInstant(opt.key)} // עדכון מיידי של plan + main_sms
+              />
+            ))}
+          </View>
+          <StatRow
+            label="תכנית נוכחית"
+            value={plan?.type ? plan.type.toUpperCase() : 'BASIC'}
+            subtitle={`פקטור: ×${PLAN_FACTORS[plan?.type || 'basic']}`}
+            strong
+          />
+          <TouchableOpacity onPress={savePlan} style={[styles.primaryBtn, { marginTop: 8 }]}>
+            <Ionicons name="save-outline" size={18} color="#fff" />
+            <Text style={styles.primaryBtnText}>שמור תכנית</Text>
+          </TouchableOpacity>
+          <Text style={[styles.dimSmall, { marginTop: 6, textAlign:'left' }]}>
+            שמירה/בחירת צ׳יפ תעדכן אוטומטית את main_sms לפי (#מוזמנים × פקטור).
+          </Text>
         </Section>
 
         {/* Traffic */}

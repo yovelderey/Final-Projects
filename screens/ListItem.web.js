@@ -82,14 +82,7 @@ const NetMeter = {
         totalUpload: this.totals.upload
       };
 
-      console.log(
-        `[NET 2s] read=${_MB(rateRead).toFixed(3)} MB/s,` +
-        ` write=${_MB(rateWrite).toFixed(3)} MB/s,` +
-        ` upload=${_MB(rateUpload).toFixed(3)} MB/s | totals:` +
-        ` read=${_MB(this.totals.read).toFixed(2)} MB,` +
-        ` write=${_MB(this.totals.write).toFixed(2)} MB,` +
-        ` upload=${_MB(this.totals.upload).toFixed(2)} MB`
-      );
+
 
       this.last = { t: now, read: this.totals.read, write: this.totals.write, upload: this.totals.upload };
       this.listeners.forEach((cb) => { try { cb(this.lastStats); } catch {} });
@@ -815,13 +808,12 @@ function ListItem(props) {
   }, [cashAnim, tableAnim]);
 
 
-// ---- 1) user-level (אופציונלי אבל שימושי) ----
-const updateLastLoginUser = async (uid) => {
-  if (!uid) return;
-  await firebase.database()
-    .ref(`Users/${uid}/lastLoginAt`)
-    .set(firebase.database.ServerValue.TIMESTAMP);
-};
+ const updateLastLoginUser = async (uid) => {
+   if (!uid) return;
+   await firebase.database()
+     .ref(`users/${uid}/lastLoginAt`)
+     .set(firebase.database.ServerValue.TIMESTAMP);
+ };
 
 // ---- 2) event-level (זה מה שהדשבורד מציג) ----
 const markEventLogin = async (uid, eventId) => {
@@ -966,7 +958,6 @@ useEffect(() => {
           <Text numberOfLines={1} ellipsizeMode="tail" adjustsFontSizeToFit={false} style={[styles.title, t(HEADER_FONT), { writingDirection: 'rtl' }]}>
             {`${eventDetails.eventDate || ''}  ●  ${eventDetails.eventName || ''}  ●  ${eventDetails.eventLocation || ''}`}
           </Text>
-          {!!netLine && <Text style={{ fontSize: 12, opacity: 0.8, marginTop: 4, textAlign: 'center' }}>{netLine}</Text>}
         </View>
         <View style={[styles.headerActions, { width: ACTIONS_W }]}>
           <Pressable onPress={cycleThemeMode} onLongPress={() => setThemeMode('auto')} hitSlop={hit}
