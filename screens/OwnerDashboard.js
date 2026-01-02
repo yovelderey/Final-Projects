@@ -1885,6 +1885,10 @@ function confirmDeleteEvent({ uid, eventId, eventName, eventDate }) {
             maybe: Number(data.maybe || 0),
             no: Number(data.no_cuming || 0),
             pending: Number(data.no_answear || 0),
+            numberOfGuests: Number(data.Numberofguests || 0),
+            main_sms: Number(data.main_sms || 0),
+            sent_msg: Number(data.sent_msg || 0),
+
             createdAt,
             trafficMB: (readB + writeB + uploadB) / 1e6,
             lastLoginEventTs: safeDate(data?.__meta?.lastLoginAt ?? data?.lastLoginAt ?? 0),
@@ -2246,8 +2250,13 @@ const setEventPlan = async (uid, eventId, plan) => {
 
         <Row k="תאריך אירוע" v={`${item.eventDate || '-'}${item.eventTime ? ` • ${item.eventTime}` : ''}`} />
         <Row k="קטגוריה" v={item.eventCategory || '-'} />
-        <Row k="כמות מוזמנים" v={item.Numberofguests ?? 0} />
+        <Row k="כמות מוזמנים" v={item.numberOfGuests ?? 0} />
         <Row k="תוכנית" v={item.plan || '-'} />
+        <Row k="כמות אסימונים" v={item.main_sms ?? 0} />
+        <Row
+          k="מכסה"
+          v={Math.max(0, Number(item.main_sms || 0) - Number(item.sent_msg || 0))}
+        />
 
         <View style={[styles.actionsRow, { marginTop: 4, flexWrap: 'wrap' }]}>
           {['basic', 'plus', 'digital', 'premium', 'complementary'].map((p) => (
@@ -2412,9 +2421,13 @@ const setEventPlan = async (uid, eventId, plan) => {
       <View style={styles.topBar}>
         <View style={styles.topRightActions}>
           {activeView !== 'servers' && (
-            <TouchableOpacity onPress={() => setActiveView('servers')} style={[styles.topBtn, { backgroundColor: '#6B7280' }]}>
-              <Text style={styles.topBtnText}>ניהול שרתים</Text>
-            </TouchableOpacity>
+<TouchableOpacity
+  onPress={() => nav.navigate('ServerMonitorsPane')}
+  style={[styles.topBtn, { backgroundColor: '#6B7280' }]}
+>
+  <Text style={styles.topBtnText}>ניהול שרתים</Text>
+</TouchableOpacity>
+
           )}
 
           {activeView !== 'users' && (
