@@ -1,9 +1,4 @@
-// ServerMonitorsPane.js
-// ✅ Pro Dashboard Redesign + Back button + Range presets (1h/12h/day/week/month/year)
-// ✅ Combined usage (WA+SMS) for selected range
-// ✅ WhatsApp servers (lastSeen heartbeat) + SMS servers (rates + day aggregates)
-
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,6 +9,9 @@ import {
   Platform,
   StyleSheet,
   useWindowDimensions,
+  StatusBar,
+  Animated,
+  Easing,
 } from 'react-native';
 
 import { useNavigation } from '@react-navigation/native';
@@ -22,7 +20,7 @@ import firebase from 'firebase/compat/app';
 import 'firebase/compat/database';
 import 'firebase/compat/auth';
 
-// ==== Firebase init (guard) ====
+// ==== Firebase init ====
 const firebaseConfig = {
   apiKey: 'AIzaSyB8LTCh_O_C0mFYINpbdEqgiW_3Z51L1ag',
   authDomain: 'final-project-d6ce7.firebaseapp.com',
@@ -35,17 +33,13 @@ const firebaseConfig = {
 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
 
 // ==== Utils ====
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = () => new Date().toISOString().slice(0, 10); // ⚠️ תואם לבוט (UTC slice)
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const avg = (arr) => (arr?.length ? arr.reduce((s, x) => s + x, 0) / arr.length : 0);
-const maxArr = (arr) => (arr?.length ? arr.reduce((m, x) => (x > m ? x : m), -Infinity) : 0);
-const sumNum = (arr) => arr.reduce((s, x) => s + (Number(x) || 0), 0);
 
 const isoToTs = (iso) => {
   const t = Date.parse(String(iso || ''));
   return Number.isFinite(t) ? t : 0;
 };
-const tsToISO = (ts) => new Date(ts).toISOString().slice(0, 10);
 
 const parseTs = (v) => {
   if (!v) return 0;
@@ -57,128 +51,82 @@ const parseTs = (v) => {
   return 0;
 };
 
-const prettyDT = (ts) => (ts ? new Date(ts).toLocaleString('he-IL') : '—');
 const timeAgoHe = (ts) => {
   if (!ts) return '—';
   const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
   if (sec <= 4) return 'עכשיו';
-  if (sec < 60) return `לפני ${sec}s`;
+  if (sec < 60) return `${sec}s`;
   const min = Math.floor(sec / 60);
-  if (min < 60) return `לפני ${min} ד׳`;
+  if (min < 60) return `${min}m`;
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `לפני ${hr} ש׳`;
+  if (hr < 24) return `${hr}h`;
   const days = Math.floor(hr / 24);
-  return `לפני ${days} ימים`;
+  return `${days}d`;
 };
 
-const palette = ['#6C63FF', '#22C55E', '#0EA5E9', '#F59E0B', '#EF4444', '#14B8A6', '#A78BFA'];
-const serverColor = (name, i = 0) => palette[Math.abs((name?.length || 0) + i) % palette.length];
+const pad2 = (n) => String(n).padStart(2, '0');
 
-// ==== Presets (Ranges) ====
+// ISO week key (תואם למה שהכנסנו בבוט)
+function isoWeekKey(date = new Date()) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}-W${pad2(weekNo)}`;
+}
+
+function buildTimeKeys(now = new Date()) {
+  // ⚠️ תואם לבוט: isoDay ב-UTC slice, hour ב-local getHours()
+  const isoDay = now.toISOString().slice(0, 10);
+  const hour = pad2(now.getHours());
+  const half = now.getHours() < 12 ? 'H1' : 'H2';
+  const month = now.toISOString().slice(0, 7);
+  const year = now.toISOString().slice(0, 4);
+  const week = isoWeekKey(now);
+  return { isoDay, hour, half, month, year, week };
+}
+
+function lastNDaysKeys(n) {
+  // מחזיר מערך YYYY-MM-DD (UTC slice) אחורה כולל היום
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+    out.push(d.toISOString().slice(0, 10));
+  }
+  return out; // [today, yesterday,...]
+}
+
+const safeNum = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+
+// ==== Config ====
 const RANGE_PRESETS = [
-  // rolling (best for rates/heartbeat)
-  { key: '1h', label: 'שעה', kind: 'rolling', ms: 60 * 60 * 1000, chartWindowSec: 60 * 60 },
-  { key: '12h', label: '12 שעות', kind: 'rolling', ms: 12 * 60 * 60 * 1000, chartWindowSec: 12 * 60 * 60 },
-  // calendar-ish (best for day map sums)
-  { key: '1d', label: 'יום', kind: 'days', days: 1, ms: 24 * 60 * 60 * 1000, chartWindowSec: 24 * 60 * 60 },
-  { key: '7d', label: 'שבוע', kind: 'days', days: 7, ms: 7 * 24 * 60 * 60 * 1000, chartWindowSec: 24 * 60 * 60 },
-  { key: '30d', label: 'חודש', kind: 'days', days: 30, ms: 30 * 24 * 60 * 60 * 1000, chartWindowSec: 24 * 60 * 60 },
-  { key: '365d', label: 'שנה', kind: 'days', days: 365, ms: 365 * 24 * 60 * 60 * 1000, chartWindowSec: 24 * 60 * 60 },
+  { key: '1h', label: '1 ש׳', days: 0 },      // hourly bucket
+  { key: '12h', label: '12 ש׳', days: 0 },    // halfDay bucket
+  { key: '1d', label: 'יום', days: 1 },       // day bucket
+  { key: '7d', label: 'שבוע', days: 7 },      // sum last 7 days
+  { key: '30d', label: 'חודש', days: 30 },    // sum last 30 days
 ];
 
-const getPreset = (key) => RANGE_PRESETS.find((p) => p.key === key) || RANGE_PRESETS[2];
-
-// ==== z-score (SMS anomaly) ====
-function zScore(series = [], win = 12) {
-  if (!series?.length) return [];
-  const out = [];
-  let sum1 = 0,
-    sum2 = 0;
-  const q = [];
-  for (let i = 0; i < series.length; i++) {
-    const v = Number(series[i] || 0);
-    q.push(v);
-    sum1 += v;
-    sum2 += v * v;
-    if (q.length > win) {
-      const r = q.shift();
-      sum1 -= r;
-      sum2 -= r * r;
-    }
-    const nn = q.length;
-    const mean = sum1 / nn;
-    const std = Math.sqrt(Math.max(1e-9, sum2 / nn - mean * mean));
-    out.push((v - mean) / (std || 1));
-  }
-  return out;
-}
-
-const DEFAULT_SLA = {
-  perMinWarn: 20,
-  perMinCrit: 27,
-  heartbeatSecWarn: 30,
-  heartbeatSecCrit: 90,
-  zAbsWarn: 2.0,
-  zAbsCrit: 3.2,
-};
-
-const WA_SLA = { heartbeatSecWarn: 45, heartbeatSecCrit: 120 };
-
-// ==== Alerts (SMS) ====
-function buildServerAlerts({ metaByName, rates, series, capPerMin, nowTs = Date.now(), sla = DEFAULT_SLA }) {
-  const alerts = [];
-  const keys = Object.keys(metaByName || {});
-  for (const name of keys) {
-    const meta = metaByName[name] || {};
-    const enabled = meta.enabled !== false;
-
-    const lastISO = meta.last_sent || meta.updatedAt;
-    let lastTs = 0;
-    try {
-      lastTs = lastISO ? new Date(lastISO).getTime() : 0;
-    } catch {}
-
-    const ageSec = lastTs ? Math.floor((nowTs - lastTs) / 1000) : 999999;
-    const rateNow = Number(rates[name] || 0);
-
-    const s = series[name] || [];
-    const z = zScore(s, Math.min(24, Math.max(8, Math.floor(s.length / 3))));
-    const zNow = z.length ? Math.abs(z[z.length - 1]) : 0;
-
-    if (enabled && ageSec >= sla.heartbeatSecCrit) alerts.push({ sev: 'critical', name, msg: `אין דופק ${ageSec}s` });
-    else if (enabled && ageSec >= sla.heartbeatSecWarn) alerts.push({ sev: 'warning', name, msg: `דופק איטי (${ageSec}s)` });
-
-    if (rateNow >= sla.perMinCrit || rateNow >= capPerMin * 0.95) alerts.push({ sev: 'critical', name, msg: `קצב ${rateNow.toFixed(1)} הוד׳/ד׳` });
-    else if (rateNow >= sla.perMinWarn) alerts.push({ sev: 'warning', name, msg: `קצב גבוה ${rateNow.toFixed(1)}` });
-
-    if (zNow >= sla.zAbsCrit) alerts.push({ sev: 'critical', name, msg: `אנומליה |z|=${zNow.toFixed(1)}` });
-    else if (zNow >= sla.zAbsWarn) alerts.push({ sev: 'warning', name, msg: `אנומליה |z|=${zNow.toFixed(1)}` });
-  }
-
-  alerts.sort((a, b) => (a.sev === b.sev ? a.name.localeCompare(b.name) : a.sev === 'critical' ? -1 : 1));
-  return alerts;
-}
-
-// ==== Rates hook (SMS device_server) ====
-function useDeviceServerRates({ windowMs = 60_000, pollMs = 2000, capPerMin = 30 } = {}) {
+// ==== Hooks ====
+function useDeviceServerRates({ windowMs = 60_000, pollMs = 2000 } = {}) {
   const [rates, setRates] = useState({});
   const [series, setSeries] = useState({});
   const historyRef = useRef({});
 
   useEffect(() => {
     const ref = firebase.database().ref('device_server');
-    const off = ref.on('value', (snap) => {
+    const cb = ref.on('value', (snap) => {
       const val = snap.val() || {};
-      const keys = Object.keys(val)
-        .filter((k) => /^server_\d+$/.test(k))
-        .sort((a, b) => Number(a.split('_')[1]) - Number(b.split('_')[1]));
-
+      const keys = Object.keys(val).filter((k) => /^server_\d+$/.test(k));
       const now = Date.now();
       const iso = todayISO();
 
       keys.forEach((k) => {
-        const daily = Number(val[k]?.day?.[iso] || 0);
-        const lastSent = String(val[k]?.last_sent || '');
+        const serverData = val[k] || {};
+        // תמיכה בשני מבני נתונים (ישיר או תחת day)
+        const daily = Number(serverData[iso] || serverData?.day?.[iso] || 0);
+        const lastSent = String(serverData.last_sent || '');
 
         const hist = (historyRef.current[k] = historyRef.current[k] || []);
         hist.push({ ts: now, count: daily });
@@ -186,7 +134,7 @@ function useDeviceServerRates({ windowMs = 60_000, pollMs = 2000, capPerMin = 30
         const prevPulse = hist.__lastPulse || '';
         if (lastSent && lastSent !== prevPulse) {
           hist.__lastPulse = lastSent;
-          hist.push({ ts: now + 1, count: daily + 0.01 });
+          hist.push({ ts: now + 1, count: daily + 0.01 }); // "טיק" קטן כדי לראות תנועה
         }
 
         historyRef.current[k] = hist.filter((s) => now - s.ts <= windowMs + 5000);
@@ -195,58 +143,28 @@ function useDeviceServerRates({ windowMs = 60_000, pollMs = 2000, capPerMin = 30
 
     return () => {
       try {
-        firebase.database().ref('device_server').off('value', off);
+        firebase.database().ref('device_server').off('value', cb);
       } catch {}
     };
   }, [windowMs]);
 
   useEffect(() => {
     const t = setInterval(() => {
-      const now = Date.now();
       const nextRates = {};
       const nextSeries = {};
-      const minsSinceMidnight = Math.max(1, Math.floor((now - new Date(todayISO()).getTime()) / 60000));
 
       for (const [k, samples] of Object.entries(historyRef.current)) {
         if (!samples?.length) continue;
-
-        const latest = samples[samples.length - 1];
-        const approxPerMin = clamp(Number(latest.count || 0) / minsSinceMidnight, 0, capPerMin);
-
-        let instPerMin = 0;
+        let rate = 0;
         if (samples.length >= 2) {
-          const a = samples[samples.length - 2];
+          const a = samples[0];
           const b = samples[samples.length - 1];
-          const dtMin2 = Math.max(1e-6, (b.ts - a.ts) / 60000);
-          const dc2 = Math.max(0, b.count - a.count);
-          instPerMin = clamp(dc2 / dtMin2, 0, capPerMin);
+          const dtMin = Math.max(1e-6, (b.ts - a.ts) / 60000);
+          const dc = Math.max(0, b.count - a.count);
+          rate = dc / dtMin;
         }
-
-        const dailyMax = 0.3;
-        const dailyW = Math.max(0, Math.min(dailyMax, (windowMs / (30 * 60 * 1000)) * dailyMax));
-        const blended = instPerMin * (1 - dailyW) + approxPerMin * dailyW;
-        nextRates[k] = blended;
-
-        const dens = 26;
-        const step = windowMs / dens;
-        const pts = [];
-        for (let i = 0; i < dens; i++) {
-          const t0 = now - windowMs + i * step;
-          let before = samples[0],
-            after = samples[samples.length - 1];
-          for (let j = 0; j < samples.length; j++) {
-            if (samples[j].ts <= t0) before = samples[j];
-            if (samples[j].ts >= t0) {
-              after = samples[j];
-              break;
-            }
-          }
-          const dtMin = Math.max(1e-6, (after.ts - before.ts) / 60000);
-          const dc = Math.max(0, after.count - before.count);
-          const inst = clamp(dc / dtMin, 0, capPerMin);
-          pts.push(inst * 0.7 + approxPerMin * 0.3);
-        }
-        nextSeries[k] = pts;
+        nextRates[k] = rate;
+        nextSeries[k] = samples.map((s) => s.count).slice(-24);
       }
 
       setRates(nextRates);
@@ -254,1003 +172,1186 @@ function useDeviceServerRates({ windowMs = 60_000, pollMs = 2000, capPerMin = 30
     }, pollMs);
 
     return () => clearInterval(t);
-  }, [pollMs, windowMs, capPerMin]);
+  }, [pollMs]);
 
   return { rates, series };
 }
 
-// ==== WhatsApp servers hook ====
-function useWhatsAppServers() {
+function useWhatsAppServersMeta() {
+  // servers/<serverId> meta כולל count/date/dailyLimit/lastSeen/status/state...
   const [rawWA, setRawWA] = useState({});
   useEffect(() => {
     const ref = firebase.database().ref('servers');
-    const off = ref.on('value', (snap) => setRawWA(snap.val() || {}));
+    const cb = ref.on('value', (snap) => setRawWA(snap.val() || {}));
     return () => {
       try {
-        ref.off('value', off);
+        ref.off('value', cb);
       } catch {}
     };
   }, []);
   return rawWA;
 }
 
-// ==== UI atoms ====
-function Panel({ title, subtitle, right, children, style }) {
+function useWhatsAppStatsGlobal() {
+  // ✅ stats/global/*
+  const [globalStats, setGlobalStats] = useState({});
+  useEffect(() => {
+    const ref = firebase.database().ref('stats/global');
+    const cb = ref.on('value', (snap) => setGlobalStats(snap.val() || {}));
+    return () => {
+      try {
+        ref.off('value', cb);
+      } catch {}
+    };
+  }, []);
+  return globalStats;
+}
+
+function useWhatsAppStatsPerServer(serverIds = []) {
+  // ✅ servers/{serverId}/stats/*
+  const [stats, setStats] = useState({}); // { serverId: statsObj }
+  const listenersRef = useRef({});
+
+  useEffect(() => {
+    // נקה מאזינים קודמים
+    const prev = listenersRef.current;
+    Object.keys(prev).forEach((sid) => {
+      try {
+        firebase.database().ref(`servers/${sid}/stats`).off('value', prev[sid]);
+      } catch {}
+    });
+    listenersRef.current = {};
+
+    const nextState = {};
+    const attach = (sid) => {
+      const r = firebase.database().ref(`servers/${sid}/stats`);
+      const cb = r.on('value', (snap) => {
+        const v = snap.val() || {};
+        setStats((cur) => ({ ...cur, [sid]: v }));
+      });
+      listenersRef.current[sid] = cb;
+      nextState[sid] = nextState[sid] || {};
+    };
+
+    serverIds.forEach(attach);
+    setStats((cur) => ({ ...nextState, ...cur }));
+
+    return () => {
+      const cur = listenersRef.current;
+      Object.keys(cur).forEach((sid) => {
+        try {
+          firebase.database().ref(`servers/${sid}/stats`).off('value', cur[sid]);
+        } catch {}
+      });
+      listenersRef.current = {};
+    };
+  }, [serverIds.join('|')]);
+
+  return stats;
+}
+
+// ==== Stats read helpers (תואם לבוט) ====
+function getWAValueInRangeFromStats(statsObj, rangeKey) {
+  if (!statsObj) return 0;
+  const now = new Date();
+  const { isoDay, hour, half } = buildTimeKeys(now);
+
+  if (rangeKey === '1h') {
+    const hourKey = `${isoDay}__${hour}`;
+    return safeNum(statsObj?.hours?.[hourKey]?.sent);
+  }
+
+  if (rangeKey === '12h') {
+    const halfKey = `${isoDay}__${half}`;
+    return safeNum(statsObj?.halfDays?.[halfKey]?.sent);
+  }
+
+  if (rangeKey === '1d') {
+    return safeNum(statsObj?.days?.[isoDay]?.sent);
+  }
+
+  if (rangeKey === '7d' || rangeKey === '30d') {
+    const n = rangeKey === '7d' ? 7 : 30;
+    const days = lastNDaysKeys(n);
+    let sum = 0;
+    days.forEach((d) => {
+      sum += safeNum(statsObj?.days?.[d]?.sent);
+    });
+    return sum;
+  }
+
+  return 0;
+}
+
+// ==== Components ====
+const PulseDot = ({ color = '#10B981' }) => {
+  const anim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 0.35, duration: 700, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 1, duration: 700, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  return <Animated.View style={[styles.pulseDot, { backgroundColor: color, opacity: anim }]} />;
+};
+
+const StatusChip = ({ label, type = 'neutral' }) => {
+  const colors = {
+    ok: { bg: '#DCFCE7', text: '#166534' },
+    warn: { bg: '#FEF3C7', text: '#92400E' },
+    bad: { bg: '#FEE2E2', text: '#991B1B' },
+    neutral: { bg: '#F3F4F6', text: '#374151' },
+    info: { bg: '#E0E7FF', text: '#3730A3' },
+  };
+  const c = colors[type] || colors.neutral;
   return (
-    <View style={[S.panel, style]}>
-      <View style={S.panelHead}>
-        <View style={{ flex: 1 }}>
-          <Text style={S.panelTitle}>{title}</Text>
-          {!!subtitle && <Text style={S.panelSub}>{subtitle}</Text>}
-        </View>
-        {!!right && <View style={{ alignItems: 'flex-end' }}>{right}</View>}
+    <View style={[styles.chip, { backgroundColor: c.bg }]}>
+      <Text style={[styles.chipText, { color: c.text }]}>{label}</Text>
+    </View>
+  );
+};
+
+const KpiBox = ({ label, value, sub, color = '#6366F1', animDelay = 0 }) => {
+  const a = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(a, {
+      toValue: 1,
+      duration: 700,
+      delay: animDelay,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, []);
+  return (
+    <Animated.View
+      style={[
+        styles.kpiBox,
+        { borderTopColor: color, opacity: a, transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] },
+      ]}
+    >
+      <Text style={styles.kpiValue}>{value}</Text>
+      <Text style={styles.kpiLabel}>{label}</Text>
+      {!!sub && <Text style={styles.kpiSub}>{sub}</Text>}
+    </Animated.View>
+  );
+};
+
+const DistributionBar = ({ wa, sms }) => {
+  const total = wa + sms || 1;
+  const waPct = (wa / total) * 100;
+  const smsPct = (sms / total) * 100;
+
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, { toValue: 1, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [wa, sms]);
+
+  const waFlex = anim.interpolate({ inputRange: [0, 1], outputRange: [0.0001, waPct] });
+  const smsFlex = anim.interpolate({ inputRange: [0, 1], outputRange: [0.0001, smsPct] });
+
+  return (
+    <View style={styles.distContainer}>
+      <View style={styles.distLabels}>
+        <Text style={styles.distLabel}>WhatsApp ({Math.round(waPct)}%)</Text>
+        <Text style={styles.distLabel}>SMS ({Math.round(smsPct)}%)</Text>
       </View>
-      {children}
+
+      <View style={styles.distBar}>
+        <Animated.View
+          style={[
+            styles.distSegment,
+            { flex: waFlex, backgroundColor: '#10B981', borderTopRightRadius: 4, borderBottomRightRadius: 4 },
+          ]}
+        />
+        <View style={{ width: 2, backgroundColor: '#fff' }} />
+        <Animated.View
+          style={[
+            styles.distSegment,
+            { flex: smsFlex, backgroundColor: '#3B82F6', borderTopLeftRadius: 4, borderBottomLeftRadius: 4 },
+          ]}
+        />
+      </View>
     </View>
   );
-}
+};
 
-function Chip({ label, tone = 'neutral' }) {
-  const map = {
-    ok: { bg: '#ECFDF5', br: '#A7F3D0', tx: '#065F46' },
-    warn: { bg: '#FFFBEB', br: '#FDE68A', tx: '#7A5C00' },
-    bad: { bg: '#FEF2F2', br: '#FCA5A5', tx: '#7F1D1D' },
-    neutral: { bg: '#F1F5F9', br: '#E2E8F0', tx: '#334155' },
-    info: { bg: '#EEF2FF', br: '#C7D2FE', tx: '#312E81' },
-  };
-  const c = map[tone] || map.neutral;
+const MiniBars = ({ values = [], color = '#3B82F6' }) => {
+  const max = Math.max(1, ...values.map((x) => Number(x) || 0));
   return (
-    <View style={{ paddingHorizontal: 10, height: 28, borderRadius: 999, borderWidth: 1, borderColor: c.br, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ color: c.tx, fontWeight: '900', fontSize: 12 }}>{label}</Text>
-    </View>
-  );
-}
-
-function KpiCard({ label, value, hint, tone = 'info', wide = false }) {
-  const map = {
-    ok: { bg: '#ECFDF5', br: '#A7F3D0', tx: '#065F46' },
-    warn: { bg: '#FFFBEB', br: '#FDE68A', tx: '#7A5C00' },
-    bad: { bg: '#FEF2F2', br: '#FCA5A5', tx: '#7F1D1D' },
-    info: { bg: '#EEF2FF', br: '#C7D2FE', tx: '#312E81' },
-    neutral: { bg: '#FFFFFF', br: '#E2E8F0', tx: '#0f172a' },
-  };
-  const c = map[tone] || map.neutral;
-
-  return (
-    <View style={[S.kpi, { backgroundColor: c.bg, borderColor: c.br }, wide && { minWidth: 220, flexGrow: 2 }]}>
-      <Text style={[S.kpiLabel, { color: c.tx }]}>{label}</Text>
-      <Text style={[S.kpiValue, { color: c.tx }]}>{value}</Text>
-      {!!hint && <Text style={[S.kpiHint, { color: c.tx }]}>{hint}</Text>}
-    </View>
-  );
-}
-
-function ProgressBar({ pct = 0, tone = 'info' }) {
-  const map = {
-    ok: '#22C55E',
-    warn: '#F59E0B',
-    bad: '#EF4444',
-    info: '#6C63FF',
-    neutral: '#94A3B8',
-  };
-  const c = map[tone] || map.info;
-  return (
-    <View style={S.progressBg}>
-      <View style={[S.progressFill, { width: `${(Math.max(0, Math.min(1, pct)) * 100).toFixed(1)}%`, backgroundColor: c }]} />
-    </View>
-  );
-}
-
-function MiniSpark({ samples = [], color = '#6C63FF', height = 40 }) {
-  const s = Array.isArray(samples) ? samples : [];
-  const maxV = Math.max(1, ...s.map((x) => Number(x) || 0));
-  const bars = s.slice(-22);
-  return (
-    <View style={[S.spark, { height }]}>
-      {bars.map((v, i) => {
-        const h = Math.max(2, Math.round(((Number(v) || 0) / maxV) * (height - 8)));
-        return <View key={i} style={{ width: 5, height: h, borderRadius: 4, backgroundColor: color, opacity: i === bars.length - 1 ? 1 : 0.6 }} />;
+    <View style={styles.miniBars}>
+      {values.slice(-20).map((v, i) => {
+        const h = clamp(((Number(v) || 0) / max) * 18, 2, 18);
+        return <View key={i} style={[styles.miniBar, { height: h, backgroundColor: color }]} />;
       })}
     </View>
   );
-}
+};
 
-function DangerDot({ tone = 'ok' }) {
-  const map = { ok: '#22C55E', warn: '#F59E0B', bad: '#EF4444', neutral: '#94A3B8', info: '#6C63FF' };
-  return <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: map[tone] || '#94A3B8' }} />;
-}
+// ==== Server Card (עם אנימציות מורכבות + WA stats אמיתי) ====
+const ServerCard = ({
+  name,
+  status,
+  lastSeen,
+  data = {},
+  historyData = {},
+  type = 'sms',
+  onToggle,
+  onReset,
+  waStatsObj = null, // ✅ servers/{id}/stats
+  entranceAnim,      // Animated.Value 0..1
+  searchHit = true,
+  onSetDailyLimit,   // (serverId, limit)
+}) => {
+  const [range, setRange] = useState('1d');
+  const [expanded, setExpanded] = useState(false);
+  const [limitDraft, setLimitDraft] = useState('');
 
-function RangeButtons({ value, onChange }) {
+  const exp = useRef(new Animated.Value(0)).current; // 0 collapsed -> 1 expanded
+  useEffect(() => {
+    Animated.timing(exp, {
+      toValue: expanded ? 1 : 0,
+      duration: expanded ? 520 : 420,
+      easing: expanded ? Easing.out(Easing.cubic) : Easing.inOut(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [expanded]);
+
+  const isOnline = status === 'ok';
+  const accent = type === 'wa' ? '#10B981' : '#3B82F6';
+
+  // 🔥 totalInRange
+  const totalInRange = useMemo(() => {
+    const preset = RANGE_PRESETS.find((p) => p.key === range);
+
+    if (type === 'sms') {
+      const daysBack = preset?.days || 1;
+      if (range === '1h' || range === '12h') {
+        // SMS אין לנו buckets של שעה/12ש — מציג "היום" כfallback
+        const iso = todayISO();
+        const keysToScan = historyData.day ? historyData.day : historyData;
+        return safeNum(keysToScan?.[iso]);
+      }
+
+      const now = new Date();
+      now.setHours(23, 59, 59, 999);
+      const startTs = now.getTime() - daysBack * 24 * 60 * 60 * 1000;
+
+      let sum = 0;
+      const keysToScan = historyData.day ? historyData.day : historyData;
+      Object.keys(keysToScan || {}).forEach((key) => {
+        if (/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+          const t = isoToTs(key);
+          if (t >= startTs) sum += safeNum(keysToScan[key]);
+        }
+      });
+      return sum;
+    }
+
+    if (type === 'wa') {
+      // ✅ WhatsApp: קורא מהנתיב הנכון servers/{id}/stats/...
+      return getWAValueInRangeFromStats(waStatsObj, range);
+    }
+
+    return 0;
+  }, [range, historyData, waStatsObj, type]);
+
+  // WA daily progress (מבוסס servers/{id}/count + date)
+  const waTodayCount = useMemo(() => {
+    if (type !== 'wa') return 0;
+    const iso = todayISO();
+    const date = String(data.date || '');
+    const c = safeNum(data.count || 0);
+    return date === iso ? c : 0;
+  }, [type, data.date, data.count]);
+
+  const waLimit = useMemo(() => {
+    if (type !== 'wa') return 0;
+    const v = safeNum(data.dailyLimit);
+    return v > 0 ? v : 0;
+  }, [type, data.dailyLimit]);
+
+  const progress = useMemo(() => {
+    if (type !== 'wa' || !waLimit) return 0;
+    return clamp(waTodayCount / waLimit, 0, 1);
+  }, [type, waTodayCount, waLimit]);
+
+  const progAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(progAnim, {
+      toValue: progress,
+      speed: 18,
+      bounciness: 8,
+      useNativeDriver: false,
+    }).start();
+  }, [progress]);
+
+  const rotate = exp.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
+  const advH = exp.interpolate({ inputRange: [0, 1], outputRange: [0, type === 'wa' ? 142 : 110] });
+
+  // "Glow" לאונליין
+  const glow = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!isOnline) return;
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+        Animated.timing(glow, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: false }),
+      ])
+    ).start();
+  }, [isOnline]);
+
+  const glowBg = glow.interpolate({ inputRange: [0, 1], outputRange: ['rgba(16,185,129,0.00)', 'rgba(16,185,129,0.10)'] });
+
+  if (!searchHit) return null;
+
   return (
-    <View style={S.rangeWrap}>
-      {RANGE_PRESETS.map((p) => {
-        const active = value === p.key;
-        return (
-          <TouchableOpacity
-            key={p.key}
-            onPress={() => onChange?.(p.key)}
-            style={[
-              S.rangeBtn,
-              {
-                borderColor: active ? '#6C63FF' : '#E2E8F0',
-                backgroundColor: active ? '#EEF2FF' : '#FFFFFF',
-              },
-            ]}
-          >
-            <Text style={{ fontWeight: '900', color: active ? '#312E81' : '#0f172a' }}>{p.label}</Text>
+    <Animated.View
+      style={[
+        styles.serverCard,
+        {
+          borderColor: isOnline ? 'rgba(16,185,129,0.35)' : '#E2E8F0',
+          transform: [
+            { translateY: entranceAnim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) },
+            { scale: entranceAnim.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1] }) },
+          ],
+          opacity: entranceAnim,
+        },
+      ]}
+    >
+      <Animated.View style={[styles.serverHeader, isOnline && { backgroundColor: glowBg }]}>
+        <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
+          {isOnline ? <PulseDot color={accent} /> : <View style={[styles.pulseDot, { backgroundColor: '#CBD5E1' }]} />}
+          <Text style={styles.serverName}>{name}</Text>
+        </View>
+
+        <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity onPress={() => setExpanded((s) => !s)} style={styles.iconBtn}>
+            <Animated.Text style={{ color: '#334155', fontWeight: '900', transform: [{ rotate }] }}>⌄</Animated.Text>
           </TouchableOpacity>
-        );
-      })}
-    </View>
+<StatusChip
+  label={
+    data.enabled === false
+      ? 'מושבת'
+      : isOnline
+      ? 'דלוק'
+      : 'מנותק'
+  }
+  type={
+    data.enabled === false ? 'neutral' : isOnline ? 'ok' : 'bad'
+  }
+/>
+
+        </View>
+      </Animated.View>
+
+      <View style={styles.serverBody}>
+
+      <View style={styles.detailGrid}>
+  {/* נראה לאחרונה (מתי השרת “חי” לאחרונה / heartbeat) */}
+  <View style={styles.detailItem}>
+    <Text style={styles.detailLabel}>נראה לאחרונה</Text>
+    <Text style={styles.detailValue}>{timeAgoHe(lastSeen)}</Text>
+  </View>
+
+  {/* הודעה אחרונה (מתי נשלחה הודעה אחרונה) */}
+  <View style={styles.detailItem}>
+    <Text style={styles.detailLabel}>הודעה אחרונה</Text>
+    <Text style={styles.detailValue}>
+      {timeAgoHe(
+        parseTs(
+          type === 'wa'
+            ? (data.lastSentAt || data.last_sent || data.lastSent)
+            : (data.last_sent || data.lastSentAt || data.lastSent)
+        )
+      )}
+    </Text>
+  </View>
+
+  {type === 'wa' && (
+    <>
+      <View style={styles.detailItem}>
+        <Text style={styles.detailLabel}>State</Text>
+        <Text style={styles.detailValue}>{data.state || '-'}</Text>
+      </View>
+
+      <View style={styles.detailItem}>
+        <Text style={styles.detailLabel}>Status</Text>
+        <Text style={styles.detailValue}>{data.status || '-'}</Text>
+      </View>
+
+      <View style={styles.detailItem}>
+        <Text style={styles.detailLabel}>Limit</Text>
+        <Text style={styles.detailValue}>{data.dailyLimit ?? '-'}</Text>
+      </View>
+    </>
+  )}
+
+  {type === 'sms' && (
+    <>
+      <View style={styles.detailItem}>
+        <Text style={styles.detailLabel}>Rate</Text>
+        <Text style={styles.detailValue}>{Number(data.rate || 0).toFixed(1)}/m</Text>
+      </View>
+
+      <View style={styles.detailItem}>
+        <Text style={styles.detailLabel}>Enabled</Text>
+        <Text style={styles.detailValue}>{data.enabled ? 'true' : 'false'}</Text>
+      </View>
+    </>
+  )}
+</View>
+
+
+        {/* כפתורי טווח */}
+        <View style={styles.cardRangeRow}>
+          {RANGE_PRESETS.map((p) => (
+            <TouchableOpacity
+              key={p.key}
+              style={[styles.cardRangeBtn, range === p.key && styles.cardRangeBtnActive]}
+              onPress={() => setRange(p.key)}
+            >
+              <Text style={[styles.cardRangeText, range === p.key && styles.cardRangeTextActive]}>{p.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.rangeResultBox}>
+          <Text style={styles.rangeResultLabel}>סה"כ בטווח:</Text>
+          <Text style={styles.rangeResultValue}>{Number(totalInRange || 0).toLocaleString()}</Text>
+        </View>
+
+        {/* WA Progress */}
+        {type === 'wa' && waLimit > 0 && (
+          <View style={{ marginTop: 12 }}>
+            <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 6 }}>
+              <Text style={styles.detailLabel}>היום</Text>
+              <Text style={[styles.detailValue, { fontSize: 12 }]}>{waTodayCount}/{waLimit}</Text>
+            </View>
+            <View style={styles.progressTrack}>
+              <Animated.View
+                style={[
+                  styles.progressFill,
+                  {
+                    width: progAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+                    backgroundColor: progress >= 1 ? '#EF4444' : '#10B981',
+                  },
+                ]}
+              />
+            </View>
+          </View>
+        )}
+
+        {/* Advanced (Animated height) */}
+        <Animated.View style={[styles.advancedBox, { height: advH, opacity: exp }]}>
+          {type === 'wa' ? (
+            <>
+              <Text style={styles.advTitle}>Advanced (WA Stats Paths)</Text>
+              <Text style={styles.advLine}>• per-server: servers/{name}/stats/*</Text>
+              <Text style={styles.advLine}>• global: stats/global/*</Text>
+
+              <View style={{ marginTop: 10 }}>
+                <Text style={styles.advTitle}>Set dailyLimit</Text>
+                <View style={{ flexDirection: 'row-reverse', gap: 8, alignItems: 'center' }}>
+                  <TextInput
+                    style={styles.limitInput}
+                    value={limitDraft}
+                    placeholder={`${data.dailyLimit ?? ''}`}
+                    onChangeText={setLimitDraft}
+                    keyboardType="numeric"
+                  />
+                  <TouchableOpacity
+                    style={styles.limitSaveBtn}
+                    onPress={() => {
+                      const n = Number(limitDraft);
+                      if (!Number.isFinite(n) || n <= 0) {
+                        Alert.alert('שגיאה', 'dailyLimit חייב להיות מספר חיובי');
+                        return;
+                      }
+                      onSetDailyLimit?.(name, n);
+                      setLimitDraft('');
+                    }}
+                  >
+                    <Text style={styles.limitSaveText}>שמור</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={styles.advTitle}>Advanced</Text>
+              <Text style={styles.advLine}>• device_server/{name} (daily counters)</Text>
+              <Text style={styles.advLine}>• last_sent: device_server/{name}/last_sent</Text>
+            </>
+          )}
+        </Animated.View>
+      </View>
+
+      <View style={styles.cardFooter}>
+        <TouchableOpacity
+          style={[styles.footerBtn, data.enabled !== false ? styles.btnStop : styles.btnStart]}
+          onPress={() => onToggle(name, !(data.enabled !== false))}
+        >
+          <Text style={styles.footerBtnText}>{data.enabled !== false ? 'השבת' : 'הפעל'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.footerBtn, styles.btnReset]} onPress={() => onReset(name)}>
+          <Text style={styles.footerBtnText}>איפוס</Text>
+        </TouchableOpacity>
+      </View>
+    </Animated.View>
   );
-}
+};
 
-// ==== Cards ====
-function WhatsAppServerCard({ name, meta, color, onReset, onToggle, rangeMs }) {
-  const enabled = meta?.enabled !== false;
-
-  const lastSeenTs = parseTs(meta?.lastSeen);
-  const ageSec = lastSeenTs ? Math.floor((Date.now() - lastSeenTs) / 1000) : 999999;
-
-  const statusRaw = String(meta?.status || '').toLowerCase();
-  const statusByField = statusRaw === 'online';
-
-  const onlineByHB = ageSec <= WA_SLA.heartbeatSecWarn;
-  const offlineHard = ageSec >= WA_SLA.heartbeatSecCrit;
-
-  const tone = offlineHard || !statusByField ? 'bad' : onlineByHB ? 'ok' : 'warn';
-
-  const count = Number(meta?.count || 0);
-  const date = String(meta?.date || '');
-  const state = String(meta?.state || '');
-  const reason = String(meta?.reason || '');
-  const readyAtTs = parseTs(meta?.readyAt);
-
-  const activeInRange = lastSeenTs && rangeMs ? (Date.now() - lastSeenTs <= rangeMs) : false;
-
-  return (
-    <View style={S.card}>
-      <View style={S.cardTop}>
-        <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
-          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color, opacity: 0.9 }} />
-          <Text style={S.cardTitle}>{name}</Text>
-        </View>
-
-        <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
-          <DangerDot tone={tone} />
-          <Chip label={tone === 'ok' ? 'ONLINE' : tone === 'warn' ? 'LAG' : 'OFFLINE'} tone={tone} />
-        </View>
-      </View>
-
-      <View style={S.grid2}>
-        <View style={S.kv}>
-          <Text style={S.kvK}>Active (Range)</Text>
-          <Text style={S.kvV}>{activeInRange ? 'כן' : 'לא'}</Text>
-        </View>
-
-        <View style={S.kv}>
-          <Text style={S.kvK}>Last Seen</Text>
-          <Text style={S.kvV}>
-            {timeAgoHe(lastSeenTs)} <Text style={{ color: '#94A3B8', fontWeight: '800' }}>({prettyDT(lastSeenTs)})</Text>
-          </Text>
-        </View>
-
-        <View style={S.kv}>
-          <Text style={S.kvK}>Daily Count</Text>
-          <Text style={S.kvV}>{count.toLocaleString('he-IL')}</Text>
-        </View>
-
-        <View style={S.kv}>
-          <Text style={S.kvK}>Date</Text>
-          <Text style={S.kvV}>{date || '—'}</Text>
-        </View>
-
-        <View style={S.kv}>
-          <Text style={S.kvK}>Ready At</Text>
-          <Text style={S.kvV}>{readyAtTs ? prettyDT(readyAtTs) : '—'}</Text>
-        </View>
-      </View>
-
-      <View style={{ marginTop: 10, gap: 6 }}>
-        <View style={S.lineRow}>
-          <Text style={S.lineK}>state</Text>
-          <Text style={S.lineV}>{state || '—'}</Text>
-        </View>
-        <View style={S.lineRow}>
-          <Text style={S.lineK}>reason</Text>
-          <Text style={S.lineV}>{reason || '—'}</Text>
-        </View>
-        <View style={S.lineRow}>
-          <Text style={S.lineK}>enabled</Text>
-          <Text style={S.lineV}>{enabled ? 'true' : 'false'}</Text>
-        </View>
-      </View>
-
-      <View style={S.actionsRow}>
-        <TouchableOpacity onPress={() => onReset?.(name)} style={[S.btn, { backgroundColor: '#111827', flex: 1 }]}>
-          <Text style={S.btnTxt}>Reset</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => onToggle?.(name, !enabled)} style={[S.btn, { backgroundColor: enabled ? '#EF4444' : '#22C55E', flex: 1 }]}>
-          <Text style={S.btnTxt}>{enabled ? 'Disable' : 'Enable'}</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-function SmsServerCard({ name, meta, rate, series, capPerMin, onReset, onToggle, color }) {
-  const enabled = meta?.enabled !== false;
-
-  const dayCount = Number(meta?.dayCount || 0);
-  const lastSentTs = parseTs(meta?.last_sent);
-  const ageSec = lastSentTs ? Math.floor((Date.now() - lastSentTs) / 1000) : 999999;
-
-  const tone = !enabled ? 'neutral' : ageSec >= DEFAULT_SLA.heartbeatSecCrit ? 'bad' : ageSec >= DEFAULT_SLA.heartbeatSecWarn ? 'warn' : 'ok';
-  const r = Number(rate) || 0;
-  const rTxt = r > 0 && r < 0.1 ? '~0.1' : r.toFixed(2);
-
-  const rArr = Array.isArray(series) ? series : [];
-  const mean = avg(rArr);
-  const peak = maxArr(rArr);
-  const util = capPerMin ? Math.min(1, r / capPerMin) : 0;
-
-  return (
-    <View style={S.card}>
-      <View style={S.cardTop}>
-        <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
-          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color, opacity: 0.9 }} />
-          <Text style={S.cardTitle}>{name}</Text>
-        </View>
-
-        <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 8 }}>
-          <DangerDot tone={tone} />
-          <Chip label={!enabled ? 'DISABLED' : tone === 'ok' ? 'OK' : tone === 'warn' ? 'SLOW' : 'NO HB'} tone={tone} />
-        </View>
-      </View>
-
-      <View style={S.grid2}>
-        <View style={S.kv}>
-          <Text style={S.kvK}>Rate</Text>
-          <Text style={S.kvV}>
-            {rTxt} <Text style={{ color: '#94A3B8', fontWeight: '800' }}>/ {capPerMin} per min</Text>
-          </Text>
-          <ProgressBar pct={util} tone={util > 0.9 ? 'bad' : util > 0.65 ? 'warn' : 'ok'} />
-        </View>
-
-        <View style={S.kv}>
-          <Text style={S.kvK}>Last Sent</Text>
-          <Text style={S.kvV}>
-            {timeAgoHe(lastSentTs)} <Text style={{ color: '#94A3B8', fontWeight: '800' }}>({prettyDT(lastSentTs)})</Text>
-          </Text>
-        </View>
-
-        <View style={S.kv}>
-          <Text style={S.kvK}>Daily</Text>
-          <Text style={S.kvV}>{dayCount.toLocaleString('he-IL')}</Text>
-        </View>
-
-        <View style={S.kv}>
-          <Text style={S.kvK}>Window Mean/Peak</Text>
-          <Text style={S.kvV}>
-            {mean.toFixed(1)} / {Number.isFinite(peak) ? peak.toFixed(1) : '0.0'}
-          </Text>
-        </View>
-      </View>
-
-      <View style={{ marginTop: 10 }}>
-        <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text style={[S.kvK, { marginBottom: 6 }]}>ECG</Text>
-          <Text style={[S.kvK, { marginBottom: 6, color: '#64748b' }]}>mini</Text>
-        </View>
-        <MiniSpark samples={rArr} color={color} height={44} />
-      </View>
-
-      <View style={S.actionsRow}>
-        <TouchableOpacity onPress={() => onReset(name)} style={[S.btn, { backgroundColor: '#111827', flex: 1 }]}>
-          <Text style={S.btnTxt}>Reset</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => onToggle(name, !enabled)} style={[S.btn, { backgroundColor: enabled ? '#EF4444' : '#22C55E', flex: 1 }]}>
-          <Text style={S.btnTxt}>{enabled ? 'Disable' : 'Enable'}</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-// ==== MAIN ====
+// ==== Main Component ====
 export default function ServerMonitorsPane({
   serversCount = 6,
   hardDisabled = ['server_6'],
   defaultCapPerMin = 30,
-  defaultWindowSec = 300,
-
-  // ✅ Back button target
-  backToRoute = 'OwnerDashboard', // אם אצלך שם המסך שונה – תחליף פה
 }) {
   const nav = useNavigation();
   const { width } = useWindowDimensions();
-  const cols = width >= 980 ? 3 : width >= 680 ? 2 : 1;
-  const colW = cols === 1 ? '100%' : cols === 2 ? '49%' : '32%';
+  const colCount = width > 900 ? 3 : width > 600 ? 2 : 1;
+  const colWidth = `${100 / colCount}%`;
 
-  const [onlyEnabled, setOnlyEnabled] = useState(false);
-  const [capPerMin, setCapPerMin] = useState(defaultCapPerMin);
-  const [windowSec, setWindowSec] = useState(defaultWindowSec);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(24)).current;
 
-  // ✅ Range selection
-  const [rangeKey, setRangeKey] = useState('1d');
-  const preset = useMemo(() => getPreset(rangeKey), [rangeKey]);
-  const rangeMs = preset.ms;
-
-  // optional: when range changes, adjust chart window (but don't explode)
   useEffect(() => {
-    if (preset?.chartWindowSec) {
-      // שמור שה-ECG יראה יפה ולא "מטורף"
-      setWindowSec((prev) => {
-        const next = preset.chartWindowSec;
-        // אל תשנה אם המשתמש כבר הגדיר ערך ידני אחר משמעותית (אפשר לשנות לפי הטעם)
-        return next;
-      });
-    }
-  }, [preset?.chartWindowSec]);
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 650, useNativeDriver: true }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 650,
+        easing: Easing.out(Easing.poly(4)),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const [capPerMin, setCapPerMin] = useState(defaultCapPerMin);
+  const [globalRange, setGlobalRange] = useState('1d');
+  const [search, setSearch] = useState('');
 
   const [rawDevice, setRawDevice] = useState({});
-  const rawWA = useWhatsAppServers();
+  const rawWA = useWhatsAppServersMeta();
+  const waGlobalStats = useWhatsAppStatsGlobal();
 
   const iso = todayISO();
 
   useEffect(() => {
     const ref = firebase.database().ref('device_server');
-    const off = ref.on('value', (snap) => setRawDevice(snap.val() || {}));
+    const cb = ref.on('value', (snap) => setRawDevice(snap.val() || {}));
     return () => {
       try {
-        ref.off('value', off);
+        ref.off('value', cb);
       } catch {}
     };
   }, []);
 
-  // SMS rates
-  const { rates, series } = useDeviceServerRates({
-    windowMs: Math.max(5, windowSec) * 1000,
-    pollMs: 2000,
-    capPerMin: Math.max(1, capPerMin),
-  });
+  const { rates, series } = useDeviceServerRates({ windowMs: 60000, pollMs: 2000, capPerMin });
 
-  // SMS keys
-  const smsKeys = Array.from({ length: serversCount }, (_, i) => `server_${i + 1}`);
+  const smsKeys = Array.from({ length: serversCount }, (_, i) => `server_${i + 1}`).filter(
+    (k) => !hardDisabled.includes(k)
+  );
 
-  const smsMetaByName = useMemo(() => {
-    const m = {};
-    smsKeys.forEach((k) => (m[k] = rawDevice?.[k] || {}));
-    return m;
-  }, [rawDevice, smsKeys]);
+  const waKeys = useMemo(() => Object.keys(rawWA || {}).sort(), [rawWA]);
 
-  const smsEnabledList = smsKeys.filter((name) => !hardDisabled.includes(name) && smsMetaByName[name].enabled !== false);
-  const smsDisabledList = smsKeys.filter((name) => !smsEnabledList.includes(name));
+  // ✅ per-server WA stats from servers/{id}/stats/*
+  const waStatsPerServer = useWhatsAppStatsPerServer(waKeys);
 
-  // WhatsApp keys
-  const waKeys = useMemo(() => {
-    const ks = Object.keys(rawWA || {}).filter((k) => /^server\d+$/i.test(k) || /^server_\d+$/i.test(k));
-    ks.sort((a, b) => (Number(String(a).replace(/\D+/g, '')) || 0) - (Number(String(b).replace(/\D+/g, '')) || 0));
-    return ks;
-  }, [rawWA]);
+  // --- Global totals (WA from stats/global, SMS from device_server history) ---
+  const globalTotals = useMemo(() => {
+    // SMS range sum (מה שיש לך — נשאר)
+    const preset = RANGE_PRESETS.find((p) => p.key === globalRange);
+    const daysBack = preset?.days || 1;
 
-  const waMetaByName = useMemo(() => {
-    const m = {};
-    waKeys.forEach((k) => (m[k] = rawWA?.[k] || {}));
-    return m;
-  }, [rawWA, waKeys]);
+    let smsTotal = 0;
 
-  // ==== Range calculations ====
+    if (globalRange === '1h' || globalRange === '12h') {
+      // SMS אין buckets כאלה בנתונים — fallback: היום
+      smsKeys.forEach((k) => {
+        const data = rawDevice[k] || {};
+        const keysToScan = data.day ? data.day : data;
+        smsTotal += safeNum(keysToScan?.[iso]);
+      });
+    } else {
+      const now = new Date();
+      now.setHours(23, 59, 59, 999);
+      const startTs = now.getTime() - daysBack * 24 * 60 * 60 * 1000;
 
-  // (A) SMS totals in range:
-  // - rolling (1h/12h): estimate using rates series (avg rate * minutes)
-  // - days (day/week/month/year): sum from day maps across last N days
-  const smsTotalInRange = useMemo(() => {
-    if (preset.kind === 'rolling') {
-      const windowMin = preset.ms / 60000;
-      const perServerEst = smsEnabledList.map((name) => avg(series[name] || []) * windowMin);
-      const total = sumNum(perServerEst);
-      return Math.max(0, Math.round(total));
+      smsKeys.forEach((k) => {
+        const data = rawDevice[k] || {};
+        const keysToScan = data.day ? data.day : data;
+        Object.keys(keysToScan || {}).forEach((dateKey) => {
+          if (/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+            const t = isoToTs(dateKey);
+            if (t >= startTs) smsTotal += safeNum(keysToScan[dateKey]);
+          }
+        });
+      });
     }
 
-    // days
-    const days = Math.max(1, preset.days || 1);
-    const endTs = isoToTs(iso);
-    const startTs = endTs - (days - 1) * 24 * 60 * 60 * 1000;
+    // ✅ WA total from stats/global/*
+    const waTotal = getWAValueInRangeFromStats(waGlobalStats, globalRange);
 
-    let total = 0;
-    for (const name of smsKeys) {
-      const dayMap = rawDevice?.[name]?.day || {};
-      for (const [dIso, val] of Object.entries(dayMap)) {
-        const t = isoToTs(dIso);
-        if (!t) continue;
-        if (t >= startTs && t <= endTs) total += Number(val || 0);
-      }
-    }
-    return Math.max(0, Math.round(total));
-  }, [preset.kind, preset.days, preset.ms, smsEnabledList, series, rawDevice, smsKeys, iso]);
+    return { smsTotal, waTotal, total: smsTotal + waTotal };
+  }, [globalRange, rawDevice, smsKeys.join('|'), iso, waGlobalStats]);
 
-  // SMS Today (always)
-  const smsDayTotalToday = useMemo(() => {
-    return smsKeys.reduce((s, name) => s + Number(rawDevice?.[name]?.day?.[iso] || 0), 0);
-  }, [rawDevice, smsKeys, iso]);
-
-  // SMS live throughput
-  const smsRateNowTotal = useMemo(() => smsEnabledList.reduce((s, name) => s + Number(rates[name] || 0), 0), [smsEnabledList, rates]);
-  const smsTotalCapNow = Math.max(1, capPerMin) * Math.max(1, smsEnabledList.length);
-  const smsUtil = smsTotalCapNow ? Math.min(1, smsRateNowTotal / smsTotalCapNow) : 0;
-
-  const smsAlerts = useMemo(() => buildServerAlerts({ metaByName: smsMetaByName, rates, series, capPerMin, sla: DEFAULT_SLA }), [smsMetaByName, rates, series, capPerMin]);
-
-  // (B) WA active servers in range by lastSeen
-  const waActiveServersInRange = useMemo(() => {
-    if (!rangeMs) return 0;
-    return waKeys.reduce((acc, name) => {
-      const lastSeenTs = parseTs(waMetaByName[name]?.lastSeen);
-      const ok = lastSeenTs && (Date.now() - lastSeenTs <= rangeMs);
-      return acc + (ok ? 1 : 0);
-    }, 0);
-  }, [waKeys, waMetaByName, rangeMs]);
-
-  // WA online now (by status + heartbeat)
-  const waEnabledCount = useMemo(() => waKeys.filter((k) => waMetaByName[k]?.enabled !== false).length, [waKeys, waMetaByName]);
-  const waOnlineNowCount = useMemo(() => {
-    return waKeys.reduce((acc, name) => {
-      const meta = waMetaByName[name] || {};
+  const waOnlineCount = useMemo(() => {
+    return waKeys.filter((k) => {
+      const meta = rawWA[k] || {};
+      const lastSeen = parseTs(meta.lastSeen);
       const enabled = meta.enabled !== false;
-      const lastSeenTs = parseTs(meta.lastSeen);
-      const ageSec = lastSeenTs ? Math.floor((Date.now() - lastSeenTs) / 1000) : 999999;
-      const statusOk = String(meta.status || '').toLowerCase() === 'online';
-      const ok = enabled && statusOk && ageSec <= WA_SLA.heartbeatSecWarn;
-      return acc + (ok ? 1 : 0);
-    }, 0);
-  }, [waKeys, waMetaByName]);
+      const isOnline = enabled && meta.status === 'online' && Date.now() - lastSeen < 90_000;
+      return isOnline;
+    }).length;
+  }, [waKeys, rawWA]);
 
-  const waOfflineNowCount = Math.max(0, waEnabledCount - waOnlineNowCount);
+  // ========== Actions ==========
+  const toggleSms = (n, on) => firebase.database().ref(`device_server/${n}/enabled`).set(!!on);
+  const resetSms = (n) => firebase.database().ref(`device_server/${n}/${iso}`).set(0);
 
-  // (C) WA counts in range (best effort using meta.date/meta.count)
-  // If meta.date is within days window -> include that count
-  const waCountInRange = useMemo(() => {
-    if (!waKeys.length) return 0;
+  const toggleWA = (n, on) => firebase.database().ref(`servers/${n}/enabled`).set(!!on);
+  const resetWA = (n) => firebase.database().ref(`servers/${n}/count`).set(0);
 
-    // rolling: treat as "today only" best effort
-    if (preset.kind === 'rolling') {
-      return waKeys.reduce((s, name) => {
-        const meta = waMetaByName[name] || {};
-        return s + (String(meta.date || '') === iso ? Number(meta.count || 0) : 0);
-      }, 0);
-    }
+  const setWADailyLimit = (serverId, limit) =>
+    firebase.database().ref(`servers/${serverId}/dailyLimit`).set(Number(limit));
 
-    const days = Math.max(1, preset.days || 1);
-    const endTs = isoToTs(iso);
-    const startTs = endTs - (days - 1) * 24 * 60 * 60 * 1000;
-
-    return waKeys.reduce((s, name) => {
-      const meta = waMetaByName[name] || {};
-      const d = String(meta.date || '');
-      const t = isoToTs(d);
-      if (!t) return s;
-      if (t >= startTs && t <= endTs) return s + Number(meta.count || 0);
-      return s;
-    }, 0);
-  }, [waKeys, waMetaByName, preset.kind, preset.days, iso]);
-
-  // Combined
-  const combinedInRange = smsTotalInRange + waCountInRange;
-
-  // Health score
-  const smsCrit = smsAlerts.filter((a) => a.sev === 'critical').length;
-  const smsWarn = smsAlerts.filter((a) => a.sev === 'warning').length;
-  const healthScore = clamp(100 - (waOfflineNowCount * 12 + smsCrit * 15 + smsWarn * 6), 0, 100);
-  const healthTone = healthScore >= 85 ? 'ok' : healthScore >= 65 ? 'warn' : 'bad';
-
-  // lists
-  const displaySmsKeys = onlyEnabled ? smsEnabledList : smsKeys;
-
-  // ==== actions ====
-  const resetSmsDaily = async (name) => {
-    await firebase.database().ref(`device_server/${name}/day/${iso}`).set(0);
-    await firebase.database().ref(`device_server/${name}/last_sent`).set(new Date().toISOString());
-    Alert.alert('בוצע', `איפוס ספירת היום ל-${name}`);
+  const confirm = (title, msg, onYes) => {
+    Alert.alert(title, msg, [
+      { text: 'ביטול', style: 'cancel' },
+      { text: 'כן', style: 'destructive', onPress: onYes },
+    ]);
   };
 
-  const toggleSms = async (name, on) => {
-    await firebase.database().ref(`device_server/${name}/enabled`).set(!!on);
-    await firebase.database().ref(`device_server/${name}/updatedAt`).set(firebase.database.ServerValue.TIMESTAMP);
-    Alert.alert('עודכן', on ? 'השרת הופעל' : 'השרת הושבת');
+  const toggleAllWA = (on) => {
+    confirm('אישור', `${on ? 'להפעיל' : 'להשבית'} את כל שרתי WhatsApp?`, async () => {
+      await Promise.all(waKeys.map((k) => firebase.database().ref(`servers/${k}/enabled`).set(!!on)));
+    });
   };
 
-  const resetWA = async (name) => {
-    const ok = Platform.OS === 'web' ? window.confirm(`לאפס מונה ל-${name}?`) : true;
-    if (!ok) return;
-    await firebase.database().ref(`servers/${name}/count`).set(0);
-    await firebase.database().ref(`servers/${name}/date`).set(todayISO());
-    await firebase.database().ref(`servers/${name}/updatedAt`).set(firebase.database.ServerValue.TIMESTAMP);
-    Alert.alert('בוצע', `איפוס בוצע ל-${name}`);
+  const toggleAllSMS = (on) => {
+    confirm('אישור', `${on ? 'להפעיל' : 'להשבית'} את כל שרתי SMS?`, async () => {
+      await Promise.all(smsKeys.map((k) => firebase.database().ref(`device_server/${k}/enabled`).set(!!on)));
+    });
   };
 
-  const toggleWA = async (name, on) => {
-    await firebase.database().ref(`servers/${name}/enabled`).set(!!on);
-    await firebase.database().ref(`servers/${name}/updatedAt`).set(firebase.database.ServerValue.TIMESTAMP);
-    Alert.alert('עודכן', on ? 'WhatsApp הופעל' : 'WhatsApp הושבת');
+  const resetAllCounts = () => {
+    confirm('אישור', 'לאפס מונים (count) לכל שרתי WhatsApp + SMS?', async () => {
+      await Promise.all([
+        ...waKeys.map((k) => firebase.database().ref(`servers/${k}/count`).set(0)),
+        ...smsKeys.map((k) => firebase.database().ref(`device_server/${k}/${iso}`).set(0)),
+      ]);
+    });
   };
 
-  // ==== UI ====
+  // Entrance animations per card (stagger)
+  const waEntrance = useRef({}).current;
+  const smsEntrance = useRef({}).current;
+
+  const getEntrance = (map, key, index) => {
+    if (!map[key]) map[key] = new Animated.Value(0);
+    return map[key];
+  };
+
+  useEffect(() => {
+    const all = [
+      ...waKeys.map((k, i) => ({ key: `wa:${k}`, v: getEntrance(waEntrance, k, i), delay: 80 * i })),
+      ...smsKeys.map((k, i) => ({ key: `sms:${k}`, v: getEntrance(smsEntrance, k, i), delay: 80 * i })),
+    ];
+
+    // reset all to 0 then animate
+    all.forEach((x) => x.v.setValue(0));
+
+    Animated.stagger(
+      60,
+      all.map((x) =>
+        Animated.timing(x.v, {
+          toValue: 1,
+          duration: 520,
+          delay: 0,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        })
+      )
+    ).start();
+  }, [waKeys.join('|'), smsKeys.join('|')]);
+
+  const searchNorm = search.trim().toLowerCase();
+  const match = useCallback(
+    (name) => {
+      if (!searchNorm) return true;
+      return String(name || '').toLowerCase().includes(searchNorm);
+    },
+    [searchNorm]
+  );
+
   return (
-    <ScrollView style={S.page} contentContainerStyle={{ padding: 12, paddingBottom: 28 }}>
-      {/* HERO */}
-      <View style={S.hero}>
-        <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-          <View style={{ flex: 1 }}>
-            <Text style={S.heroTitle}>Server Monitor • Pro Dashboard</Text>
-            <Text style={S.heroSub}>WhatsApp + SMS • Range Analytics • Last Seen • Rates • Actions</Text>
+    <View style={styles.bg}>
+      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <TouchableOpacity onPress={() => nav.goBack()} style={styles.backBtn}>
+            <Text style={styles.backText}>← חזור</Text>
+          </TouchableOpacity>
+          <Text style={styles.pageTitle}>ניהול שרתים</Text>
+        </View>
+
+        {/* Search + Quick Actions */}
+        <View style={styles.topToolsRow}>
+          <View style={styles.searchBox}>
+            <Text style={styles.searchIcon}>⌕</Text>
+            <TextInput
+              style={styles.searchInput}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="חיפוש שרת… (server1 / server_2)"
+              placeholderTextColor="#94A3B8"
+            />
           </View>
 
-          <View style={{ alignItems: 'flex-end', gap: 8 }}>
+          <TouchableOpacity style={styles.quickBtn} onPress={() => toggleAllWA(true)}>
+            <Text style={styles.quickBtnText}>WA ON</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.quickBtn, { backgroundColor: 'rgba(239,68,68,0.22)' }]} onPress={() => toggleAllWA(false)}>
+            <Text style={styles.quickBtnText}>WA OFF</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.quickBtn} onPress={() => toggleAllSMS(true)}>
+            <Text style={styles.quickBtnText}>SMS ON</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.quickBtn, { backgroundColor: 'rgba(239,68,68,0.22)' }]} onPress={() => toggleAllSMS(false)}>
+            <Text style={styles.quickBtnText}>SMS OFF</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.quickBtn, { backgroundColor: 'rgba(148,163,184,0.22)' }]} onPress={resetAllCounts}>
+            <Text style={styles.quickBtnText}>RESET</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Global Range Selector */}
+        <View style={styles.rangeSelector}>
+          {RANGE_PRESETS.map((p) => (
             <TouchableOpacity
-              onPress={() => {
-                // אם תרצה: nav.navigate(backToRoute)
-                // או פשוט: nav.goBack()
-                try {
-                  nav.navigate(backToRoute);
-                } catch {
-                  nav.goBack?.();
-                }
-              }}
-              style={S.backBtn}
+              key={p.key}
+              style={[styles.rangeBtn, globalRange === p.key && styles.rangeBtnActive]}
+              onPress={() => setGlobalRange(p.key)}
             >
-              <Text style={S.backBtnTxt}>חזור לדשבורד</Text>
+              <Text style={[styles.rangeText, globalRange === p.key && styles.rangeTextActive]}>{p.label}</Text>
             </TouchableOpacity>
-
-            <View style={{ flexDirection: 'row-reverse', gap: 6 }}>
-              <Chip label={`HEALTH ${healthScore}%`} tone={healthTone} />
-              <Chip label={`RANGE ${preset.label}`} tone="info" />
-            </View>
-          </View>
-        </View>
-
-        <View style={{ marginTop: 10 }}>
-          <Text style={[S.heroMini, { marginBottom: 8 }]}>בחר טווח נתונים</Text>
-          <RangeButtons
-            value={rangeKey}
-            onChange={(k) => {
-              setRangeKey(k);
-            }}
-          />
-        </View>
-
-        <View style={{ marginTop: 10 }}>
-          <Text style={[S.heroMini, { marginBottom: 6 }]}>System Health</Text>
-          <ProgressBar pct={healthScore / 100} tone={healthTone} />
-          <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', marginTop: 6 }}>
-            <Text style={S.heroMini}>WA offline now: {waOfflineNowCount}</Text>
-            <Text style={S.heroMini}>SMS crit/warn: {smsCrit}/{smsWarn}</Text>
-          </View>
+          ))}
         </View>
       </View>
 
-      {/* OVERVIEW KPI */}
-      <Panel
-        title="Overview"
-        subtitle={`סיכום לפי טווח: ${preset.label}`}
-        right={
-          <View style={{ flexDirection: 'row-reverse', gap: 6, flexWrap: 'wrap' }}>
-            <Chip label={`WA ONLINE ${waOnlineNowCount}/${waEnabledCount}`} tone={waOfflineNowCount ? 'warn' : 'ok'} />
-            <Chip label={`SMS ACTIVE ${smsEnabledList.length}/${smsKeys.length}`} tone={smsDisabledList.length ? 'warn' : 'ok'} />
-            <Chip label={`WA ACTIVE(${preset.label}) ${waActiveServersInRange}`} tone="info" />
-          </View>
-        }
-      >
-        <View style={S.kpiRow}>
-          <KpiCard
-            label={`סה״כ שימוש בטווח (${preset.label})`}
-            value={combinedInRange.toLocaleString('he-IL')}
-            hint={`WA ${waCountInRange.toLocaleString('he-IL')} • SMS ${smsTotalInRange.toLocaleString('he-IL')}`}
-            tone="info"
-            wide
-          />
-          <KpiCard
-            label="WA Active Servers (Range)"
-            value={`${waActiveServersInRange}`}
-            hint="לפי lastSeen"
-            tone={waActiveServersInRange ? 'ok' : 'warn'}
-          />
-          <KpiCard
-            label="SMS Throughput (Live)"
-            value={`${smsRateNowTotal.toFixed(1)}/min`}
-            hint={`Cap ${smsTotalCapNow}/min • Util ${(smsUtil * 100).toFixed(0)}%`}
-            tone={smsUtil > 0.9 ? 'bad' : smsUtil > 0.65 ? 'warn' : 'ok'}
-          />
-          <KpiCard
-            label="SMS Alerts"
-            value={`${smsCrit}/${smsWarn}`}
-            hint="crit / warn"
-            tone={smsCrit ? 'bad' : smsWarn ? 'warn' : 'ok'}
-          />
-        </View>
-
-        <View style={{ marginTop: 10 }}>
-          <Text style={S.blockTitle}>Usage Breakdown (Range)</Text>
-          <View style={S.breakRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={S.breakK}>WhatsApp</Text>
-              <Text style={S.breakV}>{waCountInRange.toLocaleString('he-IL')}</Text>
-              <ProgressBar pct={combinedInRange ? waCountInRange / combinedInRange : 0} tone="info" />
-            </View>
-            <View style={{ width: 12 }} />
-            <View style={{ flex: 1 }}>
-              <Text style={S.breakK}>SMS</Text>
-              <Text style={S.breakV}>{smsTotalInRange.toLocaleString('he-IL')}</Text>
-              <ProgressBar pct={combinedInRange ? smsTotalInRange / combinedInRange : 0} tone="ok" />
-            </View>
-          </View>
-
-          <View style={{ marginTop: 10 }}>
-            <Text style={S.noteTxt}>
-              הערה: ל־WhatsApp יש כרגע count/date ליום האחרון. כדי לקבל סכימות אמיתיות לשבוע/חודש/שנה מומלץ לשמור היסטוריה יומית.
-            </Text>
-          </View>
-        </View>
-      </Panel>
-
-      {/* WhatsApp */}
-      <Panel
-        title="WhatsApp Servers"
-        subtitle="Heartbeat (lastSeen) + סטטוס + פעולות"
-        right={
-          <View style={{ flexDirection: 'row-reverse', gap: 6 }}>
-            <Chip label={`ONLINE NOW ${waOnlineNowCount}`} tone="ok" />
-            <Chip label={`OFFLINE NOW ${waOfflineNowCount}`} tone={waOfflineNowCount ? 'bad' : 'neutral'} />
-          </View>
-        }
-      >
-        <View style={S.actionsTopRow}>
-          <TouchableOpacity
-            onPress={async () => {
-              const ok = Platform.OS === 'web' ? window.confirm('להפעיל את כל שרתי WhatsApp?') : true;
-              if (!ok) return;
-              await Promise.all(waKeys.map((k) => firebase.database().ref(`servers/${k}/enabled`).set(true)));
-              Alert.alert('בוצע', 'כל שרתי WhatsApp הופעלו');
-            }}
-            style={[S.btnTop, { backgroundColor: '#22C55E' }]}
-          >
-            <Text style={S.btnTxt}>Enable All</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={async () => {
-              const ok = Platform.OS === 'web' ? window.confirm('להשבית את כל שרתי WhatsApp?') : true;
-              if (!ok) return;
-              await Promise.all(waKeys.map((k) => firebase.database().ref(`servers/${k}/enabled`).set(false)));
-              Alert.alert('בוצע', 'כל שרתי WhatsApp הושבתו');
-            }}
-            style={[S.btnTop, { backgroundColor: '#EF4444' }]}
-          >
-            <Text style={S.btnTxt}>Disable All</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={async () => {
-              const ok = Platform.OS === 'web' ? window.confirm('לאפס מונים לכל שרתי WhatsApp?') : true;
-              if (!ok) return;
-              await Promise.all(
-                waKeys.map(async (k) => {
-                  await firebase.database().ref(`servers/${k}/count`).set(0);
-                  await firebase.database().ref(`servers/${k}/date`).set(todayISO());
-                  await firebase.database().ref(`servers/${k}/updatedAt`).set(firebase.database.ServerValue.TIMESTAMP);
-                })
-              );
-              Alert.alert('בוצע', 'כל המונים אופסו (WA)');
-            }}
-            style={[S.btnTop, { backgroundColor: '#111827' }]}
-          >
-            <Text style={S.btnTxt}>Reset Counts</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={S.cardsWrap}>
-          {waKeys.length ? (
-            waKeys.map((name, idx) => (
-              <View key={name} style={{ width: colW }}>
-                <WhatsAppServerCard
-                  name={name}
-                  meta={waMetaByName[name] || {}}
-                  color={serverColor(name, idx)}
-                  onReset={resetWA}
-                  onToggle={toggleWA}
-                  rangeMs={rangeMs}
-                />
-              </View>
-            ))
-          ) : (
-            <View style={S.emptyBox}>
-              <Text style={S.emptyText}>לא נמצאו שרתי WhatsApp תחת servers/*</Text>
-            </View>
-          )}
-        </View>
-      </Panel>
-
-      {/* SMS */}
-      <Panel
-        title="SMS Device Servers"
-        subtitle="קצב + last_sent + פעולות"
-        right={
-          <View style={{ flexDirection: 'row-reverse', gap: 6, flexWrap: 'wrap' }}>
-            <Chip label={`UTIL ${(smsUtil * 100).toFixed(0)}%`} tone={smsUtil > 0.9 ? 'bad' : smsUtil > 0.65 ? 'warn' : 'ok'} />
-            <Chip label={`TODAY ${smsDayTotalToday.toLocaleString('he-IL')}`} tone="ok" />
-          </View>
-        }
-      >
-        {/* Settings */}
-        <View style={S.settingsRow}>
-          <View style={S.settingItem}>
-            <Text style={S.settingLabel}>Cap / min</Text>
-            <TextInput
-              value={String(capPerMin)}
-              onChangeText={(t) => setCapPerMin(Math.max(1, Number(t || 0)))}
-              keyboardType="numeric"
-              style={S.input}
-              placeholder="30"
-              placeholderTextColor="#9AA3AC"
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+          {/* KPI Row */}
+          <View style={styles.kpiRow}>
+            <KpiBox
+              label={`תעבורה (${RANGE_PRESETS.find((p) => p.key === globalRange)?.label})`}
+              value={globalTotals.total.toLocaleString()}
+              sub={`WA: ${globalTotals.waTotal.toLocaleString()} | SMS: ${globalTotals.smsTotal.toLocaleString()}`}
+              color="#10B981"
+              animDelay={0}
+            />
+            <KpiBox
+              label="שרתי WA פעילים"
+              value={`${waOnlineCount} / ${waKeys.length}`}
+              sub="Online"
+              color="#3B82F6"
+              animDelay={80}
+            />
+            <KpiBox
+              label="שרתי SMS מוגדרים"
+              value={smsKeys.length}
+              sub={`Rate cap: ${capPerMin}/m`}
+              color="#F59E0B"
+              animDelay={160}
             />
           </View>
 
-          <View style={S.settingItem}>
-            <Text style={S.settingLabel}>Chart Window (sec)</Text>
-            <TextInput
-              value={String(windowSec)}
-              onChangeText={(t) => setWindowSec(Math.max(5, Number(t || 0)))}
-              keyboardType="numeric"
-              style={S.input}
-              placeholder="300"
-              placeholderTextColor="#9AA3AC"
-            />
-          </View>
+          {/* Distribution */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>פילוח תעבורה ({RANGE_PRESETS.find((p) => p.key === globalRange)?.label})</Text>
+            <View style={styles.chartCard}>
+              <DistributionBar wa={globalTotals.waTotal} sms={globalTotals.smsTotal} />
+              <View style={styles.statRow}>
+                <View style={styles.statItem}>
+                  <View style={[styles.dot, { backgroundColor: '#10B981' }]} />
+                  <Text style={styles.statLabel}>WhatsApp: {globalTotals.waTotal.toLocaleString()}</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <View style={[styles.dot, { backgroundColor: '#3B82F6' }]} />
+                  <Text style={styles.statLabel}>SMS: {globalTotals.smsTotal.toLocaleString()}</Text>
+                </View>
+              </View>
 
-          <TouchableOpacity
-            onPress={() => setOnlyEnabled((v) => !v)}
-            style={[S.toggle, { borderColor: onlyEnabled ? '#6C63FF' : '#E2E8F0', backgroundColor: onlyEnabled ? '#EEF2FF' : '#fff' }]}
-          >
-            <Text style={{ fontWeight: '900', color: onlyEnabled ? '#312E81' : '#0f172a' }}>{onlyEnabled ? 'Only Enabled' : 'Show All'}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Quick actions */}
-        <View style={S.actionsTopRow}>
-          <TouchableOpacity
-            onPress={async () => {
-              const ok = Platform.OS === 'web' ? window.confirm('לאפס את המונה היומי לכל שרתי SMS?') : true;
-              if (!ok) return;
-              await Promise.all(smsKeys.map((k) => firebase.database().ref(`device_server/${k}/day/${iso}`).set(0)));
-              Alert.alert('בוצע', 'כל המונים אופסו להיום.');
-            }}
-            style={[S.btnTop, { backgroundColor: '#111827' }]}
-          >
-            <Text style={S.btnTxt}>Reset All Daily</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={async () => {
-              await Promise.all(smsKeys.filter((k) => !hardDisabled.includes(k)).map((k) => firebase.database().ref(`device_server/${k}/enabled`).set(true)));
-              Alert.alert('בוצע', 'כל השרתים הופעלו.');
-            }}
-            style={[S.btnTop, { backgroundColor: '#22C55E' }]}
-          >
-            <Text style={S.btnTxt}>Enable All</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={async () => {
-              await Promise.all(smsKeys.filter((k) => !hardDisabled.includes(k)).map((k) => firebase.database().ref(`device_server/${k}/enabled`).set(false)));
-              Alert.alert('בוצע', 'כל השרתים הושבתו.');
-            }}
-            style={[S.btnTop, { backgroundColor: '#EF4444' }]}
-          >
-            <Text style={S.btnTxt}>Disable All</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Alerts chips */}
-        {!!smsAlerts.length && (
-          <View style={{ marginTop: 10 }}>
-            <Text style={S.blockTitle}>Active Alerts</Text>
-            <View style={{ flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 6 }}>
-              {smsAlerts.slice(0, 14).map((a, i) => (
-                <Chip key={i} label={`${a.name}: ${a.msg}`} tone={a.sev === 'critical' ? 'bad' : 'warn'} />
-              ))}
+              {/* ✅ debug info כדי שתראה שזה באמת קורא מה-path הנכון */}
+              <View style={styles.debugBox}>
+                <Text style={styles.debugText}>WA Global Path: stats/global/*</Text>
+                <Text style={styles.debugText}>WA Per Server Path: servers/&lt;id&gt;/stats/*</Text>
+              </View>
             </View>
           </View>
-        )}
 
-        {/* Cards */}
-        <View style={[S.cardsWrap, { marginTop: 12 }]}>
-          {displaySmsKeys.map((name, idx) => {
-            const isHardDisabled = hardDisabled.includes(name);
-            const meta = rawDevice?.[name] || {};
-            const enabled = isHardDisabled ? false : meta.enabled !== false;
+          {/* WhatsApp Servers */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>שרתי WhatsApp</Text>
+            <View style={styles.grid}>
+              {waKeys.map((k, idx) => {
+                const meta = rawWA[k] || {};
+                const enabled = meta.enabled !== false;
+                const lastSeen = parseTs(meta.lastSeen);
+                const isOnline = enabled && meta.status === 'online' && Date.now() - lastSeen < 90_000;
+                const status = isOnline ? 'ok' : enabled ? 'bad' : 'neutral';
 
-            const dayCount = Number(meta?.day?.[iso] || 0);
-            const lastSent = meta?.last_sent || null;
+                const entranceAnim = getEntrance(waEntrance, k, idx);
 
-            const color = serverColor(name, idx);
+                return (
+                  <View key={k} style={{ width: colWidth, padding: 6 }}>
+                    <ServerCard
+                      name={k}
+                      type="wa"
+                      status={status}
+                      lastSeen={lastSeen}
+                      data={meta}
+                      waStatsObj={waStatsPerServer[k] || null} // ✅ פה התיקון העיקרי
+                      onToggle={toggleWA}
+                      onReset={resetWA}
+                      entranceAnim={entranceAnim}
+                      searchHit={match(k)}
+                      onSetDailyLimit={setWADailyLimit}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          </View>
 
-            return (
-              <View key={name} style={{ width: colW }}>
-                <SmsServerCard
-                  name={name}
-                  meta={{
-                    enabled,
-                    dayCount,
-                    last_sent: lastSent,
-                  }}
-                  rate={rates[name] || 0}
-                  series={series[name] || []}
-                  capPerMin={capPerMin}
-                  onReset={resetSmsDaily}
-                  onToggle={(n2, on) => (isHardDisabled ? Alert.alert('Locked', `${name} נעול לפי דרישה.`) : toggleSms(n2, on))}
-                  color={color}
+          {/* SMS Servers */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>שרתי SMS</Text>
+              <View style={{ flexDirection: 'row-reverse', alignItems: 'center' }}>
+                <Text style={styles.labelInput}>Rate Limit:</Text>
+                <TextInput
+                  style={styles.smallInput}
+                  value={String(capPerMin)}
+                  onChangeText={(t) => setCapPerMin(Number(t) || 0)}
+                  keyboardType="numeric"
                 />
               </View>
-            );
-          })}
-        </View>
-      </Panel>
-    </ScrollView>
+            </View>
+
+            <View style={styles.grid}>
+              {smsKeys.map((k, idx) => {
+                const meta = rawDevice[k] || {};
+                const enabled = meta.enabled !== false;
+                const lastSeen = parseTs(meta.last_sent);
+                const age = Date.now() - lastSeen;
+
+                const status = !enabled ? 'neutral' : age < 60_000 ? 'ok' : age < 300_000 ? 'warn' : 'bad';
+                const rate = rates[k] || 0;
+                const entranceAnim = getEntrance(smsEntrance, k, idx);
+
+                return (
+                  <View key={k} style={{ width: colWidth, padding: 6 }}>
+                    <View style={{ position: 'absolute', right: 18, top: 10, zIndex: 3 }}>
+                      {series[k]?.length ? <MiniBars values={series[k]} color="#3B82F6" /> : null}
+                    </View>
+
+                    <ServerCard
+                      name={k}
+                      type="sms"
+                      status={status}
+                      lastSeen={lastSeen}
+                      data={{ ...meta, rate, enabled }}
+                      historyData={meta}
+                      onToggle={toggleSms}
+                      onReset={resetSms}
+                      entranceAnim={entranceAnim}
+                      searchHit={match(k)}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={{ height: 40 }} />
+        </Animated.View>
+      </ScrollView>
+    </View>
   );
 }
 
-// ==== styles ====
-const S = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#F6F7FF' },
+// ==== Styles ====
+const styles = StyleSheet.create({
+  bg: { flex: 1, backgroundColor: '#F8FAFC' },
 
-  hero: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E6E9F5',
-    backgroundColor: '#0B1020',
-    padding: 14,
+  header: {
+    backgroundColor: '#0F172A',
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    elevation: 5,
+  },
+  headerContent: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  pageTitle: { fontSize: 22, fontWeight: '800', color: '#FFF' },
+  backBtn: { padding: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 8 },
+  backText: { color: '#FFF', fontWeight: '600' },
+
+  topToolsRow: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: 8,
+    alignItems: 'center',
     marginBottom: 10,
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 14, shadowOffset: { width: 0, height: 10 } },
-      android: { elevation: 3 },
-      default: {},
-    }),
   },
-  heroTitle: { fontSize: 18, fontWeight: '900', textAlign: 'right', color: '#FFFFFF' },
-  heroSub: { marginTop: 4, fontSize: 12, fontWeight: '700', textAlign: 'right', color: '#B6C2FF' },
-  heroMini: { fontSize: 11, fontWeight: '800', color: '#CBD5E1', textAlign: 'right' },
 
-  backBtn: {
-    height: 34,
-    paddingHorizontal: 12,
+  searchBox: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.10)',
     borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backBtnTxt: { fontWeight: '900', color: '#0f172a' },
-
-  rangeWrap: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8 },
-  rangeBtn: {
-    height: 34,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  panel: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E6E9F5',
-    backgroundColor: '#FFFFFF',
-    padding: 12,
-    marginTop: 10,
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 12, shadowOffset: { width: 0, height: 8 } },
-      android: { elevation: 2 },
-      default: {},
-    }),
-  },
-  panelHead: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 },
-  panelTitle: { fontSize: 15, fontWeight: '900', color: '#0f172a', textAlign: 'right' },
-  panelSub: { marginTop: 2, fontSize: 12, fontWeight: '700', color: '#64748b', textAlign: 'right' },
-
-  kpiRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
-  kpi: { minWidth: 160, flexGrow: 1, borderRadius: 16, borderWidth: 1, padding: 12 },
-  kpiLabel: { fontSize: 12, fontWeight: '900', textAlign: 'right' },
-  kpiValue: { fontSize: 22, fontWeight: '900', textAlign: 'right', marginTop: 4 },
-  kpiHint: { fontSize: 11, fontWeight: '800', textAlign: 'right', marginTop: 6, opacity: 0.9 },
-
-  blockTitle: { fontSize: 12, fontWeight: '900', color: '#0f172a', textAlign: 'right', marginBottom: 8 },
-
-  breakRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', marginTop: 6 },
-  breakK: { fontSize: 11, fontWeight: '900', color: '#334155', textAlign: 'right' },
-  breakV: { fontSize: 18, fontWeight: '900', color: '#0f172a', textAlign: 'right', marginTop: 2 },
-
-  noteTxt: { textAlign: 'right', color: '#94A3B8', fontWeight: '800', fontSize: 11 },
-
-  progressBg: { height: 10, backgroundColor: '#EEF2FF', borderRadius: 8, overflow: 'hidden', marginTop: 8 },
-  progressFill: { height: '100%' },
-
-  actionsTopRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, marginBottom: 6 },
-  btnTop: { paddingHorizontal: 12, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  btn: { paddingHorizontal: 12, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  btnTxt: { color: '#fff', fontWeight: '900' },
-
-  settingsRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 10 },
-  settingItem: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
-  settingLabel: { fontSize: 12, fontWeight: '900', color: '#334155' },
-  input: {
-    width: 92,
+    paddingHorizontal: 10,
     height: 38,
+    flexGrow: 1,
+    minWidth: 220,
+  },
+  searchIcon: { color: '#CBD5E1', fontWeight: '900', marginLeft: 8 },
+  searchInput: { color: '#fff', flex: 1, textAlign: 'right', fontWeight: '700' },
+
+  quickBtn: {
+    backgroundColor: 'rgba(59,130,246,0.22)',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  quickBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+
+  rangeSelector: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    padding: 4,
+  },
+  rangeBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 8 },
+  rangeBtnActive: { backgroundColor: '#3B82F6' },
+  rangeText: { color: '#94A3B8', fontWeight: '600', fontSize: 13 },
+  rangeTextActive: { color: '#FFF' },
+
+  scrollContent: { padding: 16 },
+
+  kpiRow: { flexDirection: 'row-reverse', gap: 12, marginBottom: 24, flexWrap: 'wrap' },
+  kpiBox: {
+    flex: 1,
+    minWidth: 220,
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    borderTopWidth: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    elevation: 2,
+    alignItems: 'center',
+  },
+  kpiValue: { fontSize: 20, fontWeight: '800', color: '#0F172A' },
+  kpiLabel: { fontSize: 12, color: '#64748B', fontWeight: '600', marginTop: 4, textAlign: 'right' },
+  kpiSub: { fontSize: 10, color: '#94A3B8', marginTop: 2, textAlign: 'right' },
+
+  section: { marginBottom: 24 },
+  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#1E293B', textAlign: 'right', marginBottom: 12 },
+  sectionHeader: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+
+  chartCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    elevation: 2,
+  },
+
+  distContainer: { marginBottom: 16 },
+  distLabels: { flexDirection: 'row-reverse', justifyContent: 'space-between', marginBottom: 8 },
+  distLabel: { fontSize: 13, fontWeight: '600', color: '#475569' },
+  distBar: { flexDirection: 'row-reverse', height: 12, borderRadius: 6, backgroundColor: '#F1F5F9', overflow: 'hidden' },
+  distSegment: { height: '100%' },
+
+  statRow: { flexDirection: 'row-reverse', justifyContent: 'center', gap: 20, marginTop: 10 },
+  statItem: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6 },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  statLabel: { fontSize: 13, color: '#334155' },
+
+  debugBox: {
+    marginTop: 14,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
-    backgroundColor: '#fff',
+  },
+  debugText: { color: '#64748B', fontWeight: '700', fontSize: 12, textAlign: 'right' },
+
+  grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', marginHorizontal: -6 },
+
+  serverCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 0,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  serverHeader: {
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  serverName: { fontSize: 15, fontWeight: '800', color: '#0F172A' },
+  iconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: 'rgba(148,163,184,0.20)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  serverBody: { padding: 12 },
+
+  detailGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
+  detailItem: { flexGrow: 1, minWidth: '42%' },
+  detailLabel: { fontSize: 11, color: '#64748B', fontWeight: '700', textAlign: 'right' },
+  detailValue: { fontSize: 13, color: '#0F172A', fontWeight: '800', textAlign: 'right' },
+
+  cardRangeRow: {
+    flexDirection: 'row-reverse',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 10,
+  },
+  cardRangeBtn: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 8 },
+  cardRangeBtnActive: {
+    backgroundColor: '#FFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  cardRangeText: { fontSize: 11, color: '#64748B', fontWeight: '800' },
+  cardRangeTextActive: { color: '#0F172A' },
+
+  rangeResultBox: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    padding: 10,
+    borderRadius: 10,
+  },
+  rangeResultLabel: { fontSize: 12, color: '#4338CA', fontWeight: '800' },
+  rangeResultValue: { fontSize: 14, color: '#312E81', fontWeight: '900' },
+
+  progressTrack: {
+    height: 10,
+    borderRadius: 8,
+    backgroundColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  progressFill: { height: '100%', borderRadius: 8 },
+
+  advancedBox: {
+    marginTop: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  advTitle: { color: '#0F172A', fontWeight: '900', marginBottom: 6, textAlign: 'right' },
+  advLine: { color: '#64748B', fontWeight: '700', fontSize: 12, textAlign: 'right' },
+
+  limitInput: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingVertical: 6,
     paddingHorizontal: 10,
     textAlign: 'center',
     fontWeight: '900',
-    color: '#0f172a',
+    color: '#0F172A',
   },
-  toggle: { height: 38, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-
-  cardsWrap: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'space-between', gap: 10 },
-
-  card: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    padding: 12,
-    marginBottom: 10,
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 10, shadowOffset: { width: 0, height: 6 } },
-      android: { elevation: 1 },
-      default: {},
-    }),
-  },
-  cardTop: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
-  cardTitle: { fontSize: 15, fontWeight: '900', color: '#0f172a' },
-
-  grid2: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
-  kv: { flexGrow: 1, minWidth: 170, borderRadius: 14, borderWidth: 1, borderColor: '#EEF2FF', backgroundColor: '#F8FAFF', padding: 10 },
-  kvK: { fontSize: 11, fontWeight: '900', color: '#334155', textAlign: 'right' },
-  kvV: { marginTop: 4, fontSize: 13, fontWeight: '900', color: '#0f172a', textAlign: 'right' },
-
-  lineRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  limitSaveBtn: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 14,
+    borderRadius: 10,
+  },
+  limitSaveText: { color: '#fff', fontWeight: '900' },
+
+  cardFooter: { flexDirection: 'row-reverse', gap: 8, marginTop: 12, paddingHorizontal: 12, paddingBottom: 12 },
+  footerBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
+  btnStart: { backgroundColor: '#10B981' },
+  btnStop: { backgroundColor: '#EF4444' },
+  btnReset: { backgroundColor: '#334155' },
+  footerBtnText: { color: '#FFF', fontSize: 12, fontWeight: '900' },
+
+  pulseDot: { width: 8, height: 8, borderRadius: 4 },
+  chip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  chipText: { fontSize: 11, fontWeight: '900' },
+
+  labelInput: { fontSize: 13, color: '#64748B', marginLeft: 8, fontWeight: '800' },
+  smallInput: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    textAlign: 'center',
+    width: 70,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+
+  miniBars: {
+    flexDirection: 'row-reverse',
+    gap: 2,
+    alignItems: 'flex-end',
+    backgroundColor: 'rgba(241,245,249,0.9)',
+    paddingHorizontal: 6,
+    paddingVertical: 5,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
   },
-  lineK: { fontWeight: '900', color: '#334155' },
-  lineV: { fontWeight: '900', color: '#0f172a', maxWidth: '72%', textAlign: 'left' },
-
-  actionsRow: { flexDirection: 'row-reverse', gap: 8, marginTop: 12 },
-
-  spark: {
-    flexDirection: 'row',
-    gap: 4,
-    alignItems: 'flex-end',
-    justifyContent: 'flex-start',
-    paddingVertical: 6,
-    paddingHorizontal: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#EEF2FF',
-    backgroundColor: '#F8FAFF',
-    overflow: 'hidden',
-  },
-
-  emptyBox: { padding: 14, borderRadius: 16, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFF', width: '100%' },
-  emptyText: { textAlign: 'right', fontWeight: '900', color: '#64748b' },
+  miniBar: { width: 3, borderRadius: 3 },
 });

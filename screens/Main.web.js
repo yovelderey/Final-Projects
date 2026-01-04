@@ -4,6 +4,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  Pressable,
   Platform,
   Alert,
   StyleSheet,
@@ -14,10 +15,14 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
-import { getDatabase, ref, remove, get } from 'firebase/database';
+
+import { getDatabase, ref, remove, get, update } from 'firebase/database';
+
 import NetInfo from '@react-native-community/netinfo';
+
 import { getStorage, ref as storageRef, listAll, deleteObject } from 'firebase/storage';
 
 // ⚙️ Firebase init (אם צריך)
@@ -30,24 +35,26 @@ const firebaseConfig = {
   appId: '1:1056060530572:web:d08d859ca2d25c46d340a9',
   measurementId: 'G-LD61QH3VVP',
 };
+
 if (!firebase.apps.length) {
   firebase.initializeApp(firebaseConfig);
 }
 
-// ← כמה שקוף הרקע? 1 = לא שקוף, 0 = שקוף לגמרי
-const BG_MEDIA_OPACITY = 0.2; // 60% אטימות (כלומר יותר שקוף מברירת מחדל)
-
 function Main(props) {
   const navigation = useNavigation();
   const { width: windowWidth } = useWindowDimensions();
-const MEDIA_VISIBILITY = 0.6;
+
+  const MEDIA_VISIBILITY = 0.6;
+
   const [isLoggedIn, setLoggedIn] = useState(false);
   const [isCreate, setIsCreate] = useState(false);
   const [user, setUser] = useState(null);
+
   const [data, setData] = useState([]);
   const [isConnected, setIsConnected] = useState(true);
 
   const [showWebDialog, setShowWebDialog] = useState(false);
+  const [showWebClearConfirm, setShowWebClearConfirm] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
 
   const slideAnim = useRef(new Animated.Value(-40)).current;
@@ -58,10 +65,12 @@ const MEDIA_VISIBILITY = 0.6;
       try {
         const u = firebase.auth().currentUser;
         if (!u) return;
+
         const db = getDatabase();
-        const r = ref(db, 'Events/' + u.uid + '/');
+        const r = ref(db, `Events/${u.uid}/`);
         const snap = await get(r);
         const val = snap.val();
+
         setData(val ? Object.keys(val).map((k) => ({ id: k, ...val[k] })) : []);
       } catch (e) {
         console.log('Error fetching data:', e);
@@ -100,7 +109,7 @@ const MEDIA_VISIBILITY = 0.6;
       Animated.timing(slideAnim, {
         toValue: 0,
         duration: 450,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== 'web', // ✅ בווב אין native driver
       }).start();
     }
   }, [isCreate]);
@@ -109,6 +118,125 @@ const MEDIA_VISIBILITY = 0.6;
   const handlePressHome = (id) => props.navigation.navigate('ListItem', { id });
   const handleEditHome = (id) => props.navigation.navigate('EditHome', { id });
   const handlePressRefresh = () => props.navigation.navigate('Home');
+
+  const deleteImage = async (folderPath) => {
+    try {
+      const storage = getStorage();
+      const folderRef = storageRef(storage, folderPath);
+      const result = await listAll(folderRef);
+
+      for (const file of result.items) await deleteObject(file);
+      for (const subFolder of result.prefixes) await deleteImage(subFolder.fullPath);
+    } catch (error) {
+      console.error('שגיאה במחיקת תיקייה:', error);
+    }
+  };
+
+  const deleteAlert = async (idToDelete) => {
+    try {
+      const u = firebase.auth().currentUser;
+      if (!u) return;
+
+      const db = getDatabase();
+      await remove(ref(db, `Events/${u.uid}/${idToDelete}`));
+      await deleteImage(`users/${u.uid}/${idToDelete}/`);
+
+      setData((prev) => prev.filter((ev) => ev.id !== idToDelete));
+    } catch (e) {
+      console.error('Error deleting event:', e);
+      Alert.alert('שגיאה', e?.message || 'לא הצלחתי למחוק את האירוע.');
+    }
+  };
+
+  // ✅ helper: מצא/אסוף נתיבים למחיקה לפי "שם מפתח" (fallback אם המבנה לא סטנדרטי)
+  const collectDeletePathsByKey = (node, targetKey, basePath, out) => {
+    if (!node || typeof node !== 'object') return;
+    for (const k of Object.keys(node)) {
+      const nextPath = `${basePath}/${k}`;
+      if (k === targetKey) {
+        out.push(nextPath);
+      }
+      collectDeletePathsByKey(node[k], targetKey, nextPath, out);
+    }
+  };
+
+  // ✅ מוחק WhatsApp של האירוע שנלחץ (דינאמי) + fallback אם המבנה השתנה
+  const clearWhatsappForEvent = async (eventId) => {
+    const u = firebase.auth().currentUser;
+    if (!u) return;
+
+    const db = getDatabase();
+
+    // 1) הכי חשוב: המבנה הסטנדרטי (ומומלץ) => whatsapp/{uid}/{eventId}
+    const directRef = ref(db, `whatsapp/${u.uid}/${eventId}`);
+    const directSnap = await get(directRef);
+    if (directSnap.exists()) {
+      await remove(directRef);
+      return;
+    }
+
+    // 2) fallback: אם אצלך האירוע נמצא עמוק יותר תחת whatsapp/{uid}/...
+    const rootRef = ref(db, `whatsapp/${u.uid}`);
+    const rootSnap = await get(rootRef);
+    const rootVal = rootSnap.val();
+
+    if (!rootVal) return;
+
+    const matches = [];
+    collectDeletePathsByKey(rootVal, eventId, `whatsapp/${u.uid}`, matches);
+
+    if (matches.length === 0) return;
+
+    // מחיקה מרובה באטומיות באמצעות update(..., { path: null })
+    const multi = {};
+    for (const p of matches) multi[p] = null;
+    await update(ref(db), multi);
+  };
+
+  // ✅ מאפס sent_msg ל-0 באירוע שנלחץ
+  const resetEventStatsAndContacts = async (eventId) => {
+  const u = firebase.auth().currentUser;
+  if (!u) return;
+
+  const db = getDatabase();
+
+  // ✅ עדכון נקודתי בלי לדרוס שדות אחרים
+  const patch = {
+    [`Events/${u.uid}/${eventId}/sent_msg`]: 0,
+    [`Events/${u.uid}/${eventId}/no_answear`]: 0,
+    [`Events/${u.uid}/${eventId}/no_cuming`]: 0,
+    [`Events/${u.uid}/${eventId}/yes_caming`]: 0,
+
+    // ✅ מוחק את כל עץ contacts אם קיים
+    [`Events/${u.uid}/${eventId}/contacts`]: null,
+  };
+
+  await update(ref(db), patch);
+};
+
+
+  // ✅ הפעולה הכוללת של "ניקוי נתונים": מוחק whatsapp של האירוע + מאפס sent_msg
+  const clearDataForEvent = async (eventId) => {
+    try {
+      if (!eventId) return;
+
+      await clearWhatsappForEvent(eventId);
+      await resetEventStatsAndContacts(eventId);
+
+      if (Platform.OS === 'web') {
+        console.log('✅ cleared whatsapp + reset sent_msg');
+      } else {
+        Alert.alert('בוצע ✅', 'הנתונים נוקו בהצלחה.');
+      }
+    } catch (e) {
+      console.error('❌ clearDataForEvent error:', e);
+      if (Platform.OS === 'web') {
+        console.log('❌ Error:', e?.message || e);
+      } else {
+        Alert.alert('שגיאה', e?.message || 'לא הצלחתי לנקות נתונים.');
+      }
+    }
+  };
 
   const showAlert = (idToDelete) => {
     if (Platform.OS === 'web') {
@@ -121,36 +249,25 @@ const MEDIA_VISIBILITY = 0.6;
         [
           { text: 'ערוך', onPress: () => handleEditHome(idToDelete) },
           { text: 'מחק', onPress: () => deleteAlert(idToDelete), style: 'destructive' },
+          {
+            text: 'ניקוי נתונים',
+            style: 'destructive',
+            onPress: () => {
+              Alert.alert(
+                'ניקוי נתונים',
+                'פעולה זו תנקה נתוני WhatsApp של האירוע ותאפס את מונה השליחות. האם להמשיך?',
+                [
+                  { text: 'ביטול', style: 'cancel' },
+                  { text: 'כן, נקה', style: 'destructive', onPress: () => clearDataForEvent(idToDelete) },
+                ],
+                { cancelable: true }
+              );
+            },
+          },
           { text: 'ביטול', style: 'cancel' },
         ],
         { cancelable: true }
       );
-    }
-  };
-
-  const deleteImage = async (folderPath) => {
-    try {
-      const storage = getStorage();
-      const folderRef = storageRef(storage, folderPath);
-      const result = await listAll(folderRef);
-      for (const file of result.items) await deleteObject(file);
-      for (const subFolder of result.prefixes) await deleteImage(subFolder.fullPath);
-    } catch (error) {
-      console.error('שגיאה במחיקת תיקייה:', error);
-    }
-  };
-
-  const deleteAlert = async (idToDelete) => {
-    try {
-      const u = firebase.auth().currentUser;
-      if (!u) return;
-      const db = getDatabase();
-      const r = ref(db, 'Events/' + u.uid + '/' + idToDelete);
-      await remove(r);
-      await deleteImage(`users/${u.uid}/${idToDelete}/`);
-      setData((prev) => prev.filter((ev) => ev.id !== idToDelete));
-    } catch (e) {
-      console.error('Error deleting event:', e);
     }
   };
 
@@ -166,13 +283,8 @@ const MEDIA_VISIBILITY = 0.6;
         <StatusBar barStyle="dark-content" />
         <View style={[styles.content, { maxWidth: 720 }]}>
           <Text style={styles.errorText}>בעיית אינטרנט</Text>
-          <Text style={styles.errorSubText}>
-            נא בדוק חיבור לרשת ה-Wi-Fi או בדוק עם ספק התקשורת שלך.
-          </Text>
-          <TouchableOpacity
-            style={styles.primaryBtn}
-            onPress={() => navigation.replace('Main')}
-          >
+          <Text style={styles.errorSubText}>נא בדוק חיבור לרשת ה-Wi-Fi או בדוק עם ספק התקשורת שלך.</Text>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => navigation.replace('Main')}>
             <Text style={styles.primaryBtnText}>טען מחדש</Text>
           </TouchableOpacity>
         </View>
@@ -185,12 +297,12 @@ const MEDIA_VISIBILITY = 0.6;
     <View style={styles.page}>
       {/* שכבת מדיה על כל המסך */}
       <Image
-  source={require('../assets/Socialm.gif')}
-  style={[styles.bgMedia, { opacity: MEDIA_VISIBILITY }]} // ← זה עושה את ה"דהייה"
-  resizeMode="cover"
-  pointerEvents="none"
+        source={require('../assets/Socialm.gif')}
+        style={[styles.bgMedia, { opacity: MEDIA_VISIBILITY }]}
+        resizeMode="cover"
       />
-      {/* סקרימינג עדין לשיפור קריאות (אפשר להשאיר/להחליש לפי טעם) */}
+
+      {/* סקרימינג עדין לשיפור קריאות */}
       <View style={styles.bgScrim} />
 
       <StatusBar backgroundColor="#000" barStyle="light-content" />
@@ -200,26 +312,21 @@ const MEDIA_VISIBILITY = 0.6;
         {/* Header */}
         <View style={styles.headerRow}>
           <Text style={styles.brand}>EasyVent</Text>
-<TouchableOpacity
-  onPress={() => props.navigation.navigate('Setting')}
-  style={[
-    styles.userBtn,
-    (Platform.OS === 'web' && windowWidth >= 900) ? { right: 250 } : { right: 30 }
-  ]}
-  accessibilityRole="button"
->
-  <Image source={require('../assets/user.png')} style={styles.userIcon} />
-</TouchableOpacity>
 
+          <TouchableOpacity
+            onPress={() => props.navigation.navigate('Setting')}
+            style={[
+              styles.userBtn,
+              Platform.OS === 'web' && windowWidth >= 900 ? { right: 250 } : { right: 30 },
+            ]}
+          >
+            <Image source={require('../assets/user.png')} style={styles.userIcon} tintColor="#000" />
+          </TouchableOpacity>
         </View>
 
         {/* CTA */}
         {!isCreate && (
-          <TouchableOpacity
-            onPress={handlePressRefresh}
-            style={styles.cta}
-            accessibilityRole="button"
-          >
+          <TouchableOpacity onPress={handlePressRefresh} style={styles.cta}>
             <Image source={require('../assets/zor_event.png')} style={styles.ctaImg} />
           </TouchableOpacity>
         )}
@@ -239,22 +346,26 @@ const MEDIA_VISIBILITY = 0.6;
                 showsVerticalScrollIndicator
               >
                 {data.map((event) => (
-                  <TouchableOpacity
+                  // ✅ בלי accessibilityRole בווב => לא ייצר <button> (מונע button בתוך button)
+                  <Pressable
                     key={event.id}
                     onPress={() => handlePressHome(event.id)}
                     style={styles.eventCard}
-                    accessibilityRole="button"
+                    accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
                   >
                     <Text style={styles.eventTitle}>{event.id}</Text>
 
-                    <TouchableOpacity
-                      onPress={() => handleDeleteData(event.id)}
+                    <Pressable
+                      onPress={(ev) => {
+                        if (Platform.OS === 'web' && ev?.stopPropagation) ev.stopPropagation();
+                        handleDeleteData(event.id);
+                      }}
                       style={styles.editBtn}
-                      accessibilityRole="button"
+                      accessibilityRole={Platform.OS === 'web' ? undefined : 'button'}
                     >
                       <Image source={require('../assets/edit.png')} style={styles.editIcon} />
-                    </TouchableOpacity>
-                  </TouchableOpacity>
+                    </Pressable>
+                  </Pressable>
                 ))}
               </ScrollView>
             )}
@@ -266,15 +377,9 @@ const MEDIA_VISIBILITY = 0.6;
           <>
             <Image source={require('../assets/VIDEOLOADING.gif')} style={styles.heroGif} />
             <Image source={require('../assets/eastvent_text1.png')} style={styles.heroTitleImg} />
-            <TouchableOpacity
-              onPress={() => props.navigation.navigate('LoginEmail')}
-              style={styles.loginBtn}
-              accessibilityRole="button"
-            >
-              <Image
-                source={require('../assets/easyvent_login_botton.png')}
-                style={styles.loginBtnImg}
-              />
+
+            <TouchableOpacity onPress={() => props.navigation.navigate('LoginEmail')} style={styles.loginBtn}>
+              <Image source={require('../assets/easyvent_login_botton.png')} style={styles.loginBtnImg} />
             </TouchableOpacity>
           </>
         )}
@@ -283,7 +388,7 @@ const MEDIA_VISIBILITY = 0.6;
         <Text style={styles.footer}>כל הזכויות שמורות EasyVent©</Text>
       </View>
 
-      {/* דיאלוג Web (ערוך/מחק) */}
+      {/* ───────────── Web Dialog (ערוך/מחק/ניקוי/ביטול) ───────────── */}
       {Platform.OS === 'web' && showWebDialog && (
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -310,9 +415,45 @@ const MEDIA_VISIBILITY = 0.6;
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={() => setShowWebDialog(false)}
+              onPress={() => {
+                setShowWebDialog(false);
+                setShowWebClearConfirm(true);
+              }}
               style={styles.modalButton}
             >
+              <Text style={styles.modalButtonText}>ניקוי נתונים</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => setShowWebDialog(false)} style={styles.modalButton}>
+              <Text style={styles.modalButtonText}>ביטול</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* ───────────── Web Confirm ניקוי (בלי להציג נתיב/UID) ───────────── */}
+      {Platform.OS === 'web' && showWebClearConfirm && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>ניקוי נתונים</Text>
+
+            <Text style={{ textAlign: 'center', marginBottom: 10 }}>
+              פעולה זו תנקה נתוני WhatsApp של האירוע ותאפס את מונה השליחות.
+              {'\n'}
+              האם אתה בטוח שברצונך להמשיך?
+            </Text>
+
+            <TouchableOpacity
+              onPress={async () => {
+                await clearDataForEvent(selectedId);
+                setShowWebClearConfirm(false);
+              }}
+              style={styles.modalButton}
+            >
+              <Text style={styles.modalButtonText}>כן, נקה</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => setShowWebClearConfirm(false)} style={styles.modalButton}>
               <Text style={styles.modalButtonText}>ביטול</Text>
             </TouchableOpacity>
           </View>
@@ -323,30 +464,35 @@ const MEDIA_VISIBILITY = 0.6;
 }
 
 const styles = StyleSheet.create({
-  // שורש שמכסה 100% viewport (גם בווב)
   page: {
-  flex: 1,
-  width: '100%',
-  ...(Platform.OS === 'web' ? { minHeight: '100vh' } : {}),
-  backgroundColor: '#fff',   // ← לבן, לא #000
-  },
-  // המדיה שמכסה את כל המסך (GIF/וידאו)
-  bgMedia: {
-    position: 'absolute',
-    top: 0, right: 0, bottom: 0, left: 0,
+    flex: 1,
     width: '100%',
-    height: '100%',
-    zIndex: 0, // ← הכי מאחורה
-  },
-  // סקרימינג עדין מעל המדיה (אפשר להחליש/לבטל לפי צורך)
-  bgScrim: {
-    position: 'absolute',
-    top: 0, right: 0, bottom: 0, left: 0,
-    backgroundColor: 'rgba(255,255,255,0.20)', // היה 0.28 – השארתי עדין יותר
-    zIndex: 1, // ← מעל המדיה, מתחת לתוכן
+    ...(Platform.OS === 'web' ? { minHeight: '100vh' } : {}),
+    backgroundColor: '#fff',
   },
 
-  // מעטפת התוכן
+  bgMedia: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    zIndex: 0,
+    pointerEvents: 'none',
+  },
+
+  bgScrim: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: 'rgba(255,255,255,0.20)',
+    zIndex: 1,
+  },
+
   content: {
     flex: 1,
     alignItems: 'center',
@@ -355,10 +501,9 @@ const styles = StyleSheet.create({
     maxWidth: 980,
     paddingHorizontal: 16,
     paddingTop: 24,
-    zIndex: 2, // ← מעל הכול
+    zIndex: 2,
   },
 
-  // Header
   headerRow: {
     width: '100%',
     alignItems: 'center',
@@ -369,16 +514,15 @@ const styles = StyleSheet.create({
   },
   brand: { fontSize: 32, fontWeight: '800', color: '#111' },
   userBtn: {
-  position: 'absolute',
-  right: 120,         // היה 16
-  top: 0,
-  bottom: 0,
-  justifyContent: 'center',
-  ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+    position: 'absolute',
+    right: 120,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
   },
-  userIcon: { width: 28, height: 28, tintColor: '#000' },
+  userIcon: { width: 28, height: 28 },
 
-  // CTA
   cta: {
     marginTop: 12,
     marginBottom: 18,
@@ -388,7 +532,6 @@ const styles = StyleSheet.create({
 
   sectionTitle: { fontSize: 20, fontWeight: '700', marginBottom: 10, color: '#111' },
 
-  // רשימה
   listBox: {
     width: '100%',
     maxWidth: 520,
@@ -427,13 +570,11 @@ const styles = StyleSheet.create({
   },
   editIcon: { width: 22, height: 22 },
 
-  // Welcome (לא מחובר)
   heroGif: { width: '70%', aspectRatio: 440 / 350, marginTop: 8 },
   heroTitleImg: { width: '60%', aspectRatio: 440 / 350, marginTop: 24 },
   loginBtn: { marginTop: 24, alignItems: 'center', justifyContent: 'center' },
   loginBtnImg: { width: 340, height: 50 },
 
-  // פוטר
   footer: {
     position: 'absolute',
     bottom: 14,
@@ -444,7 +585,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 
-  // Offline
   root: {
     flex: 1,
     alignItems: 'center',
@@ -455,15 +595,24 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 24, color: 'red', fontWeight: 'bold', textAlign: 'center' },
   errorSubText: { fontSize: 18, color: 'black', textAlign: 'center', marginVertical: 10 },
   primaryBtn: {
-    marginTop: 20, padding: 15, backgroundColor: 'black', borderRadius: 5, width: '80%', alignItems: 'center',
+    marginTop: 20,
+    padding: 15,
+    backgroundColor: 'black',
+    borderRadius: 5,
+    width: '80%',
+    alignItems: 'center',
   },
   primaryBtnText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
 
-  // דיאלוג Web
   modalOverlay: {
-    position: 'absolute', top: 0, right: 0, bottom: 0, left: 0,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 9999,
   },
   modalBox: {

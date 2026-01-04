@@ -1159,11 +1159,12 @@ useEffect(() => {
                     {statusFilter === 'all' ? 'הכול' : statusFilter === 'green' ? 'מגיע' : statusFilter === 'yellow' ? 'אולי' : 'לא מגיע'}
                   </Text>
                 </TouchableOpacity>
+
                 <TouchableOpacity onPress={exportToExcel} style={[styles.actionBtn, { backgroundColor: COLORS.primary }]}>
-                  <Ionicons name="download-outline" size={20} color={COLORS.onPrimary} />
+                    <Image source={require('../assets/download.png')} style={styles.icon4} resizeMode="contain" />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={printTable} style={[styles.actionBtn, { backgroundColor: COLORS.primary }]}>
-                  <Ionicons name="print-outline" size={20} color={COLORS.onPrimary} />
+                    <Image source={require('../assets/printing.png')} style={styles.icon4} resizeMode="contain" />
                 </TouchableOpacity>
               </View>
             </View>
@@ -1435,6 +1436,11 @@ const styles = StyleSheet.create({
   buttonsContainer: { width: '100%', alignItems: 'center', gap: 8, marginTop: 6 },
   modalButton: { paddingVertical: 12, paddingHorizontal: 20, borderRadius: 8, marginVertical: 5, width: '90%', alignItems: 'center' },
   icon2: { width: 270, height: 65 },
+  icon4: {
+    width: 22,
+    height: 22,
+    tintColor: '#fff', // או COLORS.onPrimary
+  },
   checkboxContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
   checkbox: { width: 22, height: 22, borderWidth: 2, borderColor: '#007AFF', borderRadius: 4, alignItems: 'center', justifyContent: 'center', marginRight: 8, backgroundColor: '#fff' },
   checkboxMark: { fontSize: 15, color: '#007AFF' },

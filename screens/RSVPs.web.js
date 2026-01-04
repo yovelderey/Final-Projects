@@ -81,6 +81,7 @@ const [showUnsentModal,   setShowUnsentModal]   = useState(false); // מודאל
   const [qsManualPhones, setQsManualPhones] = useState('');  // רשימת מספרים ידנית
   const [qsManualName, setQsManualName] = useState('');  // ״שם נמען ידני״
   const screenWidth = Dimensions.get('window').width;
+  
   const [failedList, setFailedList] = useState([]);   // ← יאגור כשלונות
   const [progress, setProgress] = useState({
     current: 0,       // כמה נשלחו בפועל
