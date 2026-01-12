@@ -1,5 +1,6 @@
-// LoginEmail.js
-import React, { useState, useEffect } from 'react';
+// LoginEmail.js — DarkMode by System (useColorScheme)
+
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   TextInput,
@@ -15,6 +16,7 @@ import {
   Modal,
   Linking,
   Alert,
+  useColorScheme,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { initializeApp, getApps } from 'firebase/app';
@@ -146,6 +148,47 @@ function LoginEmail() {
   const navigation = useNavigation();
   const { width } = useWindowDimensions();
 
+  // ✅ System theme
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
+
+  const colors = useMemo(() => {
+    if (isDark) {
+      return {
+        bg: '#0B1220',
+        card: '#111827',
+        text: '#F8FAFC',
+        subText: '#94A3B8',
+        border: '#1F2937',
+        inputBg: '#0F172A',
+        orange: '#F59E0B',
+        pink: '#FF66B2',
+        blue: '#38BDF8',
+        danger: '#EF4444',
+        dangerSoft: '#3B1B1B',
+        dangerBorder: '#7F1D1D',
+        overlay: 'rgba(0,0,0,0.60)',
+      };
+    }
+    return {
+      bg: '#FFFFFF',
+      card: '#FFFFFF',
+      text: '#0F172A',
+      subText: '#475569',
+      border: '#E2E8F0',
+      inputBg: '#FFFFFF',
+      orange: 'orange',
+      pink: '#FF66B2',
+      blue: '#0099FF',
+      danger: '#EF4444',
+      dangerSoft: '#FEE2E2',
+      dangerBorder: '#FCA5A5',
+      overlay: 'rgba(0,0,0,0.35)',
+    };
+  }, [isDark]);
+
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -216,7 +259,7 @@ function LoginEmail() {
 
   const handleLogin = async () => {
     const e = (email || '').trim();
-    const p = (password || '').trim(); // חשוב: גם סיסמה ב-trim
+    const p = (password || '').trim();
 
     if (!/^\S+@\S+\.\S+$/.test(e)) {
       setErrorMsg('אנא הזן אימייל תקין.');
@@ -255,7 +298,6 @@ function LoginEmail() {
     setBusy(true);
     try {
       await signInWithEmailAndPassword(auth, e, p);
-      // הצלחה – איפוס מונה
       await resetFails(e);
       setErrorMsg('');
       navigation.replace('Main');
@@ -263,7 +305,6 @@ function LoginEmail() {
       console.log('Login error:', error?.code, error?.message);
       const code = String(error?.code || '');
 
-      // נספר מונה רק עבור כשלים של שם משתמש/סיסמה
       const countable =
         code === 'auth/wrong-password' ||
         code === 'auth/user-not-found' ||
@@ -307,7 +348,7 @@ function LoginEmail() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.bg} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Image source={require('../assets/wellcome_text.png')} style={styles.imagetext} />
@@ -317,6 +358,7 @@ function LoginEmail() {
             <TextInput
               style={styles.input}
               placeholder="אימייל"
+              placeholderTextColor={colors.subText}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -335,6 +377,7 @@ function LoginEmail() {
             <TextInput
               style={styles.input}
               placeholder="סיסמה"
+              placeholderTextColor={colors.subText}
               secureTextEntry={!showPassword}
               textContentType="password"
               value={password}
@@ -346,7 +389,7 @@ function LoginEmail() {
               onSubmitEditing={handleLogin}
             />
             <TouchableOpacity onPress={togglePasswordVisibility} style={styles.showPasswordButton}>
-              <Image source={require('../assets/Eye.png')} style={styles.eyeIcon} />
+              <Image source={require('../assets/Eye.png')} style={[styles.eyeIcon, { opacity: isDark ? 0.85 : 1 }]} />
             </TouchableOpacity>
           </View>
 
@@ -366,7 +409,7 @@ function LoginEmail() {
             style={[styles.loginButton, busy && { opacity: 0.7 }]}
             disabled={busy}
           >
-            <Image source={require('../assets/logineasyvent.png')} style={styles.image} />
+            <Image source={require('../assets/easyvent_login_botton.png')} style={styles.image} />
           </TouchableOpacity>
 
           <Image source={require('../assets/find_us.png')} style={styles.divider} />
@@ -390,7 +433,7 @@ function LoginEmail() {
 
             {!!blockedName && (
               <Text style={styles.blockSubtitle}>
-                חשבון: <Text style={{ fontWeight: '800' }}>{blockedName}</Text>
+                חשבון: <Text style={{ fontWeight: '800', color: colors.text }}>{blockedName}</Text>
               </Text>
             )}
 
@@ -403,7 +446,7 @@ function LoginEmail() {
                 <Text style={styles.blockBtnText}>התקשר לתמיכה ({SUPPORT_PHONE_DISPLAY})</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setBlockedModal(false)} style={[styles.blockBtn, styles.blockBtnGhost]}>
-                <Text style={[styles.blockBtnText, { color: '#334155' }]}>סגור</Text>
+                <Text style={styles.blockBtnGhostText}>סגור</Text>
               </TouchableOpacity>
             </View>
 
@@ -415,76 +458,104 @@ function LoginEmail() {
   );
 }
 
-const styles = StyleSheet.create({
-  // שלד
-  container: { flex: 1, backgroundColor: 'white' },
-  scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
+function makeStyles(c) {
+  return StyleSheet.create({
+    // שלד
+    container: { flex: 1, backgroundColor: c.bg },
+    scroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 24 },
 
-  // שדות
-  input: {
-    width: '100%',
-    height: 40,
-    borderWidth: 1,
-    borderRadius: 7,
-    borderColor: 'orange',
-    backgroundColor: 'white',
-    paddingHorizontal: 10,
-    textAlign: 'right',
-  },
-  emailInput: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, marginTop: 150 },
-  passwordInput: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  showPasswordButton: { position: 'absolute', left: 10 },
-  eyeIcon: { width: 20, height: 20 },
+    // שדות
+    input: {
+      width: '100%',
+      height: 40,
+      borderWidth: 1,
+      borderRadius: 7,
+      borderColor: c.orange,
+      backgroundColor: c.inputBg,
+      paddingHorizontal: 10,
+      textAlign: 'right',
+      color: c.text,
+    },
+    emailInput: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, marginTop: 150 },
+    passwordInput: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+    showPasswordButton: { position: 'absolute', left: 10, padding: 6 },
+    eyeIcon: { width: 20, height: 20 },
 
-  // טקסט שגיאה
-  errorText: {
-    color: '#D32F2F',
-    textAlign: 'right',
-    marginBottom: 12,
-    fontSize: 13,
-  },
+    // טקסט שגיאה
+    errorText: {
+      color: c.danger,
+      textAlign: 'right',
+      marginBottom: 12,
+      fontSize: 13,
+      fontWeight: '700',
+    },
 
-  // קישורים/כפתורים
-  fpButton: { marginTop: -2 },
-  loginButton: { marginTop: 20 },
-  signupButton: { marginTop: -60, marginBottom: 210 },
+    // קישורים/כפתורים
+    fpButton: { marginTop: -2 },
+    loginButton: { marginTop: 20 },
+    signupButton: { marginTop: -60, marginBottom: 210 },
 
-  imagetext: { marginBottom: -120, marginTop: 55 },
-  divider: { marginTop: 85 },
+    imagetext: { marginBottom: -120, marginTop: 55 },
+    divider: { marginTop: 85 },
 
-  header_re: { color: 'black', fontSize: 15, textAlign: 'center' },
-  header_re2: { color: '#FF66B2', fontWeight: 'bold', fontSize: 15 },
-  registerNow: { color: '#0099FF', fontWeight: 'bold', fontSize: 15 },
+    header_re: { color: c.text, fontSize: 15, textAlign: 'center' },
+    header_re2: { color: c.pink, fontWeight: 'bold', fontSize: 15 },
+    registerNow: { color: c.blue, fontWeight: 'bold', fontSize: 15 },
 
-  // ---- Blocked Modal ----
-  blockBackdrop: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.35)',
-    alignItems: 'center', justifyContent: 'center', padding: 16,
-  },
-  blockCard: {
-    width: '100%', maxWidth: 440, borderRadius: 16,
-    backgroundColor: '#fff', padding: 16,
-    borderWidth: 1, borderColor: '#E6E9F5',
-    shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8, elevation: 3,
-  },
-  blockHeader: { alignItems: 'center', marginBottom: 6 },
-  blockIconWrap: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: '#FEE2E2', borderWidth: 1, borderColor: '#FCA5A5',
-    alignItems: 'center', justifyContent: 'center', marginBottom: 8,
-  },
-  blockIcon: { fontSize: 28 },
-  blockTitle: { fontSize: 18, fontWeight: '900', color: '#0f172a' },
-  blockSubtitle: { marginTop: 4, fontSize: 13, color: '#334155', textAlign: 'center' },
-  blockMsg: { marginTop: 10, fontSize: 14, color: '#1f2937', textAlign: 'center', lineHeight: 20 },
+    // ---- Blocked Modal ----
+    blockBackdrop: {
+      flex: 1,
+      backgroundColor: c.overlay,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 16,
+    },
+    blockCard: {
+      width: '100%',
+      maxWidth: 440,
+      borderRadius: 16,
+      backgroundColor: c.card,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: c.border,
+      shadowColor: '#000',
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+    blockHeader: { alignItems: 'center', marginBottom: 6 },
+    blockIconWrap: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: c.dangerSoft,
+      borderWidth: 1,
+      borderColor: c.dangerBorder,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 8,
+    },
+    blockIcon: { fontSize: 28 },
+    blockTitle: { fontSize: 18, fontWeight: '900', color: c.text },
+    blockSubtitle: { marginTop: 4, fontSize: 13, color: c.subText, textAlign: 'center' },
+    blockMsg: { marginTop: 10, fontSize: 14, color: c.text, textAlign: 'center', lineHeight: 20 },
 
-  blockActions: { marginTop: 14, gap: 8 },
-  blockBtn: { height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, borderWidth: 1 },
-  blockBtnPrimary: { backgroundColor: '#EF4444', borderColor: '#EF4444' },
-  blockBtnGhost: { backgroundColor: '#fff', borderColor: '#CBD5E1' },
-  blockBtnText: { color: '#fff', fontWeight: '800' },
+    blockActions: { marginTop: 14, gap: 8 },
+    blockBtn: {
+      height: 44,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 12,
+      borderWidth: 1,
+    },
+    blockBtnPrimary: { backgroundColor: c.danger, borderColor: c.danger },
+    blockBtnGhost: { backgroundColor: 'transparent', borderColor: c.border },
+    blockBtnText: { color: '#fff', fontWeight: '800' },
+    blockBtnGhostText: { color: c.text, fontWeight: '800' },
 
-  blockHint: { marginTop: 10, fontSize: 12, color: '#64748b', textAlign: 'center' },
-});
+    blockHint: { marginTop: 10, fontSize: 12, color: c.subText, textAlign: 'center' },
+  });
+}
 
 export default LoginEmail;

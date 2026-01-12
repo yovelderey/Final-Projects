@@ -35,6 +35,7 @@ import HomeThree from './screens/HomeThree';
 import AdminPanel from './screens/AdminPanel';
 import OwnerDashboard from './screens/OwnerDashboard';
 import ServerMonitorsPane from './screens/ServerMonitorsPane';
+import NotificationsCenter from './screens/NotificationsCenter';
 
 
 const Stack = createNativeStackNavigator();
@@ -77,8 +78,8 @@ const App = () => {
         <Stack.Screen name="AdminPanel" component={AdminPanel} />
         <Stack.Screen name="OwnerDashboard" component={OwnerDashboard} />
         <Stack.Screen name="ServerMonitorsPane" component={ServerMonitorsPane} />
+        <Stack.Screen name="NotificationsCenter" component={NotificationsCenter} />
 
-        
       </Stack.Navigator>
     </NavigationContainer>
   );

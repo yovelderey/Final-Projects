@@ -1,5 +1,6 @@
-// RePassword.js
-import React, { useState } from 'react';
+// RePassword.js — DarkMode by System (useColorScheme)
+
+import React, { useMemo, useState } from 'react';
 import {
   View,
   TextInput,
@@ -13,6 +14,7 @@ import {
   useWindowDimensions,
   StatusBar,
   Alert,
+  useColorScheme,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 
@@ -35,6 +37,37 @@ const auth = getAuth(app);
 function RePassword() {
   const navigation = useNavigation();
   const { width } = useWindowDimensions();
+
+  // ✅ System theme
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
+
+  const colors = useMemo(() => {
+    if (isDark) {
+      return {
+        bg: '#0B1220',
+        card: '#111827',
+        text: '#F8FAFC',
+        subText: '#94A3B8',
+        border: '#1F2937',
+        inputBg: '#0F172A',
+        orange: '#F59E0B',
+        error: '#EF4444',
+      };
+    }
+    return {
+      bg: '#FFFFFF',
+      card: '#FFFFFF',
+      text: '#0F172A',
+      subText: '#64748b',
+      border: '#E2E8F0',
+      inputBg: '#FFFFFF',
+      orange: 'orange',
+      error: '#D32F2F',
+    };
+  }, [isDark]);
+
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   // רוחב דינמי לשדות
   const fieldWrapWidth = width > 600 ? '40%' : '85%';
@@ -67,12 +100,11 @@ function RePassword() {
       Alert.alert('שגיאה', msg);
       return;
     }
-
+    
     try {
       await sendPasswordResetEmail(auth, e);
       setErrorMsg('');
       Alert.alert('נשלח', 'שלחנו קישור לאיפוס סיסמה לכתובת האימייל שלך.');
-      // אפשר לחזור למסך התחברות אם תרצה:
       // navigation.navigate('LoginEmail');
     } catch (err) {
       console.log('Reset error:', err?.code, err?.message);
@@ -87,29 +119,32 @@ function RePassword() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.bg}
+      />
 
-      {/* שורת חזרה – ממוקמת בראש באופן רספונסיבי */}
+      {/* שורת חזרה */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => navigation.navigate('LoginEmail')}>
           <Image source={require('../assets/backicontwo.png')} style={styles.imageback} />
         </TouchableOpacity>
       </View>
 
-      {/* תוכן הגלילה + תמיכה במקלדת למסכים קטנים */}
-      <KeyboardAvoidingView style={{ flex: 1, alignSelf: 'stretch' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-        >
+      <KeyboardAvoidingView
+        style={{ flex: 1, alignSelf: 'stretch' }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           {/* תמונת הכותרת (נשארת שלך) */}
           <Image source={require('../assets/epos_password.png')} style={styles.loginText} />
 
-          {/* שדה אימייל – רספונסיבי */}
+          {/* שדה אימייל */}
           <View style={[styles.fieldWrap, { width: fieldWrapWidth }]}>
             <TextInput
               style={styles.input}
               placeholder="אימייל"
+              placeholderTextColor={colors.subText}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -117,16 +152,15 @@ function RePassword() {
               value={email}
               onChangeText={(t) => {
                 setEmail(t);
-                if (errorMsg) setErrorMsg(''); // נקה הודעת שגיאה בזמן הקלדה
+                if (errorMsg) setErrorMsg('');
               }}
               returnKeyType="send"
               onSubmitEditing={handleSend}
             />
-            {/* הודעת שגיאה אינליין */}
             {Boolean(errorMsg) && <Text style={styles.errorText}>{errorMsg}</Text>}
           </View>
 
-          {/* כפתור שליחה (נשאר שלך) */}
+          {/* כפתור שליחה */}
           <TouchableOpacity onPress={handleSend} style={styles.phoneButton}>
             <Image source={require('../assets/send_code2.png')} />
           </TouchableOpacity>
@@ -143,78 +177,78 @@ function RePassword() {
   );
 }
 
-const styles = StyleSheet.create({
-  // מסך כללי
-  container: {
-    flex: 1,
-    backgroundColor: 'white',
-  },
+function makeStyles(c) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: c.bg,
+    },
 
-  // פס עליון עם כפתור חזרה – במקום מרג'ינים שליליים
-  topBar: {
-    width: '100%',
-    alignItems: 'flex-start',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  imageback: {
-    width: 40,
-    height: 40,
-  },
+    topBar: {
+      width: '100%',
+      alignItems: 'flex-start',
+      paddingHorizontal: 16,
+      paddingTop: 12,
+    },
+    imageback: {
+      width: 40,
+      height: 40,
+    },
 
-  // גלילה מרכזית רספונסיבית
-  scroll: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: 12,
-  },
+    scroll: {
+      flexGrow: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 24,
+      paddingHorizontal: 12,
+    },
 
-  // כותרת/תמונה
-  loginText: {
-    marginBottom: 0,
-     marginTop: -400
-  },
+    loginText: {
+      marginBottom: 0,
+      marginTop: -400,
+    },
 
-  // עיטוף שדה כדי לקבוע רוחב דינמי
-  fieldWrap: {
-    alignItems: 'center',
-    marginTop: 0,
-    marginBottom: 8,
-  },
+    fieldWrap: {
+      alignItems: 'center',
+      marginTop: 0,
+      marginBottom: 8,
+    },
 
-  input: {
-    alignSelf: 'stretch',
-    height: 44,
-    backgroundColor: 'white',
-    borderColor: 'orange',
-    borderWidth: 1,
-    borderRadius: 7,
-    paddingHorizontal: 10,
-    textAlign: 'right',
-  },
+    input: {
+      alignSelf: 'stretch',
+      height: 44,
+      backgroundColor: c.inputBg,
+      borderColor: c.orange,
+      borderWidth: 1,
+      borderRadius: 7,
+      paddingHorizontal: 10,
+      textAlign: 'right',
+      color: c.text,
+    },
 
-  errorText: {
-    alignSelf: 'flex-end',
-    color: '#D32F2F',
-    fontSize: 13,
-    marginTop: 6,
-  },
+    errorText: {
+      alignSelf: 'flex-end',
+      color: c.error,
+      fontSize: 13,
+      marginTop: 6,
+      fontWeight: '700',
+    },
 
-  phoneButton: {
-    marginTop: 16,
-  },
+    phoneButton: {
+      marginTop: 16,
+    },
 
-  helperWrap: {
-    marginTop: 16,
-  },
-  text: {
-    fontSize: 16,
-    textAlign: 'center',
-    color: '#333',
-    lineHeight: 22,
-  },
-});
+    helperWrap: {
+      marginTop: 16,
+    },
+    text: {
+      fontSize: 16,
+      textAlign: 'center',
+      color: c.text,
+      lineHeight: 22,
+      fontWeight: '600',
+    },
+  });
+}
 
 export default RePassword;

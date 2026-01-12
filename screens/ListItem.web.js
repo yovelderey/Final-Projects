@@ -8,7 +8,7 @@ import {
   Alert, TouchableOpacity, Image, ScrollView, StyleSheet, Animated, Pressable, Linking, useColorScheme
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
-import { getDatabase, ref, set, get, onValue, off, remove, update, runTransaction } from 'firebase/database';
+import { getDatabase, ref, set, get, onValue, off, remove, update, runTransaction,query, orderByChild, limitToLast } from 'firebase/database';
 import 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
@@ -387,6 +387,193 @@ function ListItem(props) {
   const isFocused = useIsFocused();
   const id = props.route?.params?.id;
   const database = getDatabase();
+const [user, setUser] = useState(null);
+const adminLog = (action) => {
+  try {
+    const aRef = firebase.database().ref(`Events/${user?.uid}/${id}/__admin/audit`).push();
+    aRef.set({ ts: Date.now(), action });
+  } catch {}
+};
+
+const pushNotif = useCallback((title, body = '', extra = {}) => {
+  try {
+    if (!user?.uid || !id) return;
+    firebase.database().ref(`Events/${user.uid}/${id}/__admin/notifications`).push({
+      ts: firebase.database.ServerValue.TIMESTAMP,
+      title,
+      body,
+      ...extra,
+    });
+  } catch {}
+}, [user?.uid, id]);
+
+// ========================= GUEST CHANGE ALERTS (RSVP / AMOUNT / BLESSING) =========================
+const _normAmount = (v) => Number(String(v ?? 0).replace(/[^\d]/g, '')) || 0;
+const _short = (s, n = 110) => {
+  const t = String(s || '').trim();
+  if (!t) return '';
+  return t.length > n ? t.slice(0, n - 1) + '…' : t;
+};
+
+// שומרים snapshot קודם כדי לזהות שינוי
+const alertsPrimedRef = useRef({ contacts: false, responses: false });
+const prevGiftRef = useRef({});      // { guestKey: { amount, blessing } }
+const prevRespRef = useRef({});      // { guestKey: { response, guests } }
+
+// אינדקס שמות לפי recordID/id (כדי לקשר responses לשם)
+const buildNameIndex = (contactsObj = {}) => {
+  const map = {};
+  Object.entries(contactsObj || {}).forEach(([fbKey, c]) => {
+    const guestKey = c?.recordID || c?.id || c?.key || fbKey;
+    const name = c?.displayName || c?.name || 'מוזמן';
+    map[String(guestKey)] = name;
+  });
+  return map;
+};
+
+const emitGiftNotifs = useCallback((contactsObj = {}) => {
+  // לא “מצפצף” על הטעינה הראשונה
+  if (!alertsPrimedRef.current.contacts) {
+    const init = {};
+    Object.entries(contactsObj || {}).forEach(([fbKey, c]) => {
+      const guestKey = String(c?.recordID || c?.id || c?.key || fbKey);
+      init[guestKey] = {
+        amount: _normAmount(c?.newPrice ?? c?.price ?? 0),
+        blessing: String(c?.blessing ?? c?.bracha ?? c?.greeting ?? c?.note ?? c?.wish ?? '').trim(),
+      };
+    });
+    prevGiftRef.current = init;
+    alertsPrimedRef.current.contacts = true;
+    return;
+  }
+
+  const prev = prevGiftRef.current || {};
+  const next = {};
+
+  // לצמצם ספאם: אם הגיעו המון עדכונים בבת אחת → התראה אחת
+  const changes = [];
+
+  Object.entries(contactsObj || {}).forEach(([fbKey, c]) => {
+    const guestKey = String(c?.recordID || c?.id || c?.key || fbKey);
+    const name = c?.displayName || c?.name || 'מוזמן';
+
+    const amount = _normAmount(c?.newPrice ?? c?.price ?? 0);
+    const blessing = String(c?.blessing ?? c?.bracha ?? c?.greeting ?? c?.note ?? c?.wish ?? '').trim();
+
+    const p = prev[guestKey] || { amount: 0, blessing: '' };
+
+    // סכום
+    if (amount > 0 && amount !== (p.amount || 0)) {
+      changes.push(() =>
+        pushNotif(
+          'עודכנה מתנה',
+          `${name} הזין סכום: ₪${amount.toLocaleString('he-IL')}`,
+          { type: 'gift_amount', guestKey, amount }
+        )
+      );
+    }
+
+    // ברכה
+    if (blessing && blessing !== (p.blessing || '')) {
+      changes.push(() =>
+        pushNotif(
+          'ברכה חדשה',
+          `${name}: ${_short(blessing)}`,
+          { type: 'gift_blessing', guestKey, blessing: _short(blessing, 200) }
+        )
+      );
+    }
+
+    next[guestKey] = { amount, blessing };
+  });
+
+  // אם יש יותר מדי שינויים בבת אחת (ייבוא/רענון), שלח סיכום אחד
+  if (changes.length >= 6) {
+    pushNotif('עדכונים חדשים במתנות', `עודכנו ${changes.length} פריטים (סכום/ברכה)`, { type: 'gift_bulk', count: changes.length });
+  } else {
+    changes.forEach((fn) => fn());
+  }
+
+  prevGiftRef.current = next;
+}, [pushNotif]);
+
+const emitRsvpNotifs = useCallback((responsesObj = {}, contactsObj = {}) => {
+  // לא “מצפצף” על הטעינה הראשונה
+  if (!alertsPrimedRef.current.responses) {
+    const init = {};
+    Object.entries(responsesObj || {}).forEach(([guestKey, r]) => {
+      init[String(guestKey)] = {
+        response: String(r?.response || '').trim(),
+        guests: Number(r?.numberOfGuests ?? r?.numOfGuests ?? r?.guests ?? 0) || 0,
+      };
+    });
+    prevRespRef.current = init;
+    alertsPrimedRef.current.responses = true;
+    return;
+  }
+
+  const nameIndex = buildNameIndex(contactsObj);
+  const prev = prevRespRef.current || {};
+  const next = {};
+  const changes = [];
+
+  Object.entries(responsesObj || {}).forEach(([guestKey, r]) => {
+    const gk = String(guestKey);
+    const resp = String(r?.response || '').trim();
+    const guests = Number(r?.numberOfGuests ?? r?.numOfGuests ?? r?.guests ?? 0) || 0;
+
+    const p = prev[gk] || { response: '', guests: 0 };
+    next[gk] = { response: resp, guests };
+
+    if (!resp || resp === p.response) return;
+
+    // רק הסטטוסים שמעניינים אותך
+    const ok = (resp === 'מגיע' || resp === 'לא מגיע' || resp === 'אולי' || resp === 'טרם השיבו');
+    if (!ok) return;
+
+    const name = nameIndex[gk] || 'מוזמן';
+    const extraGuests = resp === 'מגיע' && guests > 0 ? ` (${guests})` : '';
+
+    changes.push(() =>
+      pushNotif(
+        'עדכון סטטוס מוזמן',
+        `${name} סימן: ${resp}${extraGuests}`,
+        { type: 'rsvp_status', guestKey: gk, status: resp, guests }
+      )
+    );
+  });
+
+  if (changes.length >= 6) {
+    pushNotif('עדכוני RSVP', `עודכנו ${changes.length} מוזמנים בסטטוס`, { type: 'rsvp_bulk', count: changes.length });
+  } else {
+    changes.forEach((fn) => fn());
+  }
+
+  prevRespRef.current = next;
+}, [pushNotif]);
+
+// ========================= NOTIFICATIONS (bell + badge) =========================
+const [notifLastReadAt, setNotifLastReadAt] = useState(0);
+const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+
+const notifLastReadPath = useMemo(() => {
+  if (!user?.uid || !id) return null;
+  return `Events/${user.uid}/${id}/__meta/notificationsLastReadAt`;
+}, [user?.uid, id]);
+
+const notifListPath = useMemo(() => {
+  if (!user?.uid || !id) return null;
+  return `Events/${user.uid}/${id}/__admin/notifications`;
+}, [user?.uid, id]);
+
+const markNotificationsRead = useCallback(async () => {
+  if (!user?.uid || !id) return;
+  try {
+    await update(ref(database, `Events/${user.uid}/${id}/__meta`), {
+      notificationsLastReadAt: firebase.database.ServerValue.TIMESTAMP,
+    });
+  } catch {}
+}, [user?.uid, id, database]);
 
   // מידות
   const { width: screenW } = useWindowDimensions();
@@ -415,7 +602,53 @@ function ListItem(props) {
   const [bigTargets, setBigTargets] = useState(false);
   const systemScheme = useColorScheme();
   const [themeMode, setThemeMode] = useState('auto');
+  const applyingRemoteThemeRef = useRef(false);
+// ========================= NOTIFICATIONS PANEL (inside ListItem) =========================
+const [notifOpen, setNotifOpen] = useState(false);
+const [notifLoading, setNotifLoading] = useState(true);
+const [notifItems, setNotifItems] = useState([]); // [{key, title, body, ts, ...}]
+
   const isDark = useMemo(() => themeMode === 'dark' || (themeMode === 'auto' && systemScheme === 'dark'), [themeMode, systemScheme]);
+// ===== Theme -> Firebase logging (event-local) =====
+const themeHydratedRef = useRef(false);
+const prevThemeModeRef = useRef(null);
+const pendingThemeWriteRef = useRef(null);
+
+const writeThemeModeToFirebase = useCallback(async (modeToWrite) => {
+  if (!user?.uid || !id) {
+    pendingThemeWriteRef.current = modeToWrite;
+    return;
+  }
+
+  const resolvedIsDark =
+    modeToWrite === 'dark' || (modeToWrite === 'auto' && systemScheme === 'dark');
+
+  const payload = {
+    mode: modeToWrite,                  // "auto" | "dark" | "light"
+    systemScheme: systemScheme || null, // "dark" | "light" | null
+    resolvedIsDark,                     // true/false
+    platform: Platform.OS,              // ios/android/web
+    ts: Date.now(),
+  };
+
+  try {
+    // ✅ כאן זה יישב בדיוק איפה שרצית:
+    await firebase
+      .database()
+      .ref(`Events/${user.uid}/${id}/__admin/ui/theme`)
+      .update(payload);
+
+    // אופציונלי: היסטוריה
+    firebase
+      .database()
+      .ref(`Events/${user.uid}/${id}/__admin/ui/themeHistory`)
+      .push(payload);
+
+  } catch (e) {
+    console.warn('[theme] firebase write failed:', e?.message || e);
+  }
+}, [user?.uid, id, systemScheme]);
+
 
   // טעינות
   const [eventLoaded, setEventLoaded] = useState(false);
@@ -427,7 +660,7 @@ function ListItem(props) {
 
   const headerBtnSize = (isNarrowHeader ? 30 : 36) + (bigTargets ? 6 : 0);
   const iconSize = (isNarrowHeader ? 16 : 18) + (bigTargets ? 2 : 0);
-  const ACTIONS_W = headerBtnSize * 2 + 10;
+const ACTIONS_W = headerBtnSize * 3 + 16; // ✅ מקום ל-3 אייקונים
 
   const HEADER_FONT = isDesktop ? 22 : isTablet ? 20 : screenW < 340 ? 10 : screenW < 380 ? 12 : 14;
 
@@ -444,7 +677,6 @@ function ListItem(props) {
   const hit = bigTargets ? { top: 8, bottom: 8, left: 8, right: 8 } : undefined;
 
   // ========================= DATA =========================
-  const [user, setUser] = useState(null);
   const [eventDetails, setEventDetails] = useState({});
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isScheduled_contact, setIsScheduled_contact] = useState(true);
@@ -511,31 +743,174 @@ function ListItem(props) {
   }, [user, id, database]);
 
   // תמה — טעינה/שמירה ב־AsyncStorage
-  useEffect(() => { (async () => { try { const saved = await AsyncStorage.getItem('themeMode'); if (['auto','light','dark'].includes(saved)) setThemeMode(saved); } catch {} })(); }, []);
-  useEffect(() => { AsyncStorage.setItem('themeMode', themeMode).catch(() => {}); }, [themeMode]);
-  const cycleThemeMode = () => setThemeMode((m) => (m === 'auto' ? 'dark' : m === 'dark' ? 'light' : 'auto'));
+// תמה — טעינה מ-AsyncStorage (לא לוג בפעם הראשונה)
+useEffect(() => {
+  (async () => {
+    try {
+      const saved = await AsyncStorage.getItem('themeMode');
+      if (['auto', 'light', 'dark'].includes(saved)) {
+        setThemeMode(saved);
+      }
+    } catch {}
+    finally {
+      themeHydratedRef.current = true;
+    }
+  })();
+}, []);
+
+// תמה — שמירה ל-AsyncStorage + כתיבה לפיירבייס רק כשבאמת השתנה (אחרי hydration)
+useEffect(() => {
+  AsyncStorage.setItem('themeMode', themeMode).catch(() => {});
+
+  if (!themeHydratedRef.current) return;
+
+  // ✅ אם זה עדכון שהגיע מהפיירבייס — לא עושים echo לשרת
+  if (applyingRemoteThemeRef.current) return;
+
+  if (prevThemeModeRef.current === null) {
+    prevThemeModeRef.current = themeMode;
+    return;
+  }
+
+  if (prevThemeModeRef.current === themeMode) return;
+
+  prevThemeModeRef.current = themeMode;
+  writeThemeModeToFirebase(themeMode);
+}, [themeMode, writeThemeModeToFirebase]);
+
+useEffect(() => {
+  const nav = props.navigation ?? navigation;
+  const s = nav.getState?.();
+  console.log('routeNames:', s?.routeNames);
+  console.log('routes:', s?.routes?.map(r => r.name));
+}, []);
+
+// אם המשתמש/אירוע נטענים אחרי שכבר החלפת תמה — נכתוב כשזה נהיה זמין
+useEffect(() => {
+  if (user?.uid && id && pendingThemeWriteRef.current) {
+    const mode = pendingThemeWriteRef.current;
+    pendingThemeWriteRef.current = null;
+    writeThemeModeToFirebase(mode);
+  }
+}, [user?.uid, id, writeThemeModeToFirebase]);
+const cycleThemeMode = () => {
+  setThemeMode((m) => (m === 'auto' ? 'dark' : m === 'dark' ? 'light' : 'auto'));
+};
+
   const themeIconName = themeMode === 'auto' ? 'contrast' : isDark ? 'sunny' : 'moon';
   const themeA11yLabel = themeMode === 'auto' ? 'מצב מערכת (אוטומטי)' : isDark ? 'מצב כהה' : 'מצב בהיר';
+// 1) מאזין ל-lastReadAt
+useEffect(() => {
+  if (!notifLastReadPath) return;
+  const r = ref(database, notifLastReadPath);
+
+  const unsub = meteredOnValue(r, (snap) => {
+    const v = snap.val();
+    setNotifLastReadAt(typeof v === 'number' ? v : 0);
+  });
+
+return () => { try { unsub?.(); } catch {} };
+
+}, [database, notifLastReadPath]);
+
+// 2) מאזין להתראות ומחשב כמה לא נקראו (ts > lastReadAt)
+useEffect(() => {
+  if (!notifListPath) return;
+
+  const r = query(
+    ref(database, notifListPath),
+    orderByChild('ts'),
+    limitToLast(50)
+  );
+
+  const unsub = meteredOnValue(r, (snap) => {
+    const obj = snap.val() || {};
+    const arr = Object.values(obj);
+
+    const unread = arr.reduce((acc, n) => {
+      const ts = typeof n?.ts === 'number' ? n.ts : 0;
+      return ts > (notifLastReadAt || 0) ? acc + 1 : acc;
+    }, 0);
+
+    setUnreadNotifCount(unread);
+  });
+
+  return () => {
+    try { off(r, 'value', unsub); } catch {}
+  };
+}, [database, notifListPath, notifLastReadAt]);
+
+// 3) מאזין לתוכן ההתראות (לרשימה בתוך המסך)
+useEffect(() => {
+  if (!notifListPath) return;
+
+  setNotifLoading(true);
+
+  const r = query(
+    ref(database, notifListPath),
+    orderByChild('ts'),
+    limitToLast(80)
+  );
+
+  const unsub = meteredOnValue(r, (snap) => {
+    const v = snap.val() || {};
+    const arr = Object.entries(v).map(([key, n]) => ({ key, ...(n || {}) }));
+    // מיון חדש->ישן
+    arr.sort((a, b) => (Number(b.ts || 0) - Number(a.ts || 0)));
+    setNotifItems(arr);
+    setNotifLoading(false);
+  }, () => setNotifLoading(false));
+
+  // ✅ במודולרי onValue מחזיר unsubscribe — לא off()
+  return () => { try { unsub(); } catch {} };
+}, [database, notifListPath]);
+
 
   // ========================= EVENT =========================
-  useEffect(() => {
-    if (!user || !id) return;
-    let cancelled = false;
-    (async () => {
-      const k = cacheKey(user.uid, id, 'event');
-      const cached = await loadCache(k);
-      if (!cancelled && cached) { setEventDetails(unwrap(cached) || {}); setEventExists(true); }
-      try {
-        const databaseRef0 = ref(database, `Events/${user.uid}/${id}/`);
-        const snapshot = await meteredGet(databaseRef0);
-        const fetchedData = snapshot.val() || {};
-        if (!cancelled) { setEventExists(snapshot.exists()); setEventDetails(fetchedData); saveCache(k, fetchedData); }
-      } catch {
-        if (!cancelled) { setEventExists(false); setEventDetails({}); }
-      } finally { if (!cancelled) setEventLoaded(true); }
-    })();
-    return () => { cancelled = true; };
-  }, [user, id, database]);
+// ========================= EVENT (LIVE - compat) =========================
+useEffect(() => {
+  if (!user?.uid || !id) return;
+
+  let cancelled = false;
+  const k = cacheKey(user.uid, id, 'event');
+  const r = firebase.database().ref(`Events/${user.uid}/${id}`);
+
+  // 1) cache מהיר
+  (async () => {
+    const cached = await loadCache(k);
+    if (!cancelled && cached) {
+      setEventDetails(unwrap(cached) || {});
+      setEventExists(true);
+    }
+  })();
+
+  // 2) realtime
+  const handler = (snap) => {
+    const data = snap.val() || {};
+    if (cancelled) return;
+
+    setEventExists(snap.exists());
+    setEventDetails(data);
+    saveCache(k, data);
+    setEventLoaded(true);
+
+    // DEBUG (אפשר למחוק אחרי שאתה רואה שזה עובד)
+    // console.log('[EVENT LIVE]', { yes: data.yes_caming, no: data.no_cuming, maybe: data.maybe, wait: data.no_answear });
+  };
+
+  const errHandler = (err) => {
+    console.warn('[EVENT LIVE] error:', err?.message || err);
+    setEventLoaded(true);
+  };
+
+  r.on('value', handler, errHandler);
+
+  return () => {
+    cancelled = true;
+    r.off('value', handler);
+  };
+}, [user?.uid, id]);
+
 
   // ========================= CHECKBOX =========================
   useEffect(() => {
@@ -779,24 +1154,52 @@ function ListItem(props) {
     const rRef = ref(database, `Events/${user.uid}/${id}/responses`);
     const mRef = ref(database, `whatsapp/${user.uid}/${id}`);
 
-    const unsubC = meteredOnValue(cRef, (s) => { memRefs.current.contacts = s.val() || {}; saveCache(ckC, memRefs.current.contacts); maybeRebuild(); });
-    const unsubT = meteredOnValue(tRef, (s) => { memRefs.current.tables   = s.val() || {}; saveCache(ckT, memRefs.current.tables);   maybeRebuild(); });
-    const unsubR = meteredOnValue(rRef, (s) => { memRefs.current.responses= s.val() || {}; saveCache(ckR, memRefs.current.responses); maybeRebuild(); });
-    const unsubM = meteredOnValue(mRef, (snap) => {
-      const statusByPhone = {};
-      if (snap.exists()) {
-        Object.values(snap.val()).forEach((msg) => {
-          const p = phoneFromMsg(msg); if (!p) return;
-          const raw = msg.status || msg.messageStatus || msg.deliveryStatus || msg.state || '';
-          const norm = normalizeStatus(raw);
-          const prev = statusByPhone[p];
-          if (!prev || norm.sev > prev.sev) statusByPhone[p] = norm;
-        });
-      }
-      latestWhatsStatusRef.current = statusByPhone;
-      saveCache(ckW, statusByPhone);
-      maybeRebuild();
+
+const unsubC = meteredOnValue(cRef, (s) => {
+  memRefs.current.contacts = s.val() || {};
+  saveCache(ckC, memRefs.current.contacts);
+
+  // ✅ התראות על כסף/ברכה כש־contacts משתנה
+  emitGiftNotifs(memRefs.current.contacts);
+
+  // ✅ אם ה־responses כבר קיימים, נרנדר שמות נכון (לא יוצר ספאם כי אין שינוי בסטטוס)
+  emitRsvpNotifs(memRefs.current.responses, memRefs.current.contacts);
+
+  maybeRebuild();
+});
+
+const unsubR = meteredOnValue(rRef, (s) => {
+  memRefs.current.responses = s.val() || {};
+  saveCache(ckR, memRefs.current.responses);
+
+  // ✅ התראות על שינוי סטטוס RSVP כש־responses משתנה
+  emitRsvpNotifs(memRefs.current.responses, memRefs.current.contacts);
+
+  maybeRebuild();
+});
+
+const unsubM = meteredOnValue(mRef, (snap) => {
+  const statusByPhone = {};
+  if (snap.exists()) {
+    Object.values(snap.val()).forEach((msg) => {
+      const p = phoneFromMsg(msg); if (!p) return;
+      const raw = msg.status || msg.messageStatus || msg.deliveryStatus || msg.state || '';
+      const norm = normalizeStatus(raw);
+      const prev = statusByPhone[p];
+      if (!prev || norm.sev > prev.sev) statusByPhone[p] = norm;
     });
+  }
+  latestWhatsStatusRef.current = statusByPhone;
+  saveCache(ckW, statusByPhone);
+
+  // ❌ להסיר מכאן את emitGiftNotifs / emitRsvpNotifs
+  maybeRebuild();
+});
+
+
+
+    const unsubT = meteredOnValue(tRef, (s) => { memRefs.current.tables   = s.val() || {}; saveCache(ckT, memRefs.current.tables);   maybeRebuild(); });
+
 
     return () => { off(cRef,'value',unsubC); off(tRef,'value',unsubT); off(rRef,'value',unsubR); off(mRef,'value',unsubM); };
   }, [user, id, database, rebuild]);
@@ -838,6 +1241,8 @@ useEffect(() => {
       // ניתוק – נווט למסך כניסה אם צריך
       // navigation.replace('LoginEmail');
     }
+    console.log('LISTITEM compat currentUser =', firebase.auth().currentUser?.uid);
+
   });
   return () => unsub();
 }, []);
@@ -923,13 +1328,8 @@ useEffect(() => {
     { label: 'ניהול', onPress: () => go('AdminPanel', { id }) },
   ];
 
-  // לוג אדמין כללי (כותב תחת האירוע)
-  const adminLog = (action) => {
-    try {
-      const aRef = firebase.database().ref(`Events/${user?.uid}/${id}/__admin/audit`).push();
-      aRef.set({ ts: Date.now(), action });
-    } catch {}
-  };
+
+
 
   const FooterGrid = ({ items, underlineRule }) => {
     const itemW = '50%';
@@ -991,36 +1391,120 @@ useEffect(() => {
     />
   </Pressable>
 
-  {/* WhatsApp button (image from assets) */}
-  <Pressable
-    onPress={() => {
-      const phone = '972542455869';
-      Linking.openURL(`https://wa.me/${phone}`).catch(() =>
-        Alert.alert('שגיאה', 'לא ניתן לפתוח WhatsApp')
-      );
-    }}
-    hitSlop={hit}
-    style={[
-      styles.headerIconBtn,
-      {
-        width: headerBtnSize,
-        height: headerBtnSize,
-        backgroundColor: COLORS.chipBg,
-        borderColor: COLORS.chipBorder,
-        borderWidth: StyleSheet.hairlineWidth,
-      },
-    ]}
-    accessibilityRole="button"
-    accessibilityLabel="פתיחת וואטסאפ"
-  >
-    <Image
-      source={require('../assets/whatsapp.png')}
-      style={{ width: iconSize + 8, height: iconSize + 8, resizeMode: 'contain' }}
-    />
-  </Pressable>
+
+
+<Pressable
+  onPress={async () => {
+    const next = !notifOpen;
+    setNotifOpen(next);
+    if (next) await markNotificationsRead();
+  }}
+  hitSlop={hit}
+  style={[
+    styles.headerIconBtn,
+    {
+      width: headerBtnSize,
+      height: headerBtnSize,
+      backgroundColor: COLORS.chipBg,
+      borderColor: COLORS.chipBorder,
+      borderWidth: StyleSheet.hairlineWidth,
+      position: 'relative',
+    },
+  ]}
+  accessibilityRole="button"
+  accessibilityLabel="התראות"
+>
+  <Ionicons name="notifications-outline" size={iconSize + 2} color={COLORS.text} />
+
+  {unreadNotifCount > 0 && (
+    <View style={{
+      position: 'absolute',
+      top: 4,
+      right: 4,
+      minWidth: 18,
+      height: 18,
+      paddingHorizontal: 5,
+      borderRadius: 999,
+      backgroundColor: '#EF4444',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: 'rgba(0,0,0,0.35)',
+    }}>
+      <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>
+        {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+      </Text>
+    </View>
+  )}
+</Pressable>
+
+
 </View>
 
       </View>
+
+<Modal
+  visible={notifOpen}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setNotifOpen(false)}
+>
+  <View style={styles.notifOverlay}>
+    <Pressable style={StyleSheet.absoluteFill} onPress={() => setNotifOpen(false)} />
+
+    <View style={[
+      styles.notifCardFloating,
+      { backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }
+    ]}>
+      <View style={styles.notifHeader}>
+        <Text style={[t(16), { fontWeight: '800' }]}>מרכז התראות</Text>
+
+        <Pressable
+          onPress={() => setNotifOpen(false)}
+          style={[styles.notifMiniBtn, { backgroundColor: COLORS.inputBg }]}
+        >
+          <Text style={[t(12), { fontWeight: '700' }]}>סגור</Text>
+        </Pressable>
+      </View>
+
+      {notifLoading ? (
+        <Text style={[t(13, COLORS.subtext)]}>טוען התראות…</Text>
+      ) : notifItems.length === 0 ? (
+        <Text style={[t(13, COLORS.subtext)]}>אין התראות כרגע</Text>
+      ) : (
+        <FlatList
+          data={notifItems}
+          keyExtractor={(item) => item.key}
+          style={{ maxHeight: 380 }}
+          renderItem={({ item }) => (
+            <View style={[
+              styles.notifRow,
+              { backgroundColor: COLORS.inputBg, borderColor: COLORS.cardBorder }
+            ]}>
+              <Text style={[t(13), { fontWeight: '800' }]} numberOfLines={1}>
+                {item.title || item.type || 'התראה'}
+              </Text>
+
+              {!!item.body && (
+                <Text style={[t(12, COLORS.subtext)]} numberOfLines={2}>
+                  {item.body}
+                </Text>
+              )}
+
+              {!!item.ts && (
+                <Text style={[t(11, COLORS.subtext), { marginTop: 4 }]}>
+                  {new Date(item.ts).toLocaleString('he-IL')}
+                </Text>
+              )}
+            </View>
+          )}
+        />
+      )}
+    </View>
+  </View>
+</Modal>
+
+
 
       <ScrollView contentContainerStyle={styles.scrollViewContainer}>
         <View style={styles.container}>
@@ -1467,6 +1951,50 @@ const styles = StyleSheet.create({
   toggle: { width: 44, height: 28, borderRadius: 14, backgroundColor: '#c9c9c9', alignItems: 'flex-start', justifyContent: 'center', padding: 2 },
   toggleOn: { backgroundColor: '#6c63ff', alignItems: 'flex-end' },
   toggleKnob: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff' },
+  notifCard: {
+  width: '96%',
+  maxWidth: 980,
+  alignSelf: 'center',
+  marginTop: 6,
+  marginBottom: 6,
+  borderRadius: 14,
+  padding: 12,
+  borderWidth: StyleSheet.hairlineWidth,
+},
+notifHeader: {
+  flexDirection: 'row-reverse',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  marginBottom: 10,
+},
+notifMiniBtn: {
+  paddingHorizontal: 10,
+  paddingVertical: 6,
+  borderRadius: 10,
+},
+notifRow: {
+  borderRadius: 12,
+  padding: 10,
+  borderWidth: StyleSheet.hairlineWidth,
+  marginBottom: 8,
+},
+notifOverlay: {
+  flex: 1,
+  backgroundColor: 'rgba(0,0,0,0.45)',
+  justifyContent: 'flex-start',
+  paddingTop: 70,
+},
+notifCardFloating: {
+  width: '92%',
+  maxWidth: 980,
+  alignSelf: 'center',
+  borderRadius: 16,
+  padding: 12,
+  borderWidth: StyleSheet.hairlineWidth,
+  maxHeight: '70%',
+},
+
+
 });
 
 export default ListItem;

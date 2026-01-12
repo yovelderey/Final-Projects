@@ -1,5 +1,6 @@
-// Register.js
-import React, { useState, useEffect, useRef } from 'react';
+// Register.js — DarkMode by System (useColorScheme)
+
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   TextInput,
@@ -14,12 +15,13 @@ import {
   StatusBar,
   Modal,
   ActivityIndicator,
+  useColorScheme,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
-import { getDatabase, ref, set ,serverTimestamp} from 'firebase/database';
+import { getDatabase, ref, set, serverTimestamp } from 'firebase/database';
 
 // ---- Firebase (כמו במסכים האחרים) ----
 const firebaseConfig = {
@@ -39,6 +41,63 @@ function Register(props) {
   const { width } = useWindowDimensions();
   const fieldWrapWidth = width > 600 ? '40%' : '85%';
 
+  // ✅ System theme
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
+
+  const colors = useMemo(() => {
+    if (isDark) {
+      return {
+        bg: '#0B1220',
+        card: '#111827',
+        text: '#F8FAFC',
+        subText: '#94A3B8',
+        border: '#1F2937',
+        inputBg: '#0F172A',
+        orange: '#F59E0B',
+        hint: '#64748b',
+
+        error: '#EF4444',
+        errorSoft: '#3B1B1B',
+        errorBorder: '#7F1D1D',
+
+        infoSoft: '#0B1F3A',
+        infoBorder: '#1D4ED8',
+
+        purple: '#6C63FF',
+        green: '#22C55E',
+
+        overlay: 'rgba(0,0,0,0.65)',
+        overlaySoft: 'rgba(255,255,255,0.06)',
+      };
+    }
+    return {
+      bg: '#FFFFFF',
+      card: '#FFFFFF',
+      text: '#0F172A',
+      subText: '#475569',
+      border: '#E2E8F0',
+      inputBg: '#FFFFFF',
+      orange: 'orange',
+      hint: 'gray',
+
+      error: '#D32F2F',
+      errorSoft: '#fdecea',
+      errorBorder: '#f5c6cb',
+
+      infoSoft: '#e8f4fd',
+      infoBorder: '#b6e0fe',
+
+      purple: '#6C63FF',
+      green: '#28A745',
+
+      overlay: 'rgba(0,0,0,0.50)',
+      overlaySoft: 'rgba(0,0,0,0.35)',
+    };
+  }, [isDark]);
+
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   // שדות טופס
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -46,6 +105,7 @@ function Register(props) {
   const [fullname, setFullname] = useState('');
   const [isChecked, setIsChecked] = useState(false);
   const HOLD_AFTER_SUCCESS_MS = 6000;
+
   // שגיאות אינליין
   const [emailErr, setEmailErr] = useState('');
   const [nameErr, setNameErr] = useState('');
@@ -60,7 +120,7 @@ function Register(props) {
   // מודל תקנון
   const [termsVisible, setTermsVisible] = useState(false);
 
-  // שכבת "התחברות לחשבון" עם ספינר וטקסט מתחלף
+  // שכבת טעינה עם ספינר וטקסט מתחלף
   const [loading, setLoading] = useState(false);
   const phrases = ['תודה שבחרת בנו 🙏', 'אנחנו כבר מחברים אותך לחשבון…'];
   const [phraseIndex, setPhraseIndex] = useState(0);
@@ -126,100 +186,89 @@ function Register(props) {
   };
 
   // Register.js — הפונקציה המלאה
-const handleRegister = async () => {
-  // ניקוי הודעות/שגיאות קודמות
-  setBanner(null);
-  setEmailErr('');
-  setNameErr('');
-  setPwdErr('');
-  setPwd2Err('');
-  setTermsErr('');
+  const handleRegister = async () => {
+    // ניקוי הודעות/שגיאות קודמות
+    setBanner(null);
+    setEmailErr('');
+    setNameErr('');
+    setPwdErr('');
+    setPwd2Err('');
+    setTermsErr('');
 
-  const e = email.trim();
-  const n = fullname.trim();
-  let hasErr = false;
+    const e = email.trim();
+    const n = fullname.trim();
+    let hasErr = false;
 
-  // ולידציות בסיס
-  if (!n || n.length < 2) { setNameErr('אנא הזן שם מלא תקין.'); hasErr = true; }
-  if (!e) { setEmailErr('אנא הזן אימייל.'); hasErr = true; }
-  else if (/\s/.test(e)) { setEmailErr('אימייל לא יכול להכיל רווחים.'); hasErr = true; }
-  else if (!/^\S+@\S+\.\S+$/.test(e)) { setEmailErr('האימייל שהוזן אינו תקין.'); hasErr = true; }
+    // ולידציות בסיס
+    if (!n || n.length < 2) { setNameErr('אנא הזן שם מלא תקין.'); hasErr = true; }
+    if (!e) { setEmailErr('אנא הזן אימייל.'); hasErr = true; }
+    else if (/\s/.test(e)) { setEmailErr('אימייל לא יכול להכיל רווחים.'); hasErr = true; }
+    else if (!isValidEmail(e)) { setEmailErr('האימייל שהוזן אינו תקין.'); hasErr = true; }
 
-  // לפני ה-try:
-  if (!password) { setPwdErr('אנא הזן סיסמה.'); hasErr = true; }
-  else if (!isStrong) { setPwdErr('הסיסמה אינה עומדת בדרישות החוזק (ראה למטה).'); hasErr = true; }
+    if (!password) { setPwdErr('אנא הזן סיסמה.'); hasErr = true; }
+    else if (!isStrong) { setPwdErr('הסיסמה אינה עומדת בדרישות החוזק (ראה למטה).'); hasErr = true; }
 
-  if (!passwordAgain) { setPwd2Err('אנא אשר את הסיסמה.'); hasErr = true; }
-  else if (passwordAgain !== password) { setPwd2Err('אין התאמה בין הסיסמאות.'); hasErr = true; }
+    if (!passwordAgain) { setPwd2Err('אנא אשר את הסיסמה.'); hasErr = true; }
+    else if (passwordAgain !== password) { setPwd2Err('אין התאמה בין הסיסמאות.'); hasErr = true; }
 
-  if (!isChecked) { setTermsErr('יש לאשר את התקנון.'); hasErr = true; }
+    if (!isChecked) { setTermsErr('יש לאשר את התקנון.'); hasErr = true; }
 
-  if (hasErr) {
-    setBanner({ type: 'error', text: 'אנא תקן את השדות המסומנים.' });
-    return;
-  }
+    if (hasErr) {
+      setBanner({ type: 'error', text: 'אנא תקן את השדות המסומנים.' });
+      return;
+    }
 
-  // לפני הקריאה ל-Firebase (להשאיר):
-  setLoading(true);
-  globalThis.__suppressAuthAutoNavUntil =
-    Date.now() + HOLD_AFTER_SUCCESS_MS + 500;
+    setLoading(true);
+    globalThis.__suppressAuthAutoNavUntil =
+      Date.now() + HOLD_AFTER_SUCCESS_MS + 500;
 
-  try {
-    const cred = await createUserWithEmailAndPassword(auth, e, password);
-    const user = cred.user;
-    const db = getDatabase();
-    await set(ref(db, `users/${user.uid}`), {
-      email: user.email,
-      password: passwordAgain,
-      displayName: n,
-      createdAt: serverTimestamp(),              // חותמת זמן מהשרת (RTDB)
-      createdAtISO: new Date().toISOString(),   // גיבוי קריא מהקליינט
-    });
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, e, password);
+      const user = cred.user;
+      const db = getDatabase();
+      await set(ref(db, `users/${user.uid}`), {
+        email: user.email,
+        password: passwordAgain,
+        displayName: n,
+        createdAt: serverTimestamp(),              // חותמת זמן מהשרת (RTDB)
+        createdAtISO: new Date().toISOString(),   // גיבוי קריא מהקליינט
+      });
 
-    
-    // אחרי הכתיבה ל-DB, הניווט עם השהיה:
-    setTimeout(() => {
-      if (isMounted.current && !navigatedRef.current) {
-        navigatedRef.current = true;
-        setLoading(false); // אופציונלי
-        navigation.navigate('Main'); // עדיף להשתמש ב- navigation אחיד
+      setTimeout(() => {
+        if (isMounted.current && !navigatedRef.current) {
+          navigatedRef.current = true;
+          setLoading(false);
+          navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+
+        }
+      }, HOLD_AFTER_SUCCESS_MS);
+      console.log('REGISTER modular uid =', user.uid);
+
+    } catch (err) {
+      console.log('Register error:', err?.code, err?.message);
+      if (err?.code === 'auth/email-already-in-use') {
+        setEmailErr('האימייל כבר רשום במערכת.');
       }
-    }, HOLD_AFTER_SUCCESS_MS);
-  } catch (err) {
-    console.log('Register error:', err?.code, err?.message);
-    if (err?.code === 'auth/email-already-in-use') {
-      setEmailErr('האימייל כבר רשום במערכת.');
+      setBanner({ type: 'error', text: mapFirebaseError(err?.code) });
+      setLoading(false);
     }
-    setBanner({ type: 'error', text: mapFirebaseError(err?.code) });
-    setLoading(false);
-  }
-};
-
-useEffect(() => {
-  const canAutoNav = () =>
-    !globalThis.__suppressAuthAutoNavUntil ||
-    Date.now() >= globalThis.__suppressAuthAutoNavUntil;
-
-  const unsub = onAuthStateChanged(auth, (user) => {
-    if (user && canAutoNav()) {
-      navigation.navigate('Main');
-    }
-  });
-  return unsub;
-}, [navigation]);
+  };
 
 
 
   const CheckRow = ({ ok, text }) => (
     <View style={styles.ruleRow}>
-      <Text style={[styles.ruleIcon, { color: ok ? '#2e7d32' : '#c62828' }]}>{ok ? '✓' : '✗'}</Text>
-      <Text style={[styles.ruleText, { color: ok ? '#2e7d32' : '#c62828' }]}>{text}</Text>
+      <Text style={[styles.ruleIcon, { color: ok ? colors.green : colors.error }]}>{ok ? '✓' : '✗'}</Text>
+      <Text style={[styles.ruleText, { color: ok ? colors.green : colors.error }]}>{text}</Text>
     </View>
   );
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.bg}
+      />
 
       {/* פס עליון עם חזרה — תמונה נשארת */}
       <View style={styles.topBar}>
@@ -232,7 +281,13 @@ useEffect(() => {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           {/* באנר הודעה בדף */}
           {banner && (
-            <View style={[styles.banner, banner.type === 'error' ? styles.bannerError : styles.bannerInfo, { width: fieldWrapWidth }]}>
+            <View
+              style={[
+                styles.banner,
+                banner.type === 'error' ? styles.bannerError : styles.bannerInfo,
+                { width: fieldWrapWidth },
+              ]}
+            >
               <Text style={styles.bannerText}>{banner.text}</Text>
             </View>
           )}
@@ -240,11 +295,12 @@ useEffect(() => {
           {/* כותרת (תמונה שלך) */}
           <Image source={require('../assets/shalom_oreah.png')} style={styles.loginText} />
 
-          {/* שדות — עם רווחים ויישור לימין */}
+          {/* שדות */}
           <View style={[styles.fieldWrap, { width: fieldWrapWidth }]}>
             <TextInput
               style={styles.input}
               placeholder="שם מלא"
+              placeholderTextColor={colors.subText}
               value={fullname}
               onChangeText={(t) => {
                 setFullname(t);
@@ -258,6 +314,7 @@ useEffect(() => {
             <TextInput
               style={styles.input}
               placeholder="אימייל"
+              placeholderTextColor={colors.subText}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -274,6 +331,7 @@ useEffect(() => {
             <TextInput
               style={styles.input}
               placeholder="סיסמה"
+              placeholderTextColor={colors.subText}
               secureTextEntry
               value={password}
               onChangeText={(t) => {
@@ -289,6 +347,7 @@ useEffect(() => {
             <TextInput
               style={styles.input}
               placeholder="אימות סיסמה"
+              placeholderTextColor={colors.subText}
               secureTextEntry
               value={passwordAgain}
               onChangeText={(t) => {
@@ -314,7 +373,7 @@ useEffect(() => {
             <CheckRow ok={pwRules.noSpace} text="ללא רווחים" />
           </View>
 
-          {/* קראתי/הסכמה לתקנון — באמצע ו־RTL */}
+          {/* קראתי/הסכמה לתקנון */}
           <TouchableOpacity
             style={[styles.checkboxContainer, { width: fieldWrapWidth }]}
             onPress={() => {
@@ -334,7 +393,7 @@ useEffect(() => {
             </Text>
           )}
 
-          {/* כפתור הצגת התקנון (תמונה שלך) — במרכז */}
+          {/* כפתור הצגת התקנון (תמונה שלך) */}
           <TouchableOpacity onPress={() => setTermsVisible(true)} style={styles.showPasswordButton}>
             <Image source={require('../assets/readtakanon.png')} />
           </TouchableOpacity>
@@ -348,7 +407,7 @@ useEffect(() => {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* תקנון — Modal לנייטיב + Fallback ל־Web */}
+      {/* תקנון — Modal */}
       {Platform.OS === 'web' ? (
         termsVisible && (
           <View style={[styles.modalOverlay, styles.webOverlayFix]}>
@@ -368,7 +427,6 @@ useEffect(() => {
 
               <ScrollView style={styles.modalBody} contentContainerStyle={{ padding: 16 }}>
                 <Text style={styles.modalText}>
-                  {/* כאן הטקסט המלא של התקנון שלך */}
                   כללי אפליקציה זו נועדה לספק פלטפורמה נוחה לשימוש עבור הזמנות לחתונות, תוך שמירה על פרטיות המשתמשים
                   והתאמה לחוקי ההגנה על מידע. השימוש באפליקציה מותנה בקבלת כלל תנאי התקנון...{'\n\n'}
                   פרטיות ושמירת מידע — החברה מתחייבת לשמירה על פרטיות המשתמשים...{'\n\n'}
@@ -410,7 +468,6 @@ useEffect(() => {
 
               <ScrollView style={styles.modalBody} contentContainerStyle={{ padding: 16 }}>
                 <Text style={styles.modalText}>
-                  {/* כאן הטקסט המלא של התקנון שלך */}
                   כללי אפליקציה זו נועדה לספק פלטפורמה נוחה לשימוש עבור הזמנות לחתונות, תוך שמירה על פרטיות המשתמשים
                   והתאמה לחוקי ההגנה על מידע. השימוש באפליקציה מותנה בקבלת כלל תנאי התקנון...{'\n\n'}
                   פרטיות ושמירת מידע — החברה מתחייבת לשמירה על פרטיות המשתמשים...{'\n\n'}
@@ -429,11 +486,11 @@ useEffect(() => {
         </Modal>
       )}
 
-      {/* שכבת טעינה עם ספינר וטקסט מתחלף */}
+      {/* שכבת טעינה */}
       {loading && (
         <View style={[styles.loadingOverlay, Platform.OS === 'web' && styles.webOverlayFix]}>
           <View style={styles.loadingCard}>
-            <ActivityIndicator size="large" color="#6C63FF" />
+            <ActivityIndicator size="large" color={colors.purple} />
             <Text style={styles.loadingText}>{phrases[phraseIndex]}</Text>
           </View>
         </View>
@@ -442,224 +499,231 @@ useEffect(() => {
   );
 }
 
-const styles = StyleSheet.create({
-  // מסך כללי
-  container: {
-    flex: 1,
-    backgroundColor: 'white',
-  },
-  topBar: {
-    width: '100%',
-    alignItems: 'flex-start',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  imageback: { width: 40, height: 40 },
+function makeStyles(c) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: c.bg,
+    },
+    topBar: {
+      width: '100%',
+      alignItems: 'flex-start',
+      paddingHorizontal: 16,
+      paddingTop: 12,
+    },
+    imageback: { width: 40, height: 40 },
 
-  scroll: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: 12,
-  },
+    scroll: {
+      flexGrow: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 24,
+      paddingHorizontal: 12,
+    },
 
-  // באנר הודעות בתוך הדף
-  banner: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 12,
-  },
-  bannerError: {
-    backgroundColor: '#fdecea',
-    borderColor: '#f5c6cb',
-  },
-  bannerInfo: {
-    backgroundColor: '#e8f4fd',
-    borderColor: '#b6e0fe',
-  },
-  bannerText: {
-    color: '#b71c1c',
-    textAlign: 'right',
-    fontSize: 14,
-  },
+    // באנר
+    banner: {
+      borderWidth: 1,
+      borderRadius: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      marginBottom: 12,
+    },
+    bannerError: {
+      backgroundColor: c.errorSoft,
+      borderColor: c.errorBorder,
+    },
+    bannerInfo: {
+      backgroundColor: c.infoSoft,
+      borderColor: c.infoBorder,
+    },
+    bannerText: {
+      color: c.text,
+      textAlign: 'right',
+      fontSize: 14,
+      fontWeight: '800',
+    },
 
-  // תמונות קיימות שלך — לא נגעתי
-  loginText: { marginBottom: 10 },
+    loginText: { marginBottom: 10 },
 
-  // עיטוף לשדות כדי לשלוט ברוחב דינמי
-  fieldWrap: {
-    alignItems: 'stretch',
-    marginTop: 6,
-    marginBottom: 8,
-  },
+    fieldWrap: {
+      alignItems: 'stretch',
+      marginTop: 6,
+      marginBottom: 8,
+    },
 
-  // רווח בין כל TextInput + יישור לימין
-  input: {
-    alignSelf: 'stretch',
-    height: 44,
-    borderColor: 'orange',
-    borderWidth: 1,
-    borderRadius: 7,
-    backgroundColor: 'white',
-    paddingHorizontal: 10,
-    textAlign: 'right',
-    marginBottom: 16,
-  },
+    input: {
+      alignSelf: 'stretch',
+      height: 44,
+      borderColor: c.orange,
+      borderWidth: 1,
+      borderRadius: 7,
+      backgroundColor: c.inputBg,
+      paddingHorizontal: 10,
+      textAlign: 'right',
+      marginBottom: 16,
+      color: c.text,
+    },
 
-  errText: {
-    alignSelf: 'flex-end',
-    color: '#D32F2F',
-    fontSize: 13,
-    marginTop: -8,
-    marginBottom: 10,
-    textAlign: 'right',
-  },
+    errText: {
+      alignSelf: 'flex-end',
+      color: c.error,
+      fontSize: 13,
+      marginTop: -8,
+      marginBottom: 10,
+      textAlign: 'right',
+      fontWeight: '700',
+    },
 
-  // בלוק דרישות סיסמה
-  rulesCard: {
-    alignSelf: 'center',
-    backgroundColor: '#fafafa',
-    borderWidth: 1,
-    borderColor: '#eee',
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  rulesTitle: {
-    fontWeight: '700',
-    fontSize: 15,
-    marginBottom: 6,
-    textAlign: 'right',
-  },
-  ruleRow: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    marginVertical: 2,
-  },
-  ruleIcon: { width: 18, textAlign: 'center', marginLeft: 6, fontSize: 14 },
-  ruleText: { fontSize: 14, textAlign: 'right' },
+    rulesCard: {
+      alignSelf: 'center',
+      backgroundColor: c.card,
+      borderWidth: 1,
+      borderColor: c.border,
+      borderRadius: 10,
+      padding: 12,
+      marginTop: 8,
+      marginBottom: 8,
+    },
+    rulesTitle: {
+      fontWeight: '900',
+      fontSize: 15,
+      marginBottom: 6,
+      textAlign: 'right',
+      color: c.text,
+    },
+    ruleRow: {
+      flexDirection: 'row-reverse',
+      alignItems: 'center',
+      marginVertical: 2,
+    },
+    ruleIcon: { width: 18, textAlign: 'center', marginLeft: 6, fontSize: 14, fontWeight: '900' },
+    ruleText: { fontSize: 14, textAlign: 'right', fontWeight: '700' },
 
-  // תקנון — באמצע ו־RTL
-  checkboxContainer: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginTop: 10,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderWidth: 1,
-    borderColor: 'gray',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 8,
-  },
-  checkboxChecked: { width: 14, height: 14, backgroundColor: 'orange' },
-  checkboxLabel: { fontSize: 16, color: 'black', textAlign: 'right' },
+    checkboxContainer: {
+      flexDirection: 'row-reverse',
+      alignItems: 'center',
+      justifyContent: 'center',
+      alignSelf: 'center',
+      marginTop: 10,
+    },
+    checkbox: {
+      width: 20,
+      height: 20,
+      borderWidth: 1,
+      borderColor: c.subText,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginLeft: 8,
+      backgroundColor: c.overlaySoft,
+      borderRadius: 4,
+    },
+    checkboxChecked: { width: 14, height: 14, backgroundColor: c.orange, borderRadius: 3 },
+    checkboxLabel: { fontSize: 16, color: c.text, textAlign: 'right', fontWeight: '800' },
 
-  // כפתורים (תמונות) — נשארים שלך
-  showPasswordButton: { marginTop: 16, marginBottom: 16, alignSelf: 'center' },
-  phoneButton: { marginBottom: 24, alignSelf: 'center' },
+    showPasswordButton: { marginTop: 16, marginBottom: 16, alignSelf: 'center' },
+    phoneButton: { marginBottom: 24, alignSelf: 'center' },
 
-  footerText: {
-    fontSize: 13,
-    color: 'gray',
-    marginTop: 8,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
+    footerText: {
+      fontSize: 13,
+      color: c.subText,
+      marginTop: 8,
+      marginBottom: 8,
+      textAlign: 'center',
+      fontWeight: '700',
+    },
 
-  // === עיצוב מודל התקנון ===
-  modalOverlay: {
-    position: 'absolute',
-    top: 0, right: 0, bottom: 0, left: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-    zIndex: 9999,
-    elevation: 50,
-  },
-  webOverlayFix: {
-    position: 'fixed',
-    top: 0, right: 0, bottom: 0, left: 0,
-    zIndex: 9999,
-  },
-  modalCard: {
-    width: '92%',
-    maxWidth: 760,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  modalHeader: {
-    backgroundColor: '#6C63FF',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  modalTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  closeX: {
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  modalBody: {
-    maxHeight: 440,
-    backgroundColor: '#fff',
-  },
-  modalText: {
-    textAlign: 'right',
-    lineHeight: 22,
-    color: '#333',
-    fontSize: 14,
-  },
-  modalPrimaryBtn: {
-    backgroundColor: '#28A745',
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  modalPrimaryBtnText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
-  },
+    // Modal תקנון
+    modalOverlay: {
+      position: 'absolute',
+      top: 0, right: 0, bottom: 0, left: 0,
+      backgroundColor: c.overlay,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 16,
+      zIndex: 9999,
+      elevation: 50,
+    },
+    webOverlayFix: {
+      position: 'fixed',
+      top: 0, right: 0, bottom: 0, left: 0,
+      zIndex: 9999,
+    },
+    modalCard: {
+      width: '92%',
+      maxWidth: 760,
+      backgroundColor: c.card,
+      borderRadius: 14,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    modalHeader: {
+      backgroundColor: c.purple,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      flexDirection: 'row-reverse',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    modalTitle: { color: '#fff', fontSize: 18, fontWeight: '900' },
+    closeX: {
+      backgroundColor: 'rgba(255,255,255,0.22)',
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 999,
+    },
+    modalBody: {
+      maxHeight: 440,
+      backgroundColor: c.card,
+    },
+    modalText: {
+      textAlign: 'right',
+      lineHeight: 22,
+      color: c.text,
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    modalPrimaryBtn: {
+      backgroundColor: c.green,
+      paddingVertical: 12,
+      alignItems: 'center',
+    },
+    modalPrimaryBtnText: {
+      color: '#fff',
+      fontWeight: '900',
+      fontSize: 16,
+    },
 
-  // שכבת טעינה עם ספינר
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0, right: 0, bottom: 0, left: 0,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-    zIndex: 10000,
-    // טיפ: אם תרצה טשטוש אמיתי בנייד, אפשר לשלב expo-blur (BlurView) במקום רקע חצי שקוף.
-  },
-  loadingCard: {
-    width: '86%',
-    maxWidth: 420,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#333',
-    textAlign: 'center',
-  },
-});
+    // Loading overlay
+    loadingOverlay: {
+      position: 'absolute',
+      top: 0, right: 0, bottom: 0, left: 0,
+      backgroundColor: c.overlay,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 16,
+      zIndex: 10000,
+    },
+    loadingCard: {
+      width: '86%',
+      maxWidth: 420,
+      backgroundColor: c.card,
+      borderRadius: 14,
+      paddingVertical: 20,
+      paddingHorizontal: 16,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: 16,
+      color: c.text,
+      textAlign: 'center',
+      fontWeight: '800',
+    },
+  });
+}
 
 export default Register;

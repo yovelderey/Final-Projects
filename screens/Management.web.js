@@ -1,24 +1,29 @@
-import React, { useEffect, useRef, useState } from 'react';
+// Management.js (FULL) — vCard + Excel + Manual RTL + Table Name on cards + LEFT status bar color (keep default for none/new/pending)
+// ✅ Shows table for each guest (from /tables mapping)
+// ✅ Left color bar by RSVP status: yes=green, no=red, maybe=orange, none/unknown => keep default (gray)
+// ✅ Keeps your existing UI/Theme/Filters + Gift from contacts/newPrice (+ optional blessing)
+
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
-  ImageBackground,
   StyleSheet,
   TouchableOpacity,
-  Image,
   Alert,
   TextInput,
   Modal,
-  ScrollView,
+  Pressable,
   PermissionsAndroid,
   StatusBar,
   Platform,
   FlatList,
-  ActivityIndicator,
+  KeyboardAvoidingView,
+  ScrollView,
+  Image,
+  useColorScheme,
 } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Contacts from 'expo-contacts';
 import { useNavigation } from '@react-navigation/native';
 
 import * as FileSystem from 'expo-file-system';
@@ -28,169 +33,613 @@ import * as DocumentPicker from 'expo-document-picker';
 
 import { ref, remove, set, onValue, update, push } from 'firebase/database';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth, database } from '../firebase'; // ודא נתיב נכון
+import { auth, database } from '../firebase';
+
+// ==== Theme Colors ====
+const COLORS = {
+  light: {
+    bg: '#F8FAFC',
+    headerBg: '#FFFFFF',
+    text: '#1E293B',
+    subText: '#64748B',
+    card: '#FFFFFF',
+    border: '#E2E8F0',
+    inputBg: '#F1F5F9',
+    primary: '#4F46E5',
+    iconBg: '#F1F5F9',
+    sheetBg: '#FFFFFF',
+  },
+  dark: {
+    bg: '#0F172A',
+    headerBg: '#1E293B',
+    text: '#F8FAFC',
+    subText: '#94A3B8',
+    card: '#1E293B',
+    border: '#334155',
+    inputBg: '#0F172A',
+    primary: '#6366F1',
+    iconBg: '#334155',
+    sheetBg: '#1E293B',
+  },
+};
+
+// ==== Utils ====
+const normalizeTel = (s) => {
+  if (!s) return '';
+  let t = String(s).replace(/[^\d+]/g, '');
+  t = t.replace(/(?!^)\+/g, '');
+  return t;
+};
+
+const toLocalTime = (isoOrMs) => {
+  if (!isoOrMs) return '';
+  try {
+    const d = new Date(isoOrMs);
+    if (isNaN(d.getTime())) return String(isoOrMs);
+    return d.toLocaleString('he-IL', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return String(isoOrMs);
+  }
+};
+
+// vCard parser (supports FN/N and TEL pref/cell/mobile)
+const parseVCardText = (text) => {
+  if (!text) return [];
+
+  const unfolded = String(text)
+    .replace(/\r\n[ \t]/g, '')
+    .replace(/\n[ \t]/g, '');
+
+  const cards = unfolded
+    .split(/BEGIN:VCARD/i)
+    .slice(1)
+    .map((s) => 'BEGIN:VCARD' + s);
+
+  const out = [];
+  for (let i = 0; i < cards.length; i++) {
+    const card = cards[i];
+
+    const nameMatch =
+      card.match(/^FN(?:;[^:]+)?:([^\r\n]+)/mi) ||
+      card.match(/^N(?:;[^:]+)?:([^\r\n]+)/mi);
+    const name = nameMatch ? String(nameMatch[1]).trim() : '';
+
+    const telMatches = [...card.matchAll(/^TEL(?:(;[^:]+))?:([^\r\n]+)/gmi)];
+    if (telMatches.length === 0) {
+      out.push({ id: i, name, phone: '' });
+      continue;
+    }
+
+    const lines = telMatches.map((m) => ({ meta: m[1] || '', value: m[2] }));
+    const chosen =
+      lines.find((l) => /PREF/i.test(l.meta)) ||
+      lines.find((l) => /CELL|MOBILE/i.test(l.meta)) ||
+      lines[0];
+
+    const phone = normalizeTel(chosen?.value || '');
+    out.push({ id: i, name, phone });
+  }
+
+  return out;
+};
 
 const Management = (props) => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const id = props.route.params.id;
 
-  // נתונים עיקריים
+  // Refs
+  const phoneBodyRef = useRef(null);
+
+  // ==== Theme Logic ====
+  const systemScheme = useColorScheme();
+  const [dbMode, setDbMode] = useState('light');
+
+  const isDarkMode = useMemo(() => {
+    if (dbMode === 'dark') return true;
+    if (dbMode === 'light') return false;
+    return systemScheme === 'dark';
+  }, [dbMode, systemScheme]);
+
+  const theme = isDarkMode ? COLORS.dark : COLORS.light;
+  const headerTopPadding =
+    Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : insets.top;
+
+  // Data State
   const [user, setUser] = useState(null);
   const [contacts, setContacts] = useState([]);
-
-  // חיפוש במסך הראשי
   const [searchQuery, setSearchQuery] = useState('');
 
-  // מודל “הוספה ידנית”
+  // Filter & Sort
+  const [showFilterBar, setShowFilterBar] = useState(false);
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterTable, setFilterTable] = useState('all');
+  const [sortBy, setSortBy] = useState('name');
+
+  const [responses, setResponses] = useState({});
+  const [guestTableMap, setGuestTableMap] = useState({});
+
+  // Modals
   const [manualVisible, setManualVisible] = useState(false);
   const [newContactName, setNewContactName] = useState('');
   const [newContactPhone, setNewContactPhone] = useState('');
   const [selectedPrefix, setSelectedPrefix] = useState('');
 
-  // תמונות מדריך (בתיקיית assets)
-  const onepic   = require('../assets/onepic.png');
-  const twopic   = require('../assets/twopic.png');
-  const threepic = require('../assets/threepic.png');
-  const fourpic  = require('../assets/fourpic.png');
+  const [guestModalVisible, setGuestModalVisible] = useState(false);
+  const [selectedGuestId, setSelectedGuestId] = useState(null);
+  const [editGuestName, setEditGuestName] = useState('');
+  const [editGuestPhone, setEditGuestPhone] = useState('');
+  const [isSavingGuest, setIsSavingGuest] = useState(false);
 
-  // מודל אופציות ייבוא
   const [importOptionsVisible, setImportOptionsVisible] = useState(false);
-
-  // מודל אישור “מחק הכל” (ל־Web)
-  const [confirmDeleteAllVisible, setConfirmDeleteAllVisible] = useState(false);
-
-  // סיכום ייבוא (Excel/vCard/Contact Picker)
   const [summaryVisible, setSummaryVisible] = useState(false);
   const [summaryText, setSummaryText] = useState('');
 
-  // מודל מדריך
-  const [guideVisible, setGuideVisible] = useState(false);
-
-  // תמיכת Contact Picker בדפדפן (אנדרואיד כרום/כרומיום)
-  const isContactPickerSupported =
-    Platform.OS === 'web' &&
-    typeof navigator !== 'undefined' &&
-    navigator.contacts &&
-    typeof navigator.contacts.select === 'function';
-
-  // ===== מודל vCard =====
+  // vCard modal
   const [vcfModalVisible, setVcfModalVisible] = useState(false);
-  const [vcfContacts, setVcfContacts] = useState([]); // [{id, name, phone}]
+  const [vcfContacts, setVcfContacts] = useState([]);
   const [vcfSearch, setVcfSearch] = useState('');
   const [isLoadingVcf, setIsLoadingVcf] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-
-  // בחירות עם useRef כדי למנוע מירוצים
-  const [selectedIds, setSelectedIds] = useState(new Set()); // Set<number | string>
+  const [selectedIds, setSelectedIds] = useState(new Set());
   const selectedIdsRef = useRef(selectedIds);
+
   const setSelectedAndRef = (nextSet) => {
     selectedIdsRef.current = nextSet;
     setSelectedIds(nextSet);
   };
 
-  // ------------------------------------------------------------
-  // הרשאות + סאבסקריפשן ל־Firebase
-  // ------------------------------------------------------------
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmPayload, setConfirmPayload] = useState({ mode: 'one', contactId: null, name: '' });
+
+  const [guideVisible, setGuideVisible] = useState(false);
+
+  // Images
+  const onepic = require('../assets/onepic.png');
+  const twopic = require('../assets/twopic.png');
+  const threepic = require('../assets/threepic.png');
+  const fourpic = require('../assets/fourpic.png');
+
+  // -----------------------------
+  // Permissions (optional)
+  // -----------------------------
   useEffect(() => {
-    const requestPermissions = async () => {
+    const req = async () => {
       if (Platform.OS === 'android') {
-        await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
-          {
-            title: 'Contacts Permission',
-            message: 'האפליקציה צריכה גישה לאנשי הקשר שלך.',
-            buttonPositive: 'אישור',
-            buttonNegative: 'ביטול',
+        try {
+          await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.READ_CONTACTS);
+        } catch {}
+      }
+    };
+    req();
+  }, []);
+
+  // -----------------------------
+  // Helpers (tables) — supports your structure: tables/<tableId> { numberTable: "שולחן 1", contacts/guests/.. }
+  // -----------------------------
+  const buildGuestTableMap = useCallback((tablesObj) => {
+    const out = {};
+    if (!tablesObj) return out;
+
+    const addFromNode = (node, tableName) => {
+      if (!node) return;
+
+      if (Array.isArray(node)) {
+        node.forEach((x) => {
+          if (x && (typeof x === 'string' || typeof x === 'number')) out[String(x)] = tableName;
+          else if (x && typeof x === 'object') {
+            const gid = x.recordID || x.guestId || x.id;
+            if (gid) out[String(gid)] = tableName;
           }
-        );
+        });
+        return;
       }
 
-      onAuthStateChanged(auth, async (currentUser) => {
-        if (!currentUser) {
-          setUser(null);
-          setContacts([]);
-          return;
-        }
-        setUser(currentUser);
-
-        const databaseRef = ref(database, `Events/${currentUser.uid}/${id}/contacts`);
-        onValue(databaseRef, (snapshot) => {
-          const data = snapshot.val();
-          const arr = data ? Object.values(data) : [];
-          setContacts(arr);
-
-          // תחזוקת קאונטר אנשי קשר
-          set(
-            ref(database, `Events/${currentUser.uid}/${id}/counter_contacts`),
-            arr.length
-          );
+      if (typeof node === 'object') {
+        Object.entries(node).forEach(([k, v]) => {
+          if (k) out[String(k)] = tableName;
+          if (v && typeof v === 'object') {
+            const gid = v.recordID || v.guestId || v.id;
+            if (gid) out[String(gid)] = tableName;
+            if (v.guestId) out[String(v.guestId)] = tableName;
+          }
         });
-      });
+      }
     };
 
-    requestPermissions();
-  }, [id]);
+    Object.entries(tablesObj).forEach(([_, tVal], idx) => {
+      if (!tVal) return;
+      const tableName = String(
+        tVal.numberTable || tVal.tableName || tVal.name || `שולחן ${idx + 1}`
+      ).trim();
 
-  // ------------------------------------------------------------
-  // עזרים: טלפון + vCard
-  // ------------------------------------------------------------
-  const normalizeTel = (s) => {
-    if (!s) return '';
-    let t = s.replace(/[^\d+]/g, ''); // משאיר ספרות ו-+
-    t = t.replace(/(?!^)\+/g, '');    // מסיר + פנימיים
-    return t;
-  };
+      [
+        tVal.contacts,
+        tVal.guests,
+        tVal.users,
+        tVal.assigned,
+        tVal.members,
+        tVal.people,
+        tVal.guestIds,
+        tVal.seats,
+      ].forEach((node) => addFromNode(node, tableName));
 
-  const parseVCardText = (text) => {
-    if (!text) return [];
-    // ביטול folding
-    const unfolded = text.replace(/\r\n[ \t]/g, '').replace(/\n[ \t]/g, '');
-    // פיצול לכרטיסים
-    const cards = unfolded.split(/BEGIN:VCARD/i).slice(1).map(s => 'BEGIN:VCARD' + s);
-    const out = [];
-    for (let i = 0; i < cards.length; i++) {
-      const card = cards[i];
-      const nameMatch =
-        card.match(/^FN(?:;[^:]+)?:([^\r\n]+)/mi) ||
-        card.match(/^N(?:;[^:]+)?:([^\r\n]+)/mi);
-      const name = nameMatch ? nameMatch[1].trim() : '';
+      // Optional: if this node itself is per-guest record with recordID (not common, but safe)
+      const gid = tVal.recordID || tVal.guestId || tVal.id;
+      if (gid) out[String(gid)] = tableName;
+    });
 
-      const telMatches = [...card.matchAll(/^TEL(?:(;[^:]+))?:([^\r\n]+)/gmi)];
-      if (telMatches.length === 0) {
-        out.push({ id: i, name, phone: '' });
-        continue;
-      }
-      const lines = telMatches.map(m => ({ meta: m[1] || '', value: m[2] }));
-      const chosen = lines.find(l => /PREF/i.test(l.meta)) ||
-                     lines.find(l => /CELL|MOBILE/i.test(l.meta)) ||
-                     lines[0];
-      const phone = normalizeTel(chosen.value);
-      out.push({ id: i, name, phone });
-    }
     return out;
+  }, []);
+
+  const getGuestTableName = useCallback(
+    (contact) => {
+      const gid = String(contact?.recordID || '');
+      return guestTableMap?.[gid] || 'לא שובץ';
+    },
+    [guestTableMap]
+  );
+
+  // -----------------------------
+  // Gift from contacts/<id>/newPrice (+ optional blessing fields)
+  // -----------------------------
+  const getGiftFromContact = (contact) => {
+    if (!contact) return { amount: null, blessing: '' };
+
+    const rawAmount =
+      contact?.newPrice ??
+      contact?.price ??
+      contact?.giftAmount ??
+      contact?.amount ??
+      null;
+
+    const amountNum =
+      rawAmount === null || rawAmount === undefined
+        ? null
+        : Number(String(rawAmount).replace(/[^\d.]/g, ''));
+
+    const amount = Number.isFinite(amountNum) && amountNum > 0 ? amountNum : null;
+
+    const blessing = String(
+      contact?.blessing ??
+        contact?.bracha ??
+        contact?.greeting ??
+        contact?.note ??
+        contact?.newBlessing ??
+        ''
+    ).trim();
+
+    return { amount, blessing };
   };
 
-  // ------------------------------------------------------------
-  // CRUD בסיסי
-  // ------------------------------------------------------------
-  const addManualContact = async () => {
-    if (!user) {
-      Alert.alert('שגיאה', 'משתמש לא מחובר');
-      return;
-    }
-    if (!newContactName.trim() || !selectedPrefix.trim() || !newContactPhone.trim()) {
-      Alert.alert('שגיאה', 'נא למלא את כל השדות');
-      return;
-    }
-    const fullPhone = normalizeTel(`${selectedPrefix}${newContactPhone}`);
-    const contactsRef = ref(database, `Events/${user.uid}/${id}/contacts`);
-    const newKey = push(contactsRef).key;
+  // -----------------------------
+  // Firebase subscriptions
+  // -----------------------------
+  useEffect(() => {
+    let unsubAdmin = null,
+      unsubLegacy = null,
+      unsubContacts = null,
+      unsubResponses = null,
+      unsubTables = null;
 
+    const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
+      if (unsubAdmin) unsubAdmin();
+      if (unsubLegacy) unsubLegacy();
+      if (unsubContacts) unsubContacts();
+      if (unsubResponses) unsubResponses();
+      if (unsubTables) unsubTables();
+
+      if (!currentUser) {
+        setUser(null);
+        setContacts([]);
+        return;
+      }
+      setUser(currentUser);
+
+      const modeAdminRef = ref(database, `Events/${currentUser.uid}/${id}/__admin/ui/theme/mode`);
+      const modeLegacyRef = ref(database, `Events/${currentUser.uid}/${id}/ui/theme/mode`);
+      let hasAdminTheme = false;
+
+      const applyMode = (raw) => {
+        let mode = String(raw ?? 'auto').toLowerCase();
+        if (raw === true) mode = 'dark';
+        if (raw === false) mode = 'light';
+        if (!['light', 'dark', 'auto'].includes(mode)) mode = 'auto';
+        setDbMode(mode);
+      };
+
+      unsubAdmin = onValue(modeAdminRef, (snap) => {
+        const v = snap.val();
+        hasAdminTheme = v !== null && v !== undefined;
+        if (hasAdminTheme) applyMode(v);
+      });
+
+      unsubLegacy = onValue(modeLegacyRef, (snap) => {
+        if (!hasAdminTheme) applyMode(snap.val());
+      });
+
+      unsubContacts = onValue(ref(database, `Events/${currentUser.uid}/${id}/contacts`), (snapshot) => {
+        const data = snapshot.val() || {};
+        const arr = Object.entries(data).map(([key, val]) => ({
+          ...(val || {}),
+          recordID: val?.recordID || key,
+        }));
+        arr.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
+        setContacts(arr);
+      });
+
+      unsubResponses = onValue(ref(database, `Events/${currentUser.uid}/${id}/responses`), (snap) =>
+        setResponses(snap.val() || {})
+      );
+
+      unsubTables = onValue(ref(database, `Events/${currentUser.uid}/${id}/tables`), (snap) =>
+        setGuestTableMap(buildGuestTableMap(snap.val() || {}))
+      );
+    });
+
+    return () => {
+      if (unsubAdmin) unsubAdmin();
+      if (unsubLegacy) unsubLegacy();
+      if (unsubContacts) unsubContacts();
+      if (unsubResponses) unsubResponses();
+      if (unsubTables) unsubTables();
+      unsubAuth();
+    };
+  }, [id, buildGuestTableMap]);
+
+  const toggleTheme = async () => {
+    if (!user) return;
+    let nextMode = 'light';
+    if (dbMode === 'light') nextMode = 'dark';
+    else if (dbMode === 'dark') nextMode = 'auto';
+    else if (dbMode === 'auto') nextMode = 'light';
+
+    setDbMode(nextMode);
+    await set(ref(database, `Events/${user.uid}/${id}/ui/theme/mode`), nextMode);
+  };
+
+  // -----------------------------
+  // Excel
+  // -----------------------------
+  const downloadExcelTemplate = async () => {
+    try {
+      const data = [
+        { שם: 'דני דוגמה', טלפון: '0501234567' },
+        { שם: 'רותי דוגמה', טלפון: '0527654321' },
+      ];
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'מוזמנים');
+
+      if (Platform.OS === 'web') {
+        const wbout = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+        const blob = new Blob([wbout], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'template.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        const wbout = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
+        const uri = FileSystem.cacheDirectory + 'template.xlsx';
+        await FileSystem.writeAsStringAsync(uri, wbout, { encoding: FileSystem.EncodingType.Base64 });
+        if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri);
+        else Alert.alert('שגיאה', 'שיתוף לא נתמך במכשיר זה');
+      }
+    } catch (e) {
+      Alert.alert('שגיאה', 'לא ניתן ליצור את הקובץ');
+    }
+  };
+
+  const uploadExcelFile = async () => {
+    try {
+      if (!user) {
+        Alert.alert('שגיאה', 'משתמש לא מחובר');
+        return;
+      }
+
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.ms-excel',
+          'text/csv',
+          'application/octet-stream',
+        ],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (result.canceled) return;
+      const fileUri = result.assets?.[0]?.uri;
+      if (!fileUri) return;
+
+      let workbook;
+      if (Platform.OS === 'web') {
+        const response = await fetch(fileUri);
+        const blob = await response.blob();
+        const arrayBuffer = await blob.arrayBuffer();
+        workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      } else {
+        const b64 = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
+        workbook = XLSX.read(b64, { type: 'base64' });
+      }
+
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+      const contactsRef = ref(database, `Events/${user.uid}/${id}/contacts`);
+      const updatesObj = {};
+      let successCount = 0;
+
+      jsonData.forEach((row) => {
+        const values = Object.values(row || {});
+        const nameRaw = row['שם'] ?? row['Name'] ?? row['name'] ?? (values.length ? values[0] : '');
+        const phoneRaw = row['טלפון'] ?? row['Phone'] ?? row['phone'] ?? (values.length > 1 ? values[1] : '');
+        const name = String(nameRaw || '').trim();
+        const phoneClean = normalizeTel(String(phoneRaw || '').trim());
+
+        if (name && /^\+?\d{7,15}$/.test(phoneClean)) {
+          const k = push(contactsRef).key;
+          updatesObj[k] = { recordID: k, displayName: name, phoneNumbers: phoneClean, createdAt: Date.now() };
+          successCount++;
+        }
+      });
+
+      if (successCount > 0) await update(contactsRef, updatesObj);
+
+      setSummaryText(`✅ ${successCount} מוזמנים הועלו בהצלחה.`);
+      setSummaryVisible(true);
+    } catch (error) {
+      Alert.alert('שגיאה', 'קובץ לא תקין או בעיה בקריאה');
+    }
+  };
+
+    const norm = (s) => String(s ?? '').trim().toLowerCase();
+
+const getResponsesArray = useCallback(() => {
+  return Object.entries(responses || {}).map(([key, val]) => ({
+    _key: key,
+    ...(val || {}),
+  }));
+}, [responses]);
+
+const getGuestRsvpInfo = useCallback(
+  (contact) => {
+    if (!contact) return null;
+
+    const cId = String(contact.recordID || '');
+    const cName = norm(contact.displayName);
+    const cPhone = normalizeTel(contact.phoneNumbers || '');
+
+    const all = getResponsesArray();
+
+    const matched = all.filter((r) => {
+      const rId =
+        String(r.guestId || r.recordID || r.contactId || r.recordId || '');
+      const rName = norm(r.guestName || r.displayName || r.name);
+      const rPhone = normalizeTel(r.phone || r.phoneNumbers || r.formattedContacts || '');
+
+      // 1) match by id if exists
+      if (cId && rId && cId === rId) return true;
+
+      // 2) match by phone if exists in response
+      if (cPhone && rPhone && cPhone === rPhone) return true;
+
+      // 3) your current DB: match by guestName
+      if (cName && rName && cName === rName) return true;
+
+      return false;
+    });
+
+    if (!matched.length) return null;
+
+    // pick latest by timestamp (fallback: keep newest by key order)
+    const sorted = matched.sort((a, b) => {
+      const ta = new Date(a.timestamp || 0).getTime() || 0;
+      const tb = new Date(b.timestamp || 0).getTime() || 0;
+      return tb - ta;
+    });
+
+    return sorted[0];
+  },
+  [getResponsesArray]
+);
+
+const getStatusKey = useCallback(
+  (contact) => {
+    const rsvp = getGuestRsvpInfo(contact);
+    const raw = String(rsvp?.response || rsvp?.status || '').trim();
+
+    if (/^(מגיע|כן|yes|coming)$/i.test(raw)) return 'yes';
+    if (/^(לא|no)$/i.test(raw)) return 'no';
+    if (/^(אולי|maybe)$/i.test(raw)) return 'maybe';
+
+    // pending/new/none => keep default
+    return 'none';
+  },
+  [getGuestRsvpInfo]
+);
+
+
+  // ✅ LEFT BAR COLOR:
+  // yes/no/maybe -> green/red/orange
+  // none -> keep "existing" neutral gray (based on mode)
+  const leftBarColor = useCallback(
+    (statusKey) => {
+      if (statusKey === 'yes') return '#22C55E';
+      if (statusKey === 'no') return '#EF4444';
+      if (statusKey === 'maybe') return '#F59E0B';
+      // keep default for pending/new/unknown
+      return isDarkMode ? '#334155' : '#E2E8F0';
+    },
+    [isDarkMode]
+  );
+
+  // -----------------------------
+  // Filtered list
+  // -----------------------------
+  const filteredContacts = useMemo(() => {
+    const q = (searchQuery || '').toLowerCase();
+
+    let res = (contacts || []).filter((c) => {
+      const n = (c.displayName || '').toLowerCase();
+      const p = String(c.phoneNumbers || '');
+      const t = getGuestTableName(c);
+      return n.includes(q) || p.includes(q) || (t || '').toLowerCase().includes(q);
+    });
+
+    if (filterStatus !== 'all') res = res.filter((c) => getStatusKey(c) === filterStatus);
+    if (filterTable === 'no_table') res = res.filter((c) => getGuestTableName(c) === 'לא שובץ');
+
+    res.sort((a, b) => {
+      if (sortBy === 'name') return (a.displayName || '').localeCompare(b.displayName || '');
+      if (sortBy === 'table') {
+        const tA = getGuestTableName(a);
+        const tB = getGuestTableName(b);
+        if (tA === 'לא שובץ' && tB !== 'לא שובץ') return 1;
+        if (tA !== 'לא שובץ' && tB === 'לא שובץ') return -1;
+        return tA.localeCompare(tB);
+      }
+      return 0;
+    });
+
+    return res;
+  }, [contacts, searchQuery, filterStatus, filterTable, sortBy, getGuestTableName, getStatusKey]);
+
+  // -----------------------------
+  // CRUD
+  // -----------------------------
+  const addManualContact = async () => {
+    if (!user) return;
+
+    if (!newContactName.trim() || !selectedPrefix.trim() || !newContactPhone.trim()) {
+      Alert.alert('שגיאה', 'נא למלא שם + קידומת + טלפון');
+      return;
+    }
+
+    const fullPhone = normalizeTel(`${selectedPrefix}${newContactPhone}`);
+    if (!/^\+?\d{7,15}$/.test(fullPhone)) {
+      Alert.alert('שגיאה', 'מספר טלפון לא תקין');
+      return;
+    }
+
+    const newKey = push(ref(database, `Events/${user.uid}/${id}/contacts`)).key;
     await set(ref(database, `Events/${user.uid}/${id}/contacts/${newKey}`), {
       recordID: newKey,
       displayName: newContactName.trim(),
       phoneNumbers: fullPhone,
+      createdAt: Date.now(),
     });
 
     setManualVisible(false);
@@ -199,189 +648,72 @@ const Management = (props) => {
     setSelectedPrefix('');
   };
 
-  const deleteContact = async (contactId) => {
-    if (!user) {
-      Alert.alert('שגיאה', 'משתמש לא מחובר');
-      return;
-    }
-    try {
-      await remove(ref(database, `Events/${user.uid}/${id}/contacts/${contactId}`));
-    } catch (error) {
-      console.error('Error deleting contact from Firebase:', error);
-      Alert.alert('Error', 'Failed to delete contact. Please try again.');
-    }
+  const deleteContact = async (rid) => {
+    if (!user) return;
+    await remove(ref(database, `Events/${user.uid}/${id}/contacts/${rid}`));
   };
 
-  const deleteAllContacts = async () => {
-    if (!user) {
-      Alert.alert('Error', 'User not authenticated. Please log in.');
-      return;
-    }
-    try {
-      await remove(ref(database, `Events/${user.uid}/${id}/contacts`));
-    } catch (error) {
-      console.error('Error deleting all contacts from Firebase:', error);
-      Alert.alert('Error', 'Failed to delete all contacts. Please try again.');
-    }
+  const deleteAll = async () => {
+    if (!user) return;
+    await remove(ref(database, `Events/${user.uid}/${id}/contacts`));
   };
 
-  const showDeleteAllAlert = () => {
-    if (Platform.OS === 'web') {
-      setConfirmDeleteAllVisible(true);
-    } else {
-      Alert.alert(
-        'הסר הכל',
-        'האם אתה בטוח שברצונך להסיר את כל המוזמנים?',
-        [
-          { text: 'הסר', onPress: () => deleteAllContacts(), style: 'destructive' },
-          { text: 'ביטול', onPress: () => {}, style: 'cancel' },
-        ],
-        { cancelable: true }
-      );
-    }
+  const confirmDeleteContact = (c) => {
+    setConfirmPayload({ mode: 'one', contactId: c.recordID, name: c.displayName });
+    setConfirmVisible(true);
   };
 
-  // ------------------------------------------------------------
-  // ייבוא: Contact Picker (נייטיב)
-  // ------------------------------------------------------------
-  const pickContactsNative = async () => {
-    try {
-      const { status } = await Contacts.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('שגיאה', 'אין הרשאה לגשת לאנשי קשר');
-        return;
-      }
-      const { data } = await Contacts.getContactsAsync({
-        fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Emails],
-      });
-      if (!data?.length) {
-        Alert.alert('שגיאה', 'לא נמצאו אנשי קשר');
-        return;
-      }
-      navigation.navigate('ContactsList', {
-        contacts: data,
-        selectedContacts: [],
-        onSelectContacts: async (picked) => {
-          if (!user) return;
-          const contactsRef = ref(database, `Events/${user.uid}/${id}/contacts`);
-          const updates = {};
-          let count = 0;
-
-          picked.forEach((c) => {
-            const tel = c.phoneNumbers?.[0]?.number ? normalizeTel(c.phoneNumbers[0].number) : '';
-            if (!tel) return;
-            const k = push(contactsRef).key;
-            updates[k] = {
-              recordID: k,
-              displayName: c.name || 'ללא שם',
-              phoneNumbers: tel,
-            };
-            count++;
-          });
-
-          if (count > 0) await update(contactsRef, updates);
-        },
-      });
-    } catch (error) {
-      console.error('שגיאה בבקשת הרשאות/ייבוא:', error);
-      Alert.alert('שגיאה', 'אירעה שגיאה בעת ייבוא אנשי הקשר');
-    }
+  const runConfirmedDelete = async () => {
+    setConfirmVisible(false);
+    if (confirmPayload.mode === 'all') await deleteAll();
+    else if (confirmPayload.contactId) await deleteContact(confirmPayload.contactId);
   };
 
-  // ------------------------------------------------------------
-  // ייבוא: Contact Picker API (Web / אנדרואיד כרום)
-  // ------------------------------------------------------------
-  const importFromContactPickerWeb = async () => {
-    if (!isContactPickerSupported) {
-      setSummaryText('⚠️ הדפדפן לא תומך בייבוא ישיר. ניתן להשתמש ב־vCard/Excel.');
-      setSummaryVisible(true);
-      return;
-    }
-    if (!user) {
-      setSummaryText('⚠️ יש להתחבר לפני הייבוא.');
-      setSummaryVisible(true);
-      return;
+  // -----------------------------
+  // Guest modal open/save
+  // -----------------------------
+  const selectedGuest = useMemo(() => {
+    if (!selectedGuestId) return null;
+    return (contacts || []).find((c) => String(c.recordID) === String(selectedGuestId)) || null;
+  }, [selectedGuestId, contacts]);
+
+  const openGuestModal = (contact) => {
+    setSelectedGuestId(contact?.recordID || null);
+    setEditGuestName(contact?.displayName || '');
+    setEditGuestPhone(contact?.phoneNumbers || '');
+    setGuestModalVisible(true);
+  };
+
+  const saveGuestEdits = async () => {
+    if (!user || !selectedGuest?.recordID) return;
+
+    const name = String(editGuestName || '').trim();
+    if (!name) return Alert.alert('שגיאה', 'שם חובה');
+
+    const phoneClean = normalizeTel(editGuestPhone || '');
+    if (phoneClean && !/^\+?\d{7,15}$/.test(phoneClean)) {
+      return Alert.alert('שגיאה', 'מספר טלפון לא תקין');
     }
 
+    setIsSavingGuest(true);
     try {
-      // פתיחת בורר אנשי קשר (חייב מחוות משתמש)
-      const picked = await navigator.contacts.select(['name', 'tel'], { multiple: true });
-      if (!picked?.length) {
-        setSummaryText('לא נבחרו אנשי קשר.');
-        setSummaryVisible(true);
-        return;
-      }
-
-      // דה-דופ + סינון על סמך אנשי קשר שכבר קיימים ב-Firebase/state
-      const existingSet = new Set(
-        (contacts || [])
-          .map(c => normalizeTel(c.phoneNumbers))
-          .filter(Boolean)
-      );
-
-      const seenSession = new Set();
-      const rows = [];
-      let skippedNoTel = 0;
-      let skippedDupSession = 0;
-      let skippedDupExisting = 0;
-
-      for (const c of picked) {
-        const name = Array.isArray(c.name) ? c.name[0] : (c.name || 'ללא שם');
-        const telRaw = Array.isArray(c.tel) ? c.tel[0] : c.tel;
-        if (!telRaw) { skippedNoTel++; continue; }
-        const tel = normalizeTel(telRaw);
-        if (!tel) { skippedNoTel++; continue; }
-
-        if (seenSession.has(tel)) { skippedDupSession++; continue; }
-        if (existingSet.has(tel)) { skippedDupExisting++; continue; }
-
-        seenSession.add(tel);
-        rows.push({ name, tel });
-      }
-
-      if (!rows.length) {
-        let msg = 'לא נוספו אנשי קשר חדשים.';
-        if (skippedDupExisting > 0) msg += `\n(${skippedDupExisting} כבר קיימים)`;
-        setSummaryText('ℹ️ ' + msg);
-        setSummaryVisible(true);
-        return;
-      }
-
-      // כתיבה מרוכזת ל-Firebase
-      const contactsRef = ref(database, `Events/${user.uid}/${id}/contacts`);
       const updatesObj = {};
-      rows.forEach(({ name, tel }) => {
-        const k = push(contactsRef).key;
-        updatesObj[k] = { recordID: k, displayName: name, phoneNumbers: tel };
-      });
-      await update(contactsRef, updatesObj);
+      updatesObj[`contacts/${selectedGuest.recordID}/displayName`] = name;
+      updatesObj[`contacts/${selectedGuest.recordID}/phoneNumbers`] = phoneClean;
+      updatesObj[`contacts/${selectedGuest.recordID}/updatedAt`] = Date.now();
 
-      // פידבק למשתמש
-      let message = `✅ נוספו ${rows.length} אנשי קשר מהמכשיר.`;
-      const extras = [];
-      if (skippedNoTel) extras.push(`${skippedNoTel} ללא מספר`);
-      if (skippedDupSession) extras.push(`${skippedDupSession} כפולים באותה בחירה`);
-      if (skippedDupExisting) extras.push(`${skippedDupExisting} כבר קיימים`);
-      if (extras.length) message += `\nℹ️ דילגנו על: ${extras.join(' | ')}`;
-
-      setSummaryText(message);
-      setSummaryVisible(true);
-    } catch (err) {
-      // טיפול בשגיאות טיפוסיות
-      let msg = 'ייבוא דרך בורר אנשי קשר נחסם/נכשל.';
-      if (err?.name === 'NotAllowedError') {
-        msg = 'הדפדפן חסם את הגישה לאנשי קשר. ודא שהאתר ב־HTTPS, ושהוא לא נטען בתוך iframe ללא הרשאת contact-picker.';
-      } else if (err?.name === 'NotFoundError') {
-        msg = 'לא נמצאו אנשי קשר או שהפעולה בוטלה.';
-      }
-      setSummaryText('⚠️ ' + msg);
-      setSummaryVisible(true);
+      await update(ref(database, `Events/${user.uid}/${id}`), updatesObj);
+      setGuestModalVisible(false);
+    } catch (e) {
+      Alert.alert('שגיאה', 'שמירה נכשלה');
+    } finally {
+      setIsSavingGuest(false);
     }
   };
 
-  // ------------------------------------------------------------
-  // ייבוא: vCard – פתיחת מודל + טעינת קובץ
-  // ------------------------------------------------------------
+  // -----------------------------
+  // vCard modal logic
+  // -----------------------------
   const openVcfModal = () => {
     setVcfContacts([]);
     setVcfSearch('');
@@ -392,17 +724,18 @@ const Management = (props) => {
   const pickVcfFile = async () => {
     try {
       setIsLoadingVcf(true);
+
       const result = await DocumentPicker.getDocumentAsync({
         type: ['text/vcard', 'text/x-vcard', 'text/plain', 'application/octet-stream', '.vcf'],
         copyToCacheDirectory: true,
         multiple: false,
       });
-      if (result.canceled) {
-        setIsLoadingVcf(false);
-        return;
-      }
+
+      if (result.canceled) return;
 
       const fileUri = result.assets?.[0]?.uri;
+      if (!fileUri) throw new Error('No file uri');
+
       let text = '';
       if (Platform.OS === 'web') {
         const res = await fetch(fileUri);
@@ -411,19 +744,18 @@ const Management = (props) => {
         text = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.UTF8 });
       }
 
-      const entries = parseVCardText(text).filter(e => e.phone);
+      const entries = parseVCardText(text).filter((e) => e.phone);
       setVcfContacts(entries);
       setSelectedAndRef(new Set());
     } catch (e) {
-      console.error(e);
+      console.error('pickVcfFile error:', e);
       Alert.alert('שגיאה', 'קריאת קובץ vCard נכשלה. ודא שהקובץ תקין.');
     } finally {
       setIsLoadingVcf(false);
     }
   };
 
-  // בחירה/ביטול של פריט
-  const toggleSelect = (rowId) => {
+  const toggleSelectVcf = (rowId) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       next.has(rowId) ? next.delete(rowId) : next.add(rowId);
@@ -432,26 +764,29 @@ const Management = (props) => {
     });
   };
 
-  const selectAll = () => {
-    const all = new Set(vcfContacts.map((c) => c.id));
+  const selectAllVcf = () => {
+    const all = new Set((vcfContacts || []).map((c) => c.id));
     setSelectedAndRef(all);
   };
 
-  const clearAll = () => {
+  const clearAllVcf = () => {
     setSelectedAndRef(new Set());
   };
 
-  // רשימה מסוננת במודל vCard
-  const filteredVcf = vcfContacts.filter((c) => {
+  const filteredVcf = useMemo(() => {
     const q = (vcfSearch || '').toLowerCase();
-    return (c.name || '').toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q);
-  });
+    return (vcfContacts || []).filter((c) => {
+      return (c.name || '').toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q);
+    });
+  }, [vcfContacts, vcfSearch]);
 
-  // ייבוא מרוכז ל-Firebase
   const importSelectedVcf = async () => {
-    if (!user) return;
+    if (!user) {
+      Alert.alert('שגיאה', 'משתמש לא מחובר');
+      return;
+    }
 
-    const pickedIds = Array.from(selectedIdsRef.current);
+    const pickedIds = Array.from(selectedIdsRef.current || []);
     if (pickedIds.length === 0) {
       Alert.alert('שים לב', 'לא נבחרו אנשי קשר');
       return;
@@ -463,22 +798,26 @@ const Management = (props) => {
       const updatesObj = {};
       let success = 0;
 
-      const mapById = new Map(vcfContacts.map((c) => [c.id, c]));
+      const mapById = new Map((vcfContacts || []).map((c) => [c.id, c]));
+
       pickedIds.forEach((rid) => {
         const c = mapById.get(rid);
         if (!c?.phone) return;
+
+        const phoneClean = normalizeTel(c.phone);
+        if (!/^\+?\d{7,15}$/.test(phoneClean)) return;
+
         const k = push(contactsRef).key;
         updatesObj[k] = {
           recordID: k,
-          displayName: c.name || 'ללא שם',
-          phoneNumbers: c.phone,
+          displayName: (c.name || 'ללא שם').trim(),
+          phoneNumbers: phoneClean,
+          createdAt: Date.now(),
         };
         success++;
       });
 
-      if (success > 0) {
-        await update(contactsRef, updatesObj);
-      }
+      if (success > 0) await update(contactsRef, updatesObj);
 
       setSummaryText(`✅ יובאו ${success} אנשי קשר נבחרים.`);
       setSummaryVisible(true);
@@ -486,878 +825,991 @@ const Management = (props) => {
       setSelectedAndRef(new Set());
       setVcfModalVisible(false);
     } catch (e) {
-      console.error(e);
+      console.error('importSelectedVcf error:', e);
       Alert.alert('שגיאה', 'ייבוא נכשל, נסה שוב.');
     } finally {
       setIsImporting(false);
     }
   };
 
-  // ------------------------------------------------------------
-  // Excel
-  // ------------------------------------------------------------
-  function s2ab(s) {
-    const buf = new ArrayBuffer(s.length);
-    const view = new Uint8Array(buf);
-    for (let i = 0; i !== s.length; ++i) view[i] = s.charCodeAt(i);
-    return buf;
-  }
-
-  const downloadExcelTemplate = async () => {
-    const data = [
-      { שם: 'דני דוגמה', טלפון: '0501234567' },
-      { שם: 'רותי דוגמה', טלפון: '0527654321' },
-    ];
-
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'מוזמנים');
-    const wbout = XLSX.write(wb, { type: 'binary', bookType: 'xlsx' });
-
-    if (Platform.OS === 'web') {
-      const blob = new Blob([s2ab(wbout)], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'template.xlsx';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } else {
-      const uri = FileSystem.documentDirectory + 'template.xlsx';
-      await FileSystem.writeAsStringAsync(uri, wbout, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri);
-      } else {
-        Alert.alert('שגיאה', 'שיתוף לא נתמך במכשיר שלך');
-      }
-    }
+  // -----------------------------
+  // UI helpers
+  // -----------------------------
+  const getThemeIcon = () => {
+    if (dbMode === 'light') return '☀️';
+    if (dbMode === 'dark') return '🌙';
+    return '🤖';
   };
 
-  const uploadExcelFile = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-        copyToCacheDirectory: true,
-        multiple: false,
-      });
+    const statusLabel = (key, raw) => {
+  if (key === 'yes') return 'מגיע';
+  if (key === 'no') return 'לא מגיע';
+  if (key === 'maybe') return 'אולי';
+  // אם אין תגובה/חדש/ממתין
+  return raw ? String(raw) : 'ממתין';
+};
 
-      const fileUri = result.assets?.[0]?.uri;
-      if (!result.canceled && fileUri) {
-        let workbook;
-        if (Platform.OS === 'web') {
-          const response = await fetch(fileUri);
-          const blob = await response.blob();
-          const arrayBuffer = await blob.arrayBuffer();
-          workbook = XLSX.read(arrayBuffer, { type: 'array' });
-        } else {
-          const b64 = await FileSystem.readAsStringAsync(fileUri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          workbook = XLSX.read(b64, { type: 'base64' });
-        }
-
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const data = XLSX.utils.sheet_to_json(sheet);
-
-        const errors = [];
-        let successCount = 0;
-
-        for (let idx = 0; idx < data.length; idx++) {
-          const row = data[idx];
-          if (!row || typeof row !== 'object') {
-            errors.push(`שורה ${idx + 2} ריקה או לא תקינה`);
-            continue;
-          }
-          let name = row['שם'];
-          let phone = row['טלפון'];
-          if (typeof name === 'number') name = name.toString();
-          if (typeof phone === 'number') phone = phone.toString();
-
-          if (typeof name !== 'string' || name.trim() === '') {
-            errors.push(`שורה ${idx + 2} - חסר שם`);
-            continue;
-          }
-          if (typeof phone !== 'string' || phone.trim() === '') {
-            errors.push(`שורה ${idx + 2} - חסר מספר טלפון`);
-            continue;
-          }
-          const phoneClean = normalizeTel(phone);
-          if (!/^\+?\d{7,15}$/.test(phoneClean)) {
-            errors.push(`שורה ${idx + 2} - מספר טלפון לא תקין`);
-            continue;
-          }
-
-          if (!user) continue;
-          const k = push(ref(database, `Events/${user.uid}/${id}/contacts`)).key;
-          await set(ref(database, `Events/${user.uid}/${id}/contacts/${k}`), {
-            recordID: k,
-            displayName: (name || '').trim(),
-            phoneNumbers: phoneClean,
-          });
-          successCount++;
-        }
-
-        let message = `✅ ${successCount} מוזמנים הועלו בהצלחה.`;
-        if (errors.length > 0) {
-          message += `\n\n❌ ${errors.length} שורות נכשלו:\n${errors.join('\n')}`;
-        }
-        setSummaryText(message);
-        setSummaryVisible(true);
-      }
-    } catch (error) {
-      console.error('❌ שגיאה בקריאת קובץ:', error);
-      setSummaryText('⚠️ לא הצלחנו לקרוא את הקובץ. ודא שהוא בפורמט תקין.');
-      setSummaryVisible(true);
-    }
+  const getThemeText = () => {
+    if (dbMode === 'light') return 'Light';
+    if (dbMode === 'dark') return 'Dark';
+    return 'Auto';
   };
 
-  // ------------------------------------------------------------
-  // UI עיקרי
-  // ------------------------------------------------------------
-  const filteredContacts = contacts.filter((c) => {
-    const n = (c.displayName || '').toLowerCase();
-    const p = (c.phoneNumbers || '').toLowerCase();
-    const q = (searchQuery || '').toLowerCase();
-    return n.includes(q) || p.includes(q);
-  });
+const renderItem = ({ item }) => {
+  const rsvp = getGuestRsvpInfo(item);
+  const stKey = getStatusKey(item);
 
-  const renderItem = ({ item, index }) => (
-    <View style={[styles.itemContainer, { backgroundColor: index % 2 === 0 ? '#f5f5f5' : '#ffffff' }]}>
-      <TouchableOpacity onPress={() => deleteContact(item.recordID)}>
-        <Image source={require('../assets/delete.png')} style={styles.deleteIcon} />
-      </TouchableOpacity>
-      <View style={{ flex: 1, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
-        <View>
-          <Text style={styles.itemText}>{item.displayName}</Text>
-          <Text style={styles.itemText}>{item.phoneNumbers}</Text>
+  const accent = leftBarColor(stKey);
+  const stText = statusLabel(stKey, rsvp?.response || rsvp?.status);
+  const stTime = rsvp?.timestamp ? toLocalTime(rsvp.timestamp) : '';
+
+  const tableName = getGuestTableName(item);
+
+  return (
+    <View style={[styles.card, { backgroundColor: theme.card, borderLeftColor: accent }]}>
+      <TouchableOpacity
+        style={styles.cardPressArea}
+        onPress={() => openGuestModal(item)}
+        activeOpacity={0.75}
+      >
+        {/* ✅ ימין: שם + טלפון */}
+        <View style={styles.cardInfo}>
+          <Text style={[styles.cardName, { color: theme.text }]} numberOfLines={1}>
+            {item.displayName}
+          </Text>
+          <Text style={[styles.cardPhone, { color: theme.subText }]} numberOfLines={1}>
+            {item.phoneNumbers}
+          </Text>
         </View>
-      </View>
+
+        {/* ✅ אמצע: סטטוס (לא מתחת!) */}
+        <View style={styles.statusMidWrap}>
+          <View
+            style={[
+              styles.statusPill,
+              {
+                borderColor: accent,
+                backgroundColor: isDarkMode ? '#0B1220' : '#F8FAFC',
+              },
+            ]}
+          >
+            <Text style={{ color: theme.text, fontWeight: '900', fontSize: 12, textAlign: 'center' }}>
+              {stText}{stTime ? ` · ${stTime}` : ''}
+            </Text>
+          </View>
+        </View>
+
+        {/* ✅ שמאל: שולחן */}
+        <View style={styles.cardTable}>
+          {tableName !== 'לא שובץ' && (
+            <View
+              style={[
+                styles.tableBadge,
+                {
+                  borderColor: accent,
+                  backgroundColor: isDarkMode ? '#111827' : '#F8FAFC',
+                },
+              ]}
+            >
+              <Text style={[styles.tableText, { color: theme.subText }]} numberOfLines={1}>
+                {tableName}
+              </Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={styles.deleteBtn} onPress={() => confirmDeleteContact(item)}>
+        <Text style={styles.deleteIcon}>🗑️</Text>
+      </TouchableOpacity>
     </View>
   );
+};
 
-  // ------------------------------------------------------------
-  // Render
-  // ------------------------------------------------------------
+
+
+  // Gift display for selected guest
+  const selectedGift = useMemo(() => {
+    if (!selectedGuest) return { amount: null, blessing: '' };
+    return getGiftFromContact(selectedGuest);
+  }, [selectedGuest]);
+
   return (
-    <ImageBackground source={require('../assets/backgruondcontact.png')} style={styles.background}>
-      <StatusBar backgroundColor="#6C63FF" barStyle="light-content" />
-      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity onPress={() => props.navigation.navigate('ListItem', { id })} style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>ניהול אורחים</Text>
-      </View>
+    <View style={[styles.screen, { backgroundColor: theme.bg }]}>
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+        backgroundColor={theme.headerBg}
+        translucent={false}
+      />
 
-      <View style={styles.container}>
-        {contacts.length === 0 ? (
-          <View style={styles.noItemsContainer}>
-            <Text style={styles.noItemsText}>אין פריטים להצגה</Text>
-          </View>
-        ) : (
-          <View style={styles.tableContainer}>
-            <TextInput
-              style={styles.searchInput}
-              placeholder="חפש מוזמנים"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
+      {/* Header */}
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: theme.headerBg,
+            paddingTop: headerTopPadding,
+            borderBottomColor: theme.primary,
+            shadowColor: theme.primary,
+          },
+        ]}
+      >
+<View style={styles.headerTop}>
+  {/* צד שמאל (רוחב קבוע) */}
+  <View style={styles.headerSide}>
+    <TouchableOpacity
+      onPress={() => navigation.goBack()}
+      style={[styles.iconBtn, { backgroundColor: theme.bg }]}
+    >
+      <Text style={[styles.iconBtnText, { color: theme.text }]}>חזור ←</Text>
+    </TouchableOpacity>
+  </View>
 
-            <View style={styles.rowContainer}>
-              <Text style={styles.textPrice}>מספר מוזמנים {contacts.length}</Text>
+  {/* כותרת תמיד באמצע */}
+  <Text style={[styles.headerTitle, { color: theme.text }]} numberOfLines={1}>
+    ניהול מוזמנים
+  </Text>
 
-              <TouchableOpacity style={styles.deleteAllButton} onPress={showDeleteAllAlert}>
-                <Text style={styles.deleteAllButtonText}>הסר הכל</Text>
-              </TouchableOpacity>
-            </View>
+  {/* צד ימין (placeholder באותו רוחב בדיוק) */}
+  <View style={styles.headerSide} />
+</View>
 
-            <FlatList
-              data={filteredContacts}
-              renderItem={renderItem}
-              keyExtractor={(item) => item.recordID}
-              contentContainerStyle={styles.listContent}
-            />
-          </View>
-        )}
 
-        {/* כפתור מרכזי – הוסף מוזמנים */}
-        <View style={styles.topB}>
-          <TouchableOpacity style={styles.mainButton} onPress={() => setImportOptionsVisible(true)}>
-            <Text style={styles.mainButtonText}>הוסף מוזמנים +</Text>
+
+        <View style={styles.searchRow}>
+          <TouchableOpacity
+            style={[styles.filterBtn, { backgroundColor: showFilterBar ? theme.primary : theme.bg }]}
+            onPress={() => setShowFilterBar(!showFilterBar)}
+          >
+            <Text style={[styles.filterIcon, { color: showFilterBar ? '#fff' : theme.text }]}>🌪️</Text>
           </TouchableOpacity>
+
+          <View style={[styles.searchContainer, { backgroundColor: theme.bg }]}>
+          <TextInput
+            style={[
+              styles.searchInput,
+              {
+                color: theme.text,
+                textAlign: 'right',
+                writingDirection: 'rtl',   // חשוב בעיקר ב-iOS
+              },
+            ]}
+            placeholder="חיפוש מוזמנים"
+            placeholderTextColor={theme.subText}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+
+          </View>
+
+          <View style={[styles.countBadge, { backgroundColor: theme.bg, borderColor: theme.border }]}>
+            <Text style={[styles.countText, { color: theme.primary }]}>{filteredContacts.length}</Text>
+          </View>
         </View>
 
-        {/* מודל אופציות ייבוא */}
-        <Modal
-          visible={importOptionsVisible}
-          animationType="fade"
-          transparent
-          onRequestClose={() => setImportOptionsVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>בחר אפשרות ייבוא</Text>
+        {showFilterBar && (
+          <View style={styles.filterPanel}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterScroll}
+              style={{ marginBottom: 8 }}
+            >
+              {['all', 'yes', 'maybe', 'no'].map((st) => (
+                <TouchableOpacity
+                  key={st}
+                  onPress={() => setFilterStatus(st)}
+                  style={[
+                    styles.filterChip,
+                    { backgroundColor: theme.bg, borderColor: theme.border },
+                    filterStatus === st && { backgroundColor: theme.primary, borderColor: theme.primary },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      { color: theme.subText },
+                      filterStatus === st && { color: '#FFF' },
+                    ]}
+                  >
+                    {st === 'all' ? 'הכל' : st === 'yes' ? 'מגיעים' : st === 'no' ? 'לא' : 'אולי'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
-              {/* הוספה ידנית */}
+            <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
               <TouchableOpacity
-                style={styles.optionButton}
-                onPress={() => {
-                  setManualVisible(true);
-                  setImportOptionsVisible(false);
-                }}
+                onPress={() => setSortBy(sortBy === 'name' ? 'table' : 'name')}
+                style={[
+                  styles.filterChip,
+                  { backgroundColor: theme.bg, borderColor: theme.border },
+                  sortBy === 'table' && { borderColor: theme.primary },
+                ]}
               >
-                <Text style={styles.optionButtonText}>הוסף מספר ידני</Text>
+                <Text style={[styles.filterChipText, { color: theme.text }]}>
+                  {sortBy === 'name' ? 'מיין: לפי שם ⬇️' : 'מיין: לפי שולחן 🔃'}
+                </Text>
               </TouchableOpacity>
 
-              {/* Contact Picker Web */}
-              {Platform.OS === 'web' && isContactPickerSupported && (
-                <TouchableOpacity style={styles.optionButton} onPress={importFromContactPickerWeb}>
-                  <Text style={styles.optionButtonText}>ייבא ממכשירי אנדרואיד</Text>
-                </TouchableOpacity>
-              )}
-
-
-              {/* מרווח וסעיף ברור ל-iCloud */}
-              <View style={styles.sectionSpacer} />
-              <Text style={styles.sectionTitle}>ייבוא מקובץ iCloud - אייפון (vCard)</Text>
               <TouchableOpacity
-                style={[styles.optionButtonGreen, styles.icloudButton]}
+                onPress={() => setFilterTable(filterTable === 'all' ? 'no_table' : 'all')}
+                style={[
+                  styles.filterChip,
+                  { backgroundColor: theme.bg, borderColor: theme.border },
+                  filterTable === 'no_table' && { backgroundColor: '#F59E0B', borderColor: '#F59E0B' },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    { color: theme.text },
+                    filterTable === 'no_table' && { color: '#fff' },
+                  ]}
+                >
+                  ⚠️ לא שובצו
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </View>
+
+      {/* Body */}
+      <View style={styles.body}>
+        {contacts.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={[styles.emptyText, { color: theme.subText }]}>הרשימה ריקה</Text>
+            <Text style={[styles.emptySubText, { color: theme.subText }]}>התחל להוסיף מוזמנים!</Text>
+          </View>
+        ) : filteredContacts.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={[styles.emptyText, { color: theme.subText }]}>לא נמצאו תוצאות</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredContacts}
+            renderItem={renderItem}
+            keyExtractor={(item) => String(item.recordID)}
+            contentContainerStyle={styles.listContainer}
+            initialNumToRender={10}
+          />
+        )}
+      </View>
+
+      {/* FAB */}
+      <TouchableOpacity style={[styles.fab, { backgroundColor: theme.primary }]} onPress={() => setImportOptionsVisible(true)}>
+        <Text style={styles.fabText}>+</Text>
+      </TouchableOpacity>
+
+      {/* ================= MODALS ================= */}
+
+      {/* Import Options */}
+      <Modal
+        visible={importOptionsVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setImportOptionsVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.actionSheet, styles.narrowModal, { backgroundColor: theme.sheetBg }]}>
+            <Text style={[styles.sheetTitle, { color: theme.text }]}>פעולות</Text>
+
+            <View style={styles.sheetGrid}>
+              <TouchableOpacity
+                style={styles.sheetAction}
+                onPress={() => {
+                  setImportOptionsVisible(false);
+                  setManualVisible(true);
+                }}
+              >
+                <View style={[styles.sheetIconBox, { backgroundColor: theme.iconBg }]}>
+                  <Text>✏️</Text>
+                </View>
+                <Text style={[styles.sheetLabel, { color: theme.subText }]}>ידני</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sheetAction}
+                onPress={() => {
+                  setImportOptionsVisible(false);
+                  setGuideVisible(true);
+                }}
+              >
+                <View style={[styles.sheetIconBox, { backgroundColor: isDarkMode ? '#1e1b4b' : '#EEF2FF' }]}>
+                  <Text>📘</Text>
+                </View>
+                <Text style={[styles.sheetLabel, { color: theme.subText }]}>מדריך</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sheetAction}
+                onPress={async () => {
+                  setImportOptionsVisible(false);
+                  await downloadExcelTemplate();
+                }}
+              >
+                <View style={[styles.sheetIconBox, { backgroundColor: theme.iconBg }]}>
+                  <Text>📥</Text>
+                </View>
+                <Text style={[styles.sheetLabel, { color: theme.subText }]}>הורד אקסל</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sheetAction}
+                onPress={async () => {
+                  setImportOptionsVisible(false);
+                  await uploadExcelFile();
+                }}
+              >
+                <View style={[styles.sheetIconBox, { backgroundColor: theme.iconBg }]}>
+                  <Text>📤</Text>
+                </View>
+                <Text style={[styles.sheetLabel, { color: theme.subText }]}>העלה אקסל</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sheetAction}
                 onPress={() => {
                   setImportOptionsVisible(false);
                   openVcfModal();
                 }}
               >
-                <Text style={styles.optionButtonText}>פתח מודל וייבא מ-iCloud (vCard)</Text>
+                <View style={[styles.sheetIconBox, { backgroundColor: theme.iconBg }]}>
+                  <Text>☁️</Text>
+                </View>
+                <Text style={[styles.sheetLabel, { color: theme.subText }]}>vCard</Text>
               </TouchableOpacity>
 
-              {/* מפריד ברור בין vCard ל-Excel */}
-              <View style={styles.divider} />
-              <Text style={styles.sectionTitle}>ייבוא/ייצוא דרך Excel</Text>
-
-              <TouchableOpacity style={styles.optionButtonGreen} onPress={downloadExcelTemplate}>
-                <Text style={styles.optionButtonText}>הורד טמפלייט מוזמנים באקסל</Text>
+              <TouchableOpacity
+                style={styles.sheetAction}
+                onPress={() => {
+                  setImportOptionsVisible(false);
+                  setConfirmPayload({ mode: 'all', contactId: null, name: '' });
+                  setConfirmVisible(true);
+                }}
+              >
+                <View style={[styles.sheetIconBox, { backgroundColor: isDarkMode ? '#450a0a' : '#FEE2E2' }]}>
+                  <Text>🗑️</Text>
+                </View>
+                <Text style={[styles.sheetLabel, { color: '#EF4444' }]}>מחק הכל</Text>
               </TouchableOpacity>
+            </View>
 
-              <TouchableOpacity style={styles.optionButtonGreen} onPress={uploadExcelFile}>
-                <Text style={styles.optionButtonText}>העלה קובץ אקסל</Text>
+            <TouchableOpacity
+              style={[styles.sheetClose, { backgroundColor: theme.iconBg }]}
+              onPress={() => setImportOptionsVisible(false)}
+            >
+              <Text style={[styles.sheetCloseText, { color: theme.subText }]}>ביטול</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Manual Add (RTL FIXED) */}
+      <Modal visible={manualVisible} transparent animationType="fade" onRequestClose={() => setManualVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlayCenter}>
+          <View style={[styles.dialogCard, styles.narrowModal, { backgroundColor: theme.card }]}>
+            <Text style={[styles.dialogTitle, { color: theme.text }]}>הוסף מוזמן</Text>
+
+            <Text style={[styles.label, { color: theme.subText, textAlign: 'right' }]}>שם מלא</Text>
+            <TextInput
+              style={[
+                styles.input,
+                { backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text, textAlign: 'right' },
+              ]}
+              placeholder="שם המוזמן"
+              placeholderTextColor={theme.subText}
+              value={newContactName}
+              onChangeText={setNewContactName}
+            />
+
+            <Text style={[styles.label, { color: theme.subText, textAlign: 'right' }]}>טלפון</Text>
+            <View style={styles.rowInputs}>
+              <TextInput
+                ref={phoneBodyRef}
+                style={[
+                  styles.input,
+                  { flex: 1, backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text, textAlign: 'right' },
+                ]}
+                placeholder="XXXXXXX"
+                placeholderTextColor={theme.subText}
+                value={newContactPhone}
+                onChangeText={setNewContactPhone}
+                keyboardType="phone-pad"
+              />
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    width: 70,
+                    marginLeft: 8,
+                    backgroundColor: theme.inputBg,
+                    borderColor: theme.border,
+                    color: theme.text,
+                    textAlign: 'center',
+                  },
+                ]}
+                placeholder="05X"
+                placeholderTextColor={theme.subText}
+                value={selectedPrefix}
+                onChangeText={(t) => {
+                  setSelectedPrefix(t);
+                  if (t.length === 3) phoneBodyRef.current?.focus();
+                }}
+                keyboardType="numeric"
+                maxLength={3}
+              />
+            </View>
+
+            <View style={styles.dialogActions}>
+              <TouchableOpacity onPress={() => setManualVisible(false)} style={[styles.btnSecondary, { backgroundColor: theme.bg }]}>
+                <Text style={[styles.btnTextSec, { color: theme.subText }]}>ביטול</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity style={styles.closeButton} onPress={() => setImportOptionsVisible(false)}>
-                <Text style={styles.closeButtonText}>סגור</Text>
+              <TouchableOpacity onPress={addManualContact} style={[styles.btnPrimary, { backgroundColor: theme.primary }]}>
+                <Text style={styles.btnTextPri}>שמור</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </Modal>
+        </KeyboardAvoidingView>
+      </Modal>
 
-        {/* מודל vCard: העלאה + בחירה + חיפוש + מונים */}
-        <Modal
-          visible={vcfModalVisible}
-          animationType="fade"
-          transparent
-          onRequestClose={() => setVcfModalVisible(false)}
-        >
-          <View style={styles.overlay}>
-            <View style={styles.vcfCard}>
-              {/* כפתור מדריך — פותח מודל עם גלילה */}
-              <View style={styles.guideRow}>
+      {/* vCard Modal */}
+      <Modal visible={vcfModalVisible} transparent animationType="fade" onRequestClose={() => setVcfModalVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlayCenter}>
+          <View style={[styles.dialogCard, styles.narrowModal, { backgroundColor: theme.card, padding: 18 }]}>
+            <Text style={[styles.dialogTitle, { color: theme.text, marginBottom: 10 }]}>ייבוא vCard (iCloud)</Text>
+
+            <TouchableOpacity
+              style={[styles.btnPrimary, { backgroundColor: theme.primary, marginBottom: 12 }]}
+              onPress={pickVcfFile}
+              disabled={isLoadingVcf}
+            >
+              <Text style={styles.btnTextPri}>{isLoadingVcf ? 'טוען...' : 'בחר קובץ vCard (.vcf)'}</Text>
+            </TouchableOpacity>
+
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: theme.inputBg,
+                  borderColor: theme.border,
+                  color: theme.text,
+                  textAlign: 'right',
+                  marginBottom: 10,
+                },
+              ]}
+              placeholder="חיפוש בשם/טלפון מתוך הקובץ..."
+              placeholderTextColor={theme.subText}
+              value={vcfSearch}
+              onChangeText={setVcfSearch}
+            />
+
+            <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
                 <TouchableOpacity
-                  style={styles.guideBtn}
-                  onPress={() => setGuideVisible(true)}
+                  onPress={() => {
+                    const all = new Set((vcfContacts || []).map((c) => c.id));
+                    setSelectedAndRef(all);
+                  }}
+                  disabled={!vcfContacts.length}
+                  style={[styles.btnSecondary, { backgroundColor: theme.bg, paddingVertical: 8, paddingHorizontal: 12 }]}
                 >
-                  <Text style={styles.guideBtnText}>מדריך ליצירת הקובץ</Text>
+                  <Text style={[styles.btnTextSec, { color: theme.text, fontSize: 13 }]}>בחר הכל</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setSelectedAndRef(new Set())}
+                  disabled={!vcfContacts.length}
+                  style={[styles.btnSecondary, { backgroundColor: theme.bg, paddingVertical: 8, paddingHorizontal: 12 }]}
+                >
+                  <Text style={[styles.btnTextSec, { color: theme.text, fontSize: 13 }]}>נקה</Text>
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.vcfTitle}>ייבוא מ-iCloud (vCard)</Text>
+              <Text style={{ color: theme.subText, fontWeight: '700', fontSize: 12 }}>
+                נטענו: {vcfContacts.length} | נבחרו: {selectedIds.size}
+              </Text>
+            </View>
 
-              <TouchableOpacity style={styles.chooseFileBtn} onPress={pickVcfFile} disabled={isLoadingVcf}>
-                <Text style={styles.chooseFileBtnText}>
-                  {isLoadingVcf ? 'טוען…' : 'בחר קובץ vCard'}
-                </Text>
+            <View style={{ width: '100%', maxHeight: 360, borderWidth: 1, borderColor: theme.border, borderRadius: 12, overflow: 'hidden' }}>
+              {!vcfContacts.length ? (
+                <View style={{ padding: 14, alignItems: 'center' }}>
+                  <Text style={{ color: theme.subText }}>{isLoadingVcf ? 'טוען...' : 'עדיין לא נטען קובץ.'}</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={(vcfContacts || []).filter((c) => {
+                    const q = (vcfSearch || '').toLowerCase();
+                    return (c.name || '').toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q);
+                  })}
+                  keyExtractor={(item) => String(item.id)}
+                  renderItem={({ item, index }) => {
+                    const selected = selectedIds.has(item.id);
+                    return (
+                      <TouchableOpacity
+                        onPress={() => toggleSelectVcf(item.id)}
+                        activeOpacity={0.7}
+                        style={{
+                          paddingVertical: 10,
+                          paddingHorizontal: 12,
+                          backgroundColor: index % 2 === 0 ? (isDarkMode ? '#0B1220' : '#F8FAFC') : 'transparent',
+                          borderRightWidth: 5,
+                          borderRightColor: selected ? theme.primary : 'transparent',
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <View style={{ maxWidth: '85%' }}>
+                            <Text style={{ color: theme.text, fontWeight: '800', textAlign: 'right' }} numberOfLines={1}>
+                              {item.name || 'ללא שם'}
+                            </Text>
+                            <Text style={{ color: theme.subText, textAlign: 'right', marginTop: 2 }}>{item.phone}</Text>
+                          </View>
+
+                          <View
+                            style={{
+                              width: 18,
+                              height: 18,
+                              borderRadius: 5,
+                              borderWidth: 2,
+                              borderColor: selected ? theme.primary : theme.border,
+                              backgroundColor: selected ? theme.primary : 'transparent',
+                            }}
+                          />
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
+              )}
+            </View>
+
+            <View style={[styles.dialogActions, { marginTop: 12 }]}>
+              <TouchableOpacity onPress={() => setVcfModalVisible(false)} style={[styles.btnSecondary, { backgroundColor: theme.bg }]}>
+                <Text style={[styles.btnTextSec, { color: theme.subText }]}>סגור</Text>
               </TouchableOpacity>
 
-              {/* אזור חיפוש + מונים + פעולות */}
-              <View style={{ width: '100%', marginTop: 8 }}>
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="חפש בשם/טלפון מתוך הקובץ"
-                  value={vcfSearch}
-                  onChangeText={setVcfSearch}
-                />
+              <TouchableOpacity
+                onPress={async () => {
+                  if (!user) return Alert.alert('שגיאה', 'משתמש לא מחובר');
+                  const pickedIds = Array.from(selectedIdsRef.current || []);
+                  if (!pickedIds.length) return Alert.alert('שים לב', 'לא נבחרו אנשי קשר');
 
-                <View style={styles.vcfTopRow}>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TouchableOpacity style={styles.smallPill} onPress={selectAll} disabled={!vcfContacts.length}>
-                      <Text style={styles.smallPillText}>בחר הכל</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.smallPill} onPress={clearAll} disabled={!vcfContacts.length}>
-                      <Text style={styles.smallPillText}>נקה</Text>
-                    </TouchableOpacity>
-                  </View>
+                  setIsImporting(true);
+                  try {
+                    const contactsRef = ref(database, `Events/${user.uid}/${id}/contacts`);
+                    const updatesObj = {};
+                    let success = 0;
 
-                  <Text style={styles.countersText}>
-                    נטענו: {vcfContacts.length} | נבחרו: {selectedIds.size}
-                  </Text>
-                </View>
+                    const mapById = new Map((vcfContacts || []).map((c) => [c.id, c]));
+                    pickedIds.forEach((rid) => {
+                      const c = mapById.get(rid);
+                      if (!c?.phone) return;
+                      const phoneClean = normalizeTel(c.phone);
+                      if (!/^\+?\d{7,15}$/.test(phoneClean)) return;
+
+                      const k = push(contactsRef).key;
+                      updatesObj[k] = {
+                        recordID: k,
+                        displayName: (c.name || 'ללא שם').trim(),
+                        phoneNumbers: phoneClean,
+                        createdAt: Date.now(),
+                      };
+                      success++;
+                    });
+
+                    if (success > 0) await update(contactsRef, updatesObj);
+
+                    setSummaryText(`✅ יובאו ${success} אנשי קשר נבחרים.`);
+                    setSummaryVisible(true);
+
+                    setSelectedAndRef(new Set());
+                    setVcfModalVisible(false);
+                  } catch (e) {
+                    console.error(e);
+                    Alert.alert('שגיאה', 'ייבוא נכשל, נסה שוב.');
+                  } finally {
+                    setIsImporting(false);
+                  }
+                }}
+                disabled={isImporting || selectedIds.size === 0}
+                style={[
+                  styles.btnPrimary,
+                  { backgroundColor: theme.primary, opacity: isImporting || selectedIds.size === 0 ? 0.6 : 1 },
+                ]}
+              >
+                <Text style={styles.btnTextPri}>{isImporting ? 'מייבא...' : 'ייבא נבחרים'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Guest Edit Modal (SHOW TABLE + SHOW GIFT newPrice + blessing) */}
+      <Modal visible={guestModalVisible} transparent animationType="fade" onRequestClose={() => setGuestModalVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlayCenter}>
+          <View style={[styles.dialogCard, styles.narrowModal, { backgroundColor: theme.card }]}>
+            <Text style={[styles.dialogTitle, { color: theme.text }]}>עריכה</Text>
+
+            {selectedGuest && (
+              <View style={{ alignItems: 'flex-end', marginBottom: 12 }}>
+                <Text style={{ fontSize: 14, fontWeight: 'bold', color: theme.primary }}>
+                  שולחן: {getGuestTableName(selectedGuest)}
+                </Text>
               </View>
+            )}
+{selectedGuest && (() => {
+  const rsvp = getGuestRsvpInfo(selectedGuest);
+  const key = getStatusKey(selectedGuest);
+  const accent = leftBarColor(key);
+  const stText = statusLabel(key, rsvp?.response || rsvp?.status);
+  const stTime = rsvp?.timestamp ? toLocalTime(rsvp.timestamp) : '';
 
-              {/* רשימה */}
-              <View style={styles.vcfListBox}>
-                {!vcfContacts.length ? (
-                  <View style={{ padding: 12, alignItems: 'center' }}>
-                    {isLoadingVcf ? (
-                      <ActivityIndicator />
-                    ) : (
-                      <Text style={{ color: '#666' }}>עדיין לא נטען קובץ.</Text>
-                    )}
-                  </View>
+  return (
+    <View
+      style={{
+        marginBottom: 12,
+        padding: 12,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: accent,
+        backgroundColor: isDarkMode ? '#0B1220' : '#F8FAFC',
+        alignItems: 'flex-end',
+      }}
+    >
+      <Text style={{ fontSize: 14, fontWeight: '900', color: theme.text, textAlign: 'right' }}>
+        סטטוס: {stText}
+      </Text>
+      {!!stTime && (
+        <Text style={{ fontSize: 12, color: theme.subText, marginTop: 4, textAlign: 'right' }}>
+          עדכון אחרון: {stTime}
+        </Text>
+      )}
+    </View>
+  );
+})()}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={[styles.label, { color: theme.subText, textAlign: 'right' }]}>פרטים</Text>
+              <TextInput
+                style={[styles.input, { backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text, textAlign: 'right' }]}
+                value={editGuestName}
+                onChangeText={setEditGuestName}
+                placeholder="שם"
+                placeholderTextColor={theme.subText}
+              />
+              <TextInput
+                style={[styles.input, { backgroundColor: theme.inputBg, borderColor: theme.border, color: theme.text, textAlign: 'right' }]}
+                value={editGuestPhone}
+                onChangeText={setEditGuestPhone}
+                placeholder="טלפון"
+                placeholderTextColor={theme.subText}
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View
+              style={{
+                marginBottom: 16,
+                backgroundColor: isDarkMode ? '#1e293b' : '#FEF3C7',
+                padding: 12,
+                borderRadius: 12,
+              }}
+            >
+              <Text style={[styles.label, { color: isDarkMode ? '#FCD34D' : '#92400E', textAlign: 'right', marginBottom: 6 }]}>
+                🎁 מתנה שהתקבלה
+              </Text>
+
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: theme.text }}>
+                  {selectedGift.amount !== null ? `₪ ${selectedGift.amount}` : '—'}
+                </Text>
+
+                {selectedGift.blessing ? (
+                  <Text style={{ fontSize: 14, color: theme.subText, marginTop: 6, textAlign: 'right' }}>
+                    "{selectedGift.blessing}"
+                  </Text>
                 ) : (
-                  <FlatList
-                    data={filteredVcf}
-                    keyExtractor={(item) => String(item.id)}
-                    renderItem={({ item, index }) => {
-                      const selected = selectedIds.has(item.id);
-                      return (
-                        <TouchableOpacity
-                          onPress={() => toggleSelect(item.id)}
-                          style={[
-                            styles.vcfItem,
-                            { backgroundColor: index % 2 === 0 ? '#f8f8f8' : '#ffffff' },
-                            selected && styles.vcfItemSelected,
-                          ]}
-                        >
-                          <View style={{ flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <View style={{ maxWidth: '85%' }}>
-                              <Text style={styles.vcfItemName} numberOfLines={1}>
-                                {item.name || 'ללא שם'}
-                              </Text>
-                              <Text style={styles.vcfItemPhone}>{item.phone}</Text>
-                            </View>
-                            <View style={[styles.checkbox, selected && styles.checkboxChecked]} />
-                          </View>
-                        </TouchableOpacity>
-                      );
-                    }}
-                    contentContainerStyle={{ paddingVertical: 6 }}
-                  />
+                  <Text style={{ fontSize: 12, color: theme.subText, marginTop: 6, textAlign: 'right' }}>ללא ברכה</Text>
                 )}
               </View>
-
-              {/* פעולות תחתית */}
-              <View style={styles.vcfActionsRow}>
-                <TouchableOpacity
-                  style={[styles.cancelBtn2]}
-                  onPress={() => setVcfModalVisible(false)}
-                  disabled={isImporting}
-                >
-                  <Text style={styles.modalButtonText2}>סגור</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.importBtn, (isImporting || selectedIds.size === 0) && { opacity: 0.6 }]}
-                  onPress={importSelectedVcf}
-                  disabled={isImporting || selectedIds.size === 0}
-                >
-                  <Text style={styles.modalButtonText2}>
-                    {isImporting ? 'מייבא…' : 'ייבא נבחרים'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
             </View>
-          </View>
-        </Modal>
 
-        {/* מודל “הוספה ידנית” */}
-        {manualVisible && (
-          <View style={styles.overlay}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle2}>הוסף איש קשר חדש</Text>
-
-              <TextInput
-                style={styles.modalInput2}
-                placeholder="שם"
-                value={newContactName}
-                onChangeText={setNewContactName}
-              />
-
-              <View style={styles.phoneInputContainer}>
-                <TextInput
-                  style={[styles.prefixInput, { width: 80 }]}
-                  placeholder="קידומת"
-                  value={selectedPrefix}
-                  keyboardType="numeric"
-                  maxLength={3}
-                  onChangeText={setSelectedPrefix}
-                />
-                <TextInput
-                  style={styles.phoneInput}
-                  placeholder="טלפון"
-                  value={newContactPhone}
-                  keyboardType="phone-pad"
-                  onChangeText={setNewContactPhone}
-                />
-              </View>
-
-              <View style={styles.modalButtonsRow}>
-                <TouchableOpacity style={styles.modalButtonCancel2} onPress={() => setManualVisible(false)}>
-                  <Text style={styles.modalButtonText2}>ביטול</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.modalButtonSave2} onPress={addManualContact}>
-                  <Text style={styles.modalButtonText2}>שמור</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* מודל אישור מחיקת הכל – לדפדפן */}
-        {confirmDeleteAllVisible && (
-          <View style={styles.overlay}>
-            <View style={styles.modalCard}>
-              <Text style={styles.modalTitle2}>האם למחוק את כל המוזמנים?</Text>
-              <View style={styles.modalButtonsRow}>
-                <TouchableOpacity
-                  style={styles.modalButtonCancel2}
-                  onPress={() => setConfirmDeleteAllVisible(false)}
-                >
-                  <Text style={styles.modalButtonText2}>ביטול</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.modalButtonSave2}
-                  onPress={() => {
-                    deleteAllContacts();
-                    setConfirmDeleteAllVisible(false);
-                  }}
-                >
-                  <Text style={styles.modalButtonText2}>מחק</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* סיכום ייבוא */}
-        <Modal
-          visible={summaryVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setSummaryVisible(false)}
-        >
-          <View style={styles.overlay}>
-            <View style={[styles.modalCard, { width: '85%' }]}>
-              <Text style={styles.modalTitle2}>סיכום ייבוא</Text>
-              <ScrollView style={{ maxHeight: 300, marginBottom: 15 }}>
-                <Text style={{ textAlign: 'right', lineHeight: 24 }}>{summaryText}</Text>
-              </ScrollView>
+            <View style={styles.dialogActions}>
+              <TouchableOpacity onPress={() => setGuestModalVisible(false)} style={[styles.btnSecondary, { backgroundColor: theme.bg }]}>
+                <Text style={[styles.btnTextSec, { color: theme.subText }]}>סגור</Text>
+              </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalButtonSave2, styles.modalButtonWide]}
-                onPress={() => setSummaryVisible(false)}
+                onPress={saveGuestEdits}
+                style={[styles.btnPrimary, { backgroundColor: theme.primary }]}
+                disabled={isSavingGuest}
               >
-                <Text style={styles.modalButtonText2}>הבנתי</Text>
+                <Text style={styles.btnTextPri}>{isSavingGuest ? 'שומר...' : 'שמור'}</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </Modal>
+        </KeyboardAvoidingView>
+      </Modal>
 
-        {/* מודל המדריך עם גלילה */}
-        <Modal
-          visible={guideVisible}
-          animationType="fade"
-          transparent
-          onRequestClose={() => setGuideVisible(false)}
-        >
-          <View style={styles.overlay}>
-            <View style={styles.guideCard}>
-              <View style={styles.guideHeader}>
-                <Text style={styles.guideTitle}>מדריך ייבוא מ־iCloud (vCard)</Text>
-                <TouchableOpacity style={styles.guideClose} onPress={() => setGuideVisible(false)}>
-                  <Text style={{ color: '#fff', fontSize: 16 }}>✕</Text>
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView style={styles.guideBody} contentContainerStyle={{ padding: 14, gap: 16 }}>
-                <View style={styles.guideStep}>
-                  <Text style={styles.guideStepTitle}>1) כניסה ל־iCloud</Text>
-                  <Image source={onepic} style={styles.guideImage} resizeMode="contain" />
-                  <Text style={styles.guideStepText}>גלוש ל־iCloud.com, התחבר וחפש Contacts.</Text>
-                </View>
-
-                <View style={styles.guideStep}>
-                  <Text style={styles.guideStepTitle}>2) תבחר ב־Contacts</Text>
-                  <Image source={twopic} style={styles.guideImage} resizeMode="contain" />
-                  <Text style={styles.guideStepText}>ייפתח חלון שבו כל אנשי הקשר שלך.</Text>
-                </View>
-
-                <View style={styles.guideStep}>
-                  <Text style={styles.guideStepTitle}>3) ייצוא אנשי קשר</Text>
-                  <Image source={threepic} style={styles.guideImage} resizeMode="contain" />
-                  <Text style={styles.guideStepText}>בחר "Select All" ואז Export vCard. הקובץ יישמר למכשיר.</Text>
-                </View>
-
-                <View style={styles.guideStep}>
-                  <Text style={styles.guideStepTitle}>4) ייבוא לאפליקציה</Text>
-                  <Image source={fourpic} style={styles.guideImage} resizeMode="contain" />
-                  <Text style={styles.guideStepText}>כאן לחץ "בחר קובץ vCard", סמן את הרצויים וייבא.</Text>
-                </View>
-              </ScrollView>
+      {/* Guide Modal */}
+      <Modal visible={guideVisible} animationType="slide" onRequestClose={() => setGuideVisible(false)}>
+        <View style={[styles.screen, { backgroundColor: theme.bg }]}>
+          <View style={[styles.header, { backgroundColor: theme.headerBg, paddingTop: headerTopPadding }]}>
+            <View style={styles.headerTop}>
+              <TouchableOpacity onPress={() => setGuideVisible(false)} style={[styles.iconBtn, { backgroundColor: theme.bg }]}>
+                <Text style={[styles.iconBtnText, { color: theme.text }]}>סגור</Text>
+              </TouchableOpacity>
+              <Text style={[styles.headerTitle, { color: theme.text }]}>מדריך ייבוא (vCard)</Text>
+              <View style={{ width: 45 }} />
             </View>
           </View>
-        </Modal>
-      </View>
-    </ImageBackground>
+
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 16, maxWidth: 600, alignSelf: 'center', width: '100%' }}>
+            <View style={styles.guideStep}>
+              <Text style={[styles.guideStepTitle, { color: theme.text }]}>1. היכנס ל-iCloud.com</Text>
+              <Image source={onepic} style={styles.guideImage} resizeMode="contain" />
+              <Text style={[styles.guideStepText, { color: theme.subText }]}>התחבר לחשבון ה-iCloud דרך הדפדפן במחשב.</Text>
+            </View>
+            <View style={styles.guideStep}>
+              <Text style={[styles.guideStepTitle, { color: theme.text }]}>2. בחר "אנשי קשר"</Text>
+              <Image source={twopic} style={styles.guideImage} resizeMode="contain" />
+              <Text style={[styles.guideStepText, { color: theme.subText }]}>לחץ על אייקון אנשי הקשר.</Text>
+            </View>
+            <View style={styles.guideStep}>
+              <Text style={[styles.guideStepTitle, { color: theme.text }]}>3. ייצוא vCard</Text>
+              <Image source={threepic} style={styles.guideImage} resizeMode="contain" />
+              <Text style={[styles.guideStepText, { color: theme.subText }]}>בחר את אנשי הקשר (CTRL+A) ← גלגל שיניים ← Export vCard.</Text>
+            </View>
+            <View style={styles.guideStep}>
+              <Text style={[styles.guideStepTitle, { color: theme.text }]}>4. העלאה לאפליקציה</Text>
+              <Image source={fourpic} style={styles.guideImage} resizeMode="contain" />
+              <Text style={[styles.guideStepText, { color: theme.subText }]}>חזור לכאן, לחץ על vCard, בחר את הקובץ וייבא.</Text>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Summary Modal */}
+      <Modal visible={summaryVisible} transparent animationType="fade" onRequestClose={() => setSummaryVisible(false)}>
+        <Pressable style={styles.modalOverlayCenter} onPress={() => setSummaryVisible(false)}>
+          <Pressable style={[styles.dialogCard, styles.narrowModal, { backgroundColor: theme.card }]} onPress={() => {}}>
+            <Text style={[styles.dialogTitle, { color: theme.text }]}>סיכום</Text>
+            <ScrollView style={{ maxHeight: 260 }}>
+              <Text style={{ color: theme.text, textAlign: 'right', lineHeight: 22 }}>{summaryText}</Text>
+            </ScrollView>
+            <View style={styles.dialogActions}>
+              <TouchableOpacity onPress={() => setSummaryVisible(false)} style={[styles.btnPrimary, { backgroundColor: theme.primary }]}>
+                <Text style={styles.btnTextPri}>הבנתי</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Confirm Delete Modal */}
+      <Modal visible={confirmVisible} transparent animationType="fade" onRequestClose={() => setConfirmVisible(false)}>
+        <Pressable style={styles.modalOverlayCenter} onPress={() => setConfirmVisible(false)}>
+          <Pressable style={[styles.dialogCard, styles.narrowModal, { backgroundColor: theme.card }]} onPress={() => {}}>
+            <Text style={[styles.dialogTitle, { color: theme.text }]}>מחיקה</Text>
+            <Text style={{ textAlign: 'center', marginBottom: 20, color: theme.text }}>
+              {confirmPayload.mode === 'all' ? 'למחוק את כל המוזמנים?' : `למחוק את ${confirmPayload.name}?`}
+            </Text>
+            <View style={styles.dialogActions}>
+              <TouchableOpacity onPress={() => setConfirmVisible(false)} style={[styles.btnSecondary, { backgroundColor: theme.bg }]}>
+                <Text style={[styles.btnTextSec, { color: theme.subText }]}>ביטול</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={runConfirmedDelete} style={[styles.btnPrimary, { backgroundColor: '#EF4444' }]}>
+                <Text style={styles.btnTextPri}>מחק</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  // מסך כללי
-  background: { flex: 1, resizeMode: 'cover', backgroundColor: '#fff' },
-  container: { flex: 1, padding: 16 },
+  screen: { flex: 1 },
 
   header: {
-    width: '100%',
-    backgroundColor: 'rgba(108, 99, 255, 0.9)',
-    paddingTop: 50,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  backButton: { position: 'absolute', left: 20, bottom: 20 },
-  backButtonText: { fontSize: 29, color: 'white' },
-  title: { fontSize: 24, fontWeight: 'bold', color: 'white' },
-
-  // רשימה
-  tableContainer: { flex: 1 },
-  listContent: { paddingBottom: 20 },
-  searchInput: {
-    backgroundColor: '#FFFFFF',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 12,
-    textAlign: 'right',
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  rowContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginVertical: 20,
-    paddingHorizontal: 20,
-  },
-  textPrice: {
-    right: 0,
-    fontSize: 16,
-    color: 'black',
-    fontWeight: 'bold',
-    textAlign: 'right',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 5,
-  },
-  deleteAllButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: 'red',
-    borderRadius: 5,
-  },
-  deleteAllButtonText: { color: '#fff', fontSize: 12 },
-
-  itemContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderRadius: 18,
-    marginBottom: 8,
-    backgroundColor: '#f5f5f5',
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  deleteIcon: { width: 24, height: 24, marginRight: 12 },
-  itemText: { fontSize: 16, color: '#333', textAlign: 'right' },
-
-  // כפתור ראשי
-  topB: { alignItems: 'center', marginBottom: 20, marginTop: 20 },
-  mainButton: {
-    backgroundColor: '#28A745',
-    borderRadius: 20,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '70%',
-    maxWidth: 420,
-  },
-  mainButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
-
-  // מודל אופציות
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    padding: 16,
-  },
-  modalContent: {
-    width: '90%',
-    maxWidth: 420,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-  },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10 },
-  optionButton: {
-    padding: 10,
-    backgroundColor: '#000',
-    borderRadius: 6,
-    marginVertical: 6,
-    width: '100%',
-  },
-  optionButtonGreen: {
-    padding: 10,
-    backgroundColor: '#28A745',
-    borderRadius: 6,
-    marginVertical: 6,
-    width: '100%',
-  },
-  optionButtonText: { color: '#FFFFFF', textAlign: 'center', fontSize: 16 },
-  closeButton: { marginTop: 12, padding: 10, backgroundColor: '#808080', borderRadius: 6, width: '100%' },
-  closeButtonText: { color: '#FFFFFF', textAlign: 'center', fontSize: 16 },
-
-  // מפרידים וסעיפים באופציות
-  sectionSpacer: { height: 6 },
-  sectionTitle: { alignSelf: 'flex-end', width: '100%', textAlign: 'right', marginTop: 4, marginBottom: 4, fontWeight: '600' },
-  divider: { height: 1, backgroundColor: '#e9e9e9', alignSelf: 'stretch', marginVertical: 10 },
-  icloudButton: { marginTop: 6 },
-
-  // Overlay כללי
-  overlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 3,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
     zIndex: 10,
   },
-  modalCard: {
-    width: '85%',
-    maxWidth: 520,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
-  },
-
-  // “הוספה ידנית”
-  modalTitle2: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
-  modalInput2: {
-    width: '100%',
-    height: 42,
-    borderColor: '#ddd',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    marginBottom: 12,
-    textAlign: 'right',
-    backgroundColor: '#fff',
-  },
-  phoneInputContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  prefixInput: {
-    height: 42,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    marginRight: 10,
-    textAlign: 'center',
-    backgroundColor: '#f5f5f5',
-  },
-  phoneInput: {
-    flex: 1,
-    height: 42,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    backgroundColor: '#f5f5f5',
-    textAlign: 'right',
-  },
-  modalButtonsRow: { flexDirection: 'row', width: '100%', gap: 8 },
-  modalButtonCancel2: {
-    flex: 1,
-    backgroundColor: '#FF6F61',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  modalButtonSave2: {
-    flex: 1,
-    backgroundColor: '#4CAF50',
-    borderRadius: 8,
-    paddingVertical: 12,   // טיפה יותר גבוה
-    alignItems: 'center',
-  },
-  modalButtonText2: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
-
-  // vCard Modal
-  vcfCard: {
-    width: '92%',
-    maxWidth: 560,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    alignItems: 'center',
-  },
-  guideRow: {
-    width: '100%',
-    alignItems: 'flex-start',
-    marginBottom: 6,
-  },
-  guideBtn: {
-    backgroundColor: '#000',
-    borderRadius: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-  },
-  guideBtnText: { color: '#fff', fontWeight: '600' },
-
-  vcfTitle: { fontSize: 18, fontWeight: 'bold', marginVertical: 6 },
-  chooseFileBtn: {
-    backgroundColor: '#28A745',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignSelf: 'stretch',
-  },
-  chooseFileBtnText: { color: '#fff', textAlign: 'center', fontWeight: '700' },
-
-  vcfTopRow: {
-    marginTop: 8,
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  smallPill: {
-    backgroundColor: '#eee',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 999,
-  },
-  smallPillText: { fontWeight: '600' },
-  countersText: { color: '#444' },
-
-  vcfListBox: {
-    width: '100%',
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: '#eee',
-    borderRadius: 10,
-    backgroundColor: '#fff',
-    maxHeight: 380,
-    overflow: 'hidden',
-  },
-  vcfItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  vcfItemSelected: {
-    borderLeftWidth: 4,
-    borderLeftColor: '#28A745',
-  },
-  vcfItemName: { fontWeight: '700', color: '#333' },
-  vcfItemPhone: { color: '#666', marginTop: 2 },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: '#bbb',
-  },
-  checkboxChecked: {
-    backgroundColor: '#28A745',
-    borderColor: '#28A745',
-  },
-
-  vcfActionsRow: {
-    marginTop: 12,
+  headerTop: {
     flexDirection: 'row',
-    gap: 10,
-    alignSelf: 'stretch',
-  },
-  cancelBtn2: {
-    flex: 1,
-    backgroundColor: '#808080',
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  importBtn: {
-    flex: 1,
-    backgroundColor: '#28A745',
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-
-  // מדריך – מודל גלילה
-  guideCard: {
-    width: '92%',
-    maxWidth: 760,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    overflow: 'hidden',
-    alignItems: 'center',
-    elevation: 8,
-  },
-  guideHeader: {
-    backgroundColor: '#6C63FF',
-    alignSelf: 'stretch',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 12,
+    marginTop: 4,
   },
-  guideTitle: { color: '#fff', fontWeight: '700', fontSize: 18 },
-  guideClose: {
-    backgroundColor: 'rgba(255,255,255,0.22)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  guideBody: { alignSelf: 'stretch', maxHeight: 420 },
-  guideStep: { gap: 8 },
-  guideStepTitle: { fontSize: 16, fontWeight: '700', textAlign: 'right' },
-  guideStepText: { fontSize: 14, color: '#444', textAlign: 'right', lineHeight: 22 },
-  guideImage: {
-    width: '100%',
-    height: 220,
-    backgroundColor: '#f4f4f7',
-    borderRadius: 10,
+  headerTitle: { fontSize: 20, fontWeight: '800', letterSpacing: 0.5 },
+  iconBtn: { padding: 8, borderRadius: 12, minWidth: 40, alignItems: 'center' },
+  iconBtnText: { fontSize: 13, fontWeight: '700' },
+
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  searchContainer: { flex: 1, borderRadius: 12, height: 44, justifyContent: 'center' },
+searchInput: {
+  fontSize: 15,
+  fontWeight: '500',
+  paddingHorizontal: 12,
+  textAlign: 'right',
+  writingDirection: 'rtl',
+},
+  filterBtn: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  filterIcon: { fontSize: 20 },
+  countBadge: {
+    height: 44,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#eee',
+    minWidth: 50,
   },
+  countText: { fontSize: 16, fontWeight: '800' },
 
-  // כפתור "הבנתי" רחב וגבוה יותר
-  modalButtonWide: {
-    width: '100%',
-    alignSelf: 'stretch',
-    minHeight: 48,
+  filterPanel: { marginTop: 12 },
+  filterScroll: { flexDirection: 'row-reverse', gap: 8, paddingHorizontal: 2 },
+  filterChip: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1 },
+  filterChipText: { fontSize: 12, fontWeight: '600' },
+
+  body: { flex: 1 },
+  listContainer: { padding: 16, paddingBottom: 100, maxWidth: 600, alignSelf: 'center', width: '100%' },
+
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 100 },
+  emptyText: { fontSize: 18, fontWeight: 'bold' },
+  emptySubText: { fontSize: 14, marginTop: 6 },
+
+  // ✅ now borderLeft for status color
+  card: {
+    borderRadius: 16,
+    marginBottom: 12,
+    overflow: 'hidden',
+    flexDirection: 'row-reverse',
+    borderLeftWidth: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 3,
   },
+  cardPressArea: { flex: 1, flexDirection: 'row-reverse', padding: 16, alignItems: 'center' },
+  cardInfo: { flex: 1 },
+  cardName: { fontSize: 16, fontWeight: 'bold', textAlign: 'right', marginBottom: 4 },
+  cardPhone: { fontSize: 13, textAlign: 'right' },
 
-  // ריקון
-  noItemsContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  noItemsText: { fontSize: 20, color: '#000' },
+  cardTable: { paddingHorizontal: 8 },
+  tableBadge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
+  tableText: { fontSize: 11, fontWeight: '700' },
+
+  deleteBtn: { paddingHorizontal: 16, justifyContent: 'center', borderRightWidth: 1, borderRightColor: 'rgba(0,0,0,0.05)' },
+  deleteIcon: { fontSize: 20 },
+
+  fab: {
+    position: 'absolute',
+    bottom: 30,
+    left: 30,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 999,
+  },
+  fabText: { color: '#fff', fontSize: 32, marginTop: -4 },
+
+  narrowModal: { width: '90%', maxWidth: 450, alignSelf: 'center' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+    paddingBottom: Platform.OS === 'web' ? 20 : 0,
+  },
+  modalOverlayCenter: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+
+  actionSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
+  sheetTitle: { fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 24 },
+  sheetGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12 },
+  sheetAction: { alignItems: 'center', width: '30%', marginBottom: 16 },
+  sheetIconBox: { width: 56, height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  sheetLabel: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  sheetClose: { marginTop: 12, padding: 14, borderRadius: 16, alignItems: 'center' },
+  sheetCloseText: { fontWeight: 'bold', fontSize: 16 },
+
+  dialogCard: {
+    borderRadius: 20,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  dialogTitle: { fontSize: 20, fontWeight: '800', textAlign: 'center', marginBottom: 20 },
+  label: { fontSize: 14, fontWeight: '700', marginBottom: 8, textAlign: 'right' },
+
+  input: { borderWidth: 1, borderRadius: 12, padding: 12, fontSize: 16, marginBottom: 16 },
+  rowInputs: { flexDirection: 'row-reverse' },
+
+  dialogActions: { flexDirection: 'row-reverse', marginTop: 12, gap: 12 },
+  btnPrimary: { flex: 1, padding: 14, borderRadius: 14, alignItems: 'center' },
+  btnSecondary: { flex: 1, padding: 14, borderRadius: 14, alignItems: 'center' },
+  btnTextPri: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  btnTextSec: { fontWeight: 'bold', fontSize: 16 },
+
+  // Guide
+  guideStep: { marginBottom: 16 },
+  guideStepTitle: { fontSize: 16, fontWeight: 'bold', textAlign: 'right', marginBottom: 6 },
+  guideStepText: { textAlign: 'right' },
+  guideImage: { width: '100%', height: 200, borderRadius: 10, marginVertical: 8 },
+  statusMidWrap: {
+  paddingHorizontal: 10,
+  alignItems: 'center',
+  justifyContent: 'center',
+},
+
+statusPill: {
+  paddingHorizontal: 10,
+  paddingVertical: 6,
+  borderRadius: 999,
+  borderWidth: 1,
+  minWidth: 90,
+},
+headerTop: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  marginBottom: 12,
+  marginTop: 4,
+},
+
+headerSide: {
+  width: 96,            // תוכל לשחק 80-110 לפי איך שזה נראה אצלך
+  alignItems: 'flex-start',
+},
+
+headerTitle: {
+  flex: 1,
+  textAlign: 'center',
+  fontSize: 20,
+  fontWeight: '800',
+  letterSpacing: 0.5,
+},
+
+
+
+headerSpacer: {
+  width: 90, // חשוב: אותו רוחב “ויזואלי” כמו כפתור החזור (אפשר לשחק בין 80-100)
+},
+
 });
 
 export default Management;

@@ -1,562 +1,501 @@
-import React, { useState, useEffect } from 'react';
+// Task.js — Theme from Firebase (dark/light/auto) + Header like Management
+
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
-  Image,
   FlatList,
   TextInput,
-  SafeAreaView,
   StyleSheet,
   StatusBar,
   TouchableOpacity,
   Modal,
-  Alert,
   Animated,
-  ImageBackground,
   Dimensions,
+  Platform,
+  UIManager,
+  LayoutAnimation,
+  useColorScheme, // ✅ חשוב
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getDatabase, ref, set, get, push, remove } from 'firebase/database';
+import { getDatabase, ref, set, get, push, remove, onValue } from 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import { useNavigation } from '@react-navigation/native';
 
-const Task = ({route,props}) => {
-  
-  const { id } = route.params;
-  const [fadeAnim] = useState(new Animated.Value(0));
+// הפעלת אנימציות באנדרואיד
+if (Platform.OS === 'android') {
+  if (UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+  }
+}
+
+// --- Theme palettes ---
+const COLORS = {
+  light: {
+    bg: '#F8FAFC',
+    headerBg: '#FFFFFF',
+    card: '#FFFFFF',
+    text: '#0F172A',
+    subText: '#64748B',
+    accent: '#4F46E5',
+    success: '#22C55E',
+    danger: '#EF4444',
+    shadow: '#000',
+    input: '#F1F5F9',
+    border: '#E2E8F0',
+    glass: 'rgba(2,6,23,0.06)',
+    glassBorder: 'rgba(2,6,23,0.10)',
+  },
+  dark: {
+    bg: '#0B1220',
+    headerBg: '#0F172A',
+    card: '#111827',
+    text: '#F8FAFC',
+    subText: '#94A3B8',
+    accent: '#6C63FF',
+    success: '#22C55E',
+    danger: '#EF4444',
+    shadow: '#000',
+    input: '#0B1220',
+    border: '#1F2937',
+    glass: 'rgba(255,255,255,0.08)',
+    glassBorder: 'rgba(255,255,255,0.12)',
+  },
+};
+
+const Task = ({ route }) => {
+  const { id } = route.params || {};
+  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const screenWidth = Dimensions.get('window').width;
 
-  const insets = useSafeAreaInsets();
+  // --- State ---
   const [selectedTab, setSelectedTab] = useState('table');
+
+  // Data
+  const [tableData, setTableData] = useState([]);
   const [notes, setNotes] = useState([]);
+
+  // Modals & Inputs
+  const [modalVisible, setModalVisible] = useState(false);
+  const [newTask, setNewTask] = useState('');
+
+  // Notes Editing
   const [currentNote, setCurrentNote] = useState('');
   const [currentNoteName, setCurrentNoteName] = useState('');
-  const [tableData, setTableData] = useState([
-    { id: 1, text: 'האם סגרתם אולם אירועים?', checked: false },
-    { id: 2, text: 'האם סגרתם גן אירועים?', checked: false },
-    { id: 3, text: 'האם סגרתם צלם לאירוע?', checked: false },
-    { id: 4, text: 'האם סגרתם צלם וידאו?', checked: false },
-    { id: 5, text: 'האם סגרתם DJ לאירוע?', checked: false },
-    { id: 6, text: 'האם סגרתם להקה חיה?', checked: false },
-    { id: 7, text: 'האם סגרתם קייטרינג?', checked: false },
-    { id: 8, text: 'האם סגרתם עיצוב שולחנות?', checked: false },
-    { id: 9, text: 'האם סגרתם סידורי פרחים?', checked: false },
-    { id: 10, text: 'האם סגרתם הסעות לאורחים?', checked: false },
-    { id: 11, text: 'האם סגרתם שמלת כלה?', checked: false },
-    { id: 12, text: 'האם סגרתם חליפת חתן?', checked: false },
-    { id: 13, text: 'האם סגרתם תכשיטים לכלה?', checked: false },
-    { id: 14, text: 'האם סגרתם חופה?', checked: false },
-    { id: 15, text: 'האם סגרתם בר שתייה?', checked: false },
-    { id: 16, text: 'האם סגרתם תא צילום?', checked: false },
-    { id: 17, text: 'האם סגרתם בלונים מעוצבים?', checked: false },
-    { id: 18, text: 'האם סגרתם קונפטי לאירוע?', checked: false },
-    { id: 19, text: 'האם סגרתם מופע זיקוקים?', checked: false },
-    { id: 20, text: 'האם סגרתם מפל שוקולד?', checked: false },
-    { id: 21, text: 'האם סגרתם שירותי ניקיון?', checked: false },
-    { id: 22, text: 'האם סגרתם שירותי אבטחה?', checked: false },
-    { id: 23, text: 'האם סגרתם רקדנים מקצועיים?', checked: false },
-    { id: 24, text: 'האם סגרתם מתופפים ושופרות?', checked: false },
-    { id: 25, text: 'האם סגרתם מאפרת מקצועית?', checked: false },
-    { id: 26, text: 'האם סגרתם מעצב שיער?', checked: false },
-    { id: 27, text: 'האם סגרתם פינת יצירה לילדים?', checked: false },
-    { id: 28, text: 'האם סגרתם בר קפה?', checked: false },
-    { id: 29, text: 'האם סגרתם שולחן קינוחים?', checked: false },
-    { id: 30, text: 'האם סגרתם עמדת שייקים?', checked: false },
-    { id: 31, text: 'האם סגרתם בר קוקטיילים?', checked: false },
-    { id: 32, text: 'האם סגרתם קרפ צרפתי?', checked: false },
-    { id: 33, text: 'האם סגרתם דוכן גלידה?', checked: false },
-    { id: 34, text: 'האם סגרתם מופע קסמים?', checked: false },
-    { id: 35, text: 'האם סגרתם עיצוב חופה?', checked: false },
-    { id: 36, text: 'האם סגרתם צלם מגנטים?', checked: false },
-    { id: 37, text: 'האם סגרתם שירותי חניה?', checked: false },
-    { id: 38, text: 'האם סגרתם פינת טעימות?', checked: false },
-    { id: 39, text: 'האם סגרתם מנהל אירוע?', checked: false },
-    { id: 40, text: 'האם סגרתם עיצוב כניסה לאולם?', checked: false },
-    { id: 41, text: 'האם סגרתם צלם סטילס?', checked: false },
-    { id: 42, text: 'האם סגרתם תאורת במה?', checked: false },
-    { id: 43, text: 'האם סגרתם מערכת הגברה?', checked: false },
-    { id: 44, text: 'האם סגרתם מפיק אירועים?', checked: false },
-    { id: 45, text: 'האם סגרתם להקת נגנים?', checked: false },
-    { id: 46, text: 'האם סגרתם מופע אומנותי?', checked: false },
-    { id: 47, text: 'האם סגרתם קריינות לאירוע?', checked: false },
-    { id: 48, text: 'האם סגרתם מתנות לאורחים?', checked: false },
-    { id: 49, text: 'האם סגרתם פינת צילום עם אביזרים?', checked: false },
-    { id: 50, text: 'האם סגרתם פינת צילום 360?', checked: false },
-    { id: 51, text: 'האם סגרתם עיצוב כיסאות?', checked: false },
-    { id: 52, text: 'האם סגרתם שף פרטי?', checked: false },
-    { id: 53, text: 'האם סגרתם מופע לייזרים?', checked: false },
-    { id: 54, text: 'האם סגרתם רכב חתונה?', checked: false },
-    { id: 55, text: 'האם סגרתם תפאורה לחינה?', checked: false },
-    { id: 56, text: 'האם סגרתם תלבושות לחינה?', checked: false },
-    { id: 57, text: 'האם סגרתם תכשיטים לחינה?', checked: false },
-    { id: 58, text: 'האם סגרתם מאפרת לחינה?', checked: false },
-    { id: 59, text: 'האם סגרתם צלם לחינה?', checked: false },
-    { id: 60, text: 'האם סגרתם הזמנות דיגיטליות?', checked: false },
-    { id: 61, text: 'האם סגרתם חבילת צילום לחתונה?', checked: false },
-    { id: 62, text: 'האם סגרתם חבילת צילום לחינה?', checked: false },
-    { id: 63, text: 'האם סגרתם אולם קטן לאירוע משפחתי?', checked: false },
-    { id: 64, text: 'האם סגרתם הפקת חינה?', checked: false },
-    { id: 65, text: 'האם סגרתם תפאורה לאירוע?', checked: false },
-  ]);
-  
-  
-  const user = firebase.auth().currentUser;
+  const [editNoteId, setEditNoteId] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+
+  // Theme mode from DB
+  const systemScheme = useColorScheme(); // 'dark' | 'light' | null
+  const [dbMode, setDbMode] = useState('auto'); // 'light' | 'dark' | 'auto'
+
+  // Animations Refs
+  const scrollY = useRef(new Animated.Value(0)).current;
+
   const database = getDatabase();
-  const navigation = useNavigation(); // ייבוא הניווט
-  const [newTask, setNewTask] = useState('');
-  const [modalVisible, setModalVisible] = useState(false);
-  const [editNoteId, setEditNoteId] = useState(null); // מזהה הפתק שנערך
-  const [isEditMode, setIsEditMode] = useState(false); // מצב עריכה
+  const user = firebase.auth().currentUser;
 
+  // ===== Theme Listener (Firebase) =====
   useEffect(() => {
-    if (user) {
-      const tasksRef = ref(database, `Events/${user.uid}/${id}/task`);
+    if (!user || !id) return;
 
-      get(tasksRef).then((snapshot) => {
-        if (snapshot.exists()) {
-          setTableData(snapshot.val());
+    const applyMode = (raw) => {
+      let mode = String(raw ?? 'auto').toLowerCase();
+      if (raw === true) mode = 'dark';
+      if (raw === false) mode = 'light';
+      if (!['light', 'dark', 'auto'].includes(mode)) mode = 'auto';
+      setDbMode(mode);
+    };
+
+    const adminRef = ref(database, `Events/${user.uid}/${id}/__admin/ui/theme/mode`);
+    const legacyRef = ref(database, `Events/${user.uid}/${id}/ui/theme/mode`);
+
+    let hasAdminTheme = false;
+
+    const unsubAdmin = onValue(adminRef, (snap) => {
+      const v = snap.val();
+      hasAdminTheme = v !== null && v !== undefined;
+      if (hasAdminTheme) applyMode(v);
+    });
+
+    const unsubLegacy = onValue(legacyRef, (snap) => {
+      if (!hasAdminTheme) applyMode(snap.val());
+    });
+
+    return () => {
+      unsubAdmin();
+      unsubLegacy();
+    };
+  }, [user, id]);
+
+  const isDarkMode = useMemo(() => {
+    if (dbMode === 'dark') return true;
+    if (dbMode === 'light') return false;
+    // auto
+    return systemScheme === 'dark';
+  }, [dbMode, systemScheme]);
+
+  const colors = useMemo(() => (isDarkMode ? COLORS.dark : COLORS.light), [isDarkMode]);
+
+  // ===== Data Load =====
+  useEffect(() => {
+    if (!user || !id) return;
+
+    // Task load
+    get(ref(database, `Events/${user.uid}/${id}/task`)).then((snapshot) => {
+      if (snapshot.exists() && Array.isArray(snapshot.val())) {
+        setTableData(snapshot.val());
+      } else {
+        setTableData(getInitialTasks());
+      }
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+    });
+
+    // Notes listener
+    const notesRef = ref(database, `Events/${user.uid}/${id}/notes`);
+    const unsub = onValue(notesRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        const loadedNotes = Object.entries(data).map(([key, value]) => ({ id: key, ...(value || {}) }));
+        setNotes(loadedNotes);
+      } else {
+        setNotes([]);
+      }
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    });
+
+    return () => unsub();
+  }, [user, id]);
+
+  // ✅ ensure initial 65 tasks exist, merge if needed
+  useEffect(() => {
+    if (!user || !id) return;
+
+    const taskRef = ref(database, `Events/${user.uid}/${id}/task`);
+
+    get(taskRef).then((snapshot) => {
+      const initial = getInitialTasks();
+
+      let next = initial;
+      let shouldSave = false;
+
+      if (snapshot.exists()) {
+        const val = snapshot.val();
+
+        if (Array.isArray(val)) {
+          const byId = new Map(val.map((t) => [t.id, t]));
+          next = initial.map((t) => {
+            const old = byId.get(t.id);
+            return old ? { ...t, ...old } : t;
+          });
+          shouldSave = val.length !== next.length;
+        } else {
+          next = initial;
+          shouldSave = true;
         }
-      });
+      } else {
+        next = initial;
+        shouldSave = true;
+      }
 
-      const notesRef = ref(database, `Events/${user.uid}/${id}/notes`);
-      get(notesRef).then((snapshot) => {
-        if (snapshot.exists()) {
-          const data = snapshot.val();
-          setNotes(Object.entries(data).map(([key, value]) => ({ id: key, ...value })));
-        }
-      });
-    }
-  }, [user]);
+      setTableData(next);
+      if (shouldSave) set(taskRef, next);
+    });
+  }, [user, id]);
 
-  const countCheckedTasks = () => {
-    return tableData.filter((item) => item.checked).length;
-  };
-  
+  // ===== Logic =====
   const handleCheckBoxChange = (index) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
     const newData = [...tableData];
     newData[index].checked = !newData[index].checked;
     setTableData(newData);
-  
-    if (user) {
-      const tasksRef = ref(database, `Events/${user.uid}/${id}/task`);
-      set(tasksRef, newData).catch((error) => {
-        Alert.alert('Error', error.message);
-      });
-    }
+    if (user) set(ref(database, `Events/${user.uid}/${id}/task`), newData);
   };
-  const startEditNote = (note) => {
-    setEditNoteId(note.id);
-    setCurrentNoteName(note.name);
-    setCurrentNote(note.content);
-    setIsEditMode(true);
-  };
-  
-
-  const saveNote = () => {
-    if (!currentNote.trim()) {
-      Alert.alert('שגיאה', 'אנא הזן תוכן לפתק');
-      return;
-    }
-  
-    if (isEditMode && editNoteId) {
-      // עדכון פתק קיים
-      const noteRef = ref(database, `Events/${user.uid}/${id}/notes/${editNoteId}`);
-      const updatedNote = {
-        name: currentNoteName,
-        content: currentNote,
-        lastUpdated: new Date().toLocaleString(),
-      };
-  
-      set(noteRef, updatedNote)
-        .then(() => {
-          setNotes((prevNotes) =>
-            prevNotes.map((note) => (note.id === editNoteId ? { id: editNoteId, ...updatedNote } : note))
-          );
-          resetForm();
-        })
-        .catch((error) => {
-          Alert.alert('שגיאה', 'לא ניתן לעדכן את הפתק: ' + error.message);
-        });
-    } else {
-      // הוספת פתק חדש
-      const newNote = {
-        name: currentNoteName || `פתק חדש ${notes.length + 1}`,
-        content: currentNote,
-        lastUpdated: new Date().toLocaleString(),
-      };
-  
-      const notesRef = ref(database, `Events/${user.uid}/${id}/notes`);
-      push(notesRef, newNote).then((snapshot) => {
-        setNotes([...notes, { id: snapshot.key, ...newNote }]);
-        resetForm();
-      });
-    }
-  };
-  const resetForm = () => {
-    setEditNoteId(null);
-    setCurrentNote('');
-    setCurrentNoteName('');
-    setIsEditMode(false);
-  };
-  
-
-  const resetModalState = () => {
-    setEditNoteId(null);
-    setCurrentNote('');
-    setCurrentNoteName('');
-    setIsEditMode(false);
-    setModalVisible(false);
-  };
-    
-  useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 1000,
-      useNativeDriver: true,
-    }).start();
-  }, [tableData]);
-
-  
-  useEffect(() => {
-    if (user) {
-      const tasksRef = ref(database, `Events/${user.uid}/${id}/task`);
-      get(tasksRef).then((snapshot) => {
-        if (snapshot.exists() && Array.isArray(snapshot.val())) {
-          setTableData(snapshot.val());
-        } else {
-          setTableData([
-           
-    { id: 1, text: 'האם סגרתם אולם אירועים?', checked: false },
-    { id: 2, text: 'האם סגרתם גן אירועים?', checked: false },
-    { id: 3, text: 'האם סגרתם צלם לאירוע?', checked: false },
-    { id: 4, text: 'האם סגרתם צלם וידאו?', checked: false },
-    { id: 5, text: 'האם סגרתם DJ לאירוע?', checked: false },
-    { id: 6, text: 'האם סגרתם להקה חיה?', checked: false },
-    { id: 7, text: 'האם סגרתם קייטרינג?', checked: false },
-    { id: 8, text: 'האם סגרתם עיצוב שולחנות?', checked: false },
-    { id: 9, text: 'האם סגרתם סידורי פרחים?', checked: false },
-    { id: 10, text: 'האם סגרתם הסעות לאורחים?', checked: false },
-    { id: 11, text: 'האם סגרתם שמלת כלה?', checked: false },
-    { id: 12, text: 'האם סגרתם חליפת חתן?', checked: false },
-    { id: 13, text: 'האם סגרתם תכשיטים לכלה?', checked: false },
-    { id: 14, text: 'האם סגרתם חופה?', checked: false },
-    { id: 15, text: 'האם סגרתם בר שתייה?', checked: false },
-    { id: 16, text: 'האם סגרתם תא צילום?', checked: false },
-    { id: 17, text: 'האם סגרתם בלונים מעוצבים?', checked: false },
-    { id: 18, text: 'האם סגרתם קונפטי לאירוע?', checked: false },
-    { id: 19, text: 'האם סגרתם מופע זיקוקים?', checked: false },
-    { id: 20, text: 'האם סגרתם מפל שוקולד?', checked: false },
-    { id: 21, text: 'האם סגרתם שירותי ניקיון?', checked: false },
-    { id: 22, text: 'האם סגרתם שירותי אבטחה?', checked: false },
-    { id: 23, text: 'האם סגרתם רקדנים מקצועיים?', checked: false },
-    { id: 24, text: 'האם סגרתם מתופפים ושופרות?', checked: false },
-    { id: 25, text: 'האם סגרתם מאפרת מקצועית?', checked: false },
-    { id: 26, text: 'האם סגרתם מעצב שיער?', checked: false },
-    { id: 27, text: 'האם סגרתם פינת יצירה לילדים?', checked: false },
-    { id: 28, text: 'האם סגרתם בר קפה?', checked: false },
-    { id: 29, text: 'האם סגרתם שולחן קינוחים?', checked: false },
-    { id: 30, text: 'האם סגרתם עמדת שייקים?', checked: false },
-    { id: 31, text: 'האם סגרתם בר קוקטיילים?', checked: false },
-    { id: 32, text: 'האם סגרתם קרפ צרפתי?', checked: false },
-    { id: 33, text: 'האם סגרתם דוכן גלידה?', checked: false },
-    { id: 34, text: 'האם סגרתם מופע קסמים?', checked: false },
-    { id: 35, text: 'האם סגרתם עיצוב חופה?', checked: false },
-    { id: 36, text: 'האם סגרתם צלם מגנטים?', checked: false },
-    { id: 37, text: 'האם סגרתם שירותי חניה?', checked: false },
-    { id: 38, text: 'האם סגרתם פינת טעימות?', checked: false },
-    { id: 39, text: 'האם סגרתם מנהל אירוע?', checked: false },
-    { id: 40, text: 'האם סגרתם עיצוב כניסה לאולם?', checked: false },
-    { id: 41, text: 'האם סגרתם צלם סטילס?', checked: false },
-    { id: 42, text: 'האם סגרתם תאורת במה?', checked: false },
-    { id: 43, text: 'האם סגרתם מערכת הגברה?', checked: false },
-    { id: 44, text: 'האם סגרתם מפיק אירועים?', checked: false },
-    { id: 45, text: 'האם סגרתם להקת נגנים?', checked: false },
-    { id: 46, text: 'האם סגרתם מופע אומנותי?', checked: false },
-    { id: 47, text: 'האם סגרתם קריינות לאירוע?', checked: false },
-    { id: 48, text: 'האם סגרתם מתנות לאורחים?', checked: false },
-    { id: 49, text: 'האם סגרתם פינת צילום עם אביזרים?', checked: false },
-    { id: 50, text: 'האם סגרתם פינת צילום 360?', checked: false },
-    { id: 51, text: 'האם סגרתם עיצוב כיסאות?', checked: false },
-    { id: 52, text: 'האם סגרתם שף פרטי?', checked: false },
-    { id: 53, text: 'האם סגרתם מופע לייזרים?', checked: false },
-    { id: 54, text: 'האם סגרתם רכב חתונה?', checked: false },
-    { id: 55, text: 'האם סגרתם תפאורה לחינה?', checked: false },
-    { id: 56, text: 'האם סגרתם תלבושות לחינה?', checked: false },
-    { id: 57, text: 'האם סגרתם תכשיטים לחינה?', checked: false },
-    { id: 58, text: 'האם סגרתם מאפרת לחינה?', checked: false },
-    { id: 59, text: 'האם סגרתם צלם לחינה?', checked: false },
-    { id: 60, text: 'האם סגרתם הזמנות דיגיטליות?', checked: false },
-    { id: 61, text: 'האם סגרתם חבילת צילום לחתונה?', checked: false },
-    { id: 62, text: 'האם סגרתם חבילת צילום לחינה?', checked: false },
-    { id: 63, text: 'האם סגרתם אולם קטן לאירוע משפחתי?', checked: false },
-    { id: 64, text: 'האם סגרתם הפקת חינה?', checked: false },
-    { id: 65, text: 'האם סגרתם תפאורה לאירוע?', checked: false },
-          ]);
-        }
-      }).catch((error) => {
-        console.error('Error fetching data:', error);
-        Alert.alert('Error', 'שגיאה בטעינת הנתונים מהשרת');
-      });
-    }
-  }, [user]);
-  
-  const openAddTask = () => {
-  setNewTask('');          // ננקה שדה קלט
-  setModalVisible(true);   // נפתח את המודל
-};
 
   const addTask = () => {
-    if (newTask.trim() === '') {
-      Alert.alert('שגיאה', 'אנא הזן טקסט למשימה');
-      return;
-    }
-  
-    // מציאת המזהה הגבוה ביותר והוספת 1
-    const maxId = tableData.length > 0 ? Math.max(...tableData.map((item) => item.id)) : 0;
-    const newTaskItem = { id: maxId + 1, text: newTask, checked: false, custom: true };
-  
-    const updatedTableData = [...tableData, newTaskItem];
-    setTableData(updatedTableData);
+    if (!newTask.trim()) return;
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+
+    const maxId = tableData.length > 0 ? Math.max(...tableData.map((t) => t.id)) : 0;
+    const newTaskItem = { id: maxId + 1, text: newTask.trim(), checked: false, custom: true };
+    const updatedData = [newTaskItem, ...tableData];
+
+    setTableData(updatedData);
     setNewTask('');
     setModalVisible(false);
-  
-    // שמירת הנתונים בפיירבייס
-    if (user) {
-      const tasksRef = ref(database, `Events/${user.uid}/${id}/task`);
-      set(tasksRef, updatedTableData).catch((error) => {
-        Alert.alert('Error', error.message);
-      });
-    }
-  };
-  
-  
 
-  const deleteTask = (id) => {
-    const newData = tableData.filter((item) => item.id !== id || !item.custom);
+    if (user) set(ref(database, `Events/${user.uid}/${id}/task`), updatedData);
+  };
+
+  const deleteTask = (taskId) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+    const newData = tableData.filter((item) => item.id !== taskId);
     setTableData(newData);
+    if (user) set(ref(database, `Events/${user.uid}/${id}/task`), newData);
   };
-  const [slideAnim] = useState(new Animated.Value(0));
 
-  // פונקציה להפעלת האנימציה בעת שינוי הטאב
-  const switchTab = (tab) => {
-    const direction = tab === 'table' ? 0 : 1;
-
-    Animated.timing(slideAnim, {
-      toValue: direction,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-
-    setSelectedTab(tab);
+  const startEditNote = (note) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsEditMode(true);
+    setEditNoteId(note.id);
+    setCurrentNoteName(String(note.name || ''));
+    setCurrentNote(String(note.content || ''));
   };
-  const renderTableRow = ({ item, index }) => (
-    <View style={styles.row}>
-      <TouchableOpacity style={styles.checkbox} onPress={() => handleCheckBoxChange(index)}>
-        <Text style={styles.checkboxText}>{item.checked ? 'V' : ''}</Text>
-      </TouchableOpacity>
-      <Text style={styles.textCell}>{item.text}</Text>
-      {item.custom && (
-        <TouchableOpacity onPress={() => deleteTask(item.id)} style={styles.deleteButton}>
-          <Text style={styles.deleteButtonText}>🗑️</Text>
-        </TouchableOpacity>
-      )}
-      <Text style={styles.cell}>{item.id}</Text>
 
-    </View>
-  );
-  
-  
-  
+  const resetNoteForm = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setEditNoteId(null);
+    setCurrentNote('');
+    setCurrentNoteName('');
+    setIsEditMode(false);
+  };
 
-  const addNote = () => {
-    if (!currentNote.trim()) {
-      Alert.alert('שגיאה', 'אנא הזן תוכן לפתק');
-      return;
-    }
-  
-    if (user) {
-      const newNote = {
-        name: currentNoteName || `פתק חדש ${notes.length + 1}`,
-        content: currentNote,      // ודא שהתוכן מתווסף כאן
-        lastUpdated: new Date().toLocaleString(),
-      };
-  
-      const notesRef = ref(database, `Events/${user.uid}/${id}/notes`);
-  
-      push(notesRef, newNote).then(() => {
-        setNotes([...notes, newNote]);
-        setCurrentNote('');        // נקה את התוכן לאחר ההוספה
-        setCurrentNoteName('');    // נקה את שם הפתק לאחר ההוספה
-      });
+  const saveNote = () => {
+    if (!user || !id) return;
+    if (!currentNote.trim()) return;
+
+    const notePayload = {
+      name: (currentNoteName || 'פתק כללי').trim(),
+      content: currentNote.trim(),
+      lastUpdated: new Date().toLocaleString('he-IL'),
+    };
+
+    if (isEditMode && editNoteId) {
+      set(ref(database, `Events/${user.uid}/${id}/notes/${editNoteId}`), notePayload).then(resetNoteForm);
+    } else {
+      push(ref(database, `Events/${user.uid}/${id}/notes`), notePayload).then(resetNoteForm);
     }
   };
-  
 
   const deleteNote = (noteId) => {
-    console.log('ID של הפתק למחיקה:', noteId); // בדיקת ה-ID שמתקבל
-  
-    if (user && noteId) {
-      const noteRef = ref(database, `Events/${user.uid}/${id}/notes/${noteId}`);
-      remove(noteRef)
-        .then(() => {
-          setNotes((prevNotes) => prevNotes.filter((note) => note.id !== noteId));
-        })
-        .catch((error) => {
-          Alert.alert('שגיאה', 'לא ניתן למחוק את הפתק: ' + error.message);
-        });
-    } else {
-      Alert.alert('שגיאה', 'לא נמצא מזהה למחיקת הפתק');
-    }
+    if (!user || !id) return;
+    remove(ref(database, `Events/${user.uid}/${id}/notes/${noteId}`));
   };
-  
-const HEADER_HEIGHT = 80;  // px – אפשר לשנות לפי העיצוב הרצוי
 
-  
+  // ===== UI =====
+  const BigHeader = () => {
+    const total = tableData.length;
+    const done = tableData.filter((t) => t.checked).length;
+    const progress = total > 0 ? done / total : 0;
 
- // …כל הקוד שמעל return נשאר ללא שינוי
-/* =========  Return  ========= */
-return (
-  <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
-    <StatusBar backgroundColor="rgba(108,99,255,0.9)" barStyle="light-content" />
+    return (
+      <View
+        style={[
+          styles.bigHeaderContainer,
+          {
+            backgroundColor: colors.headerBg,
+            paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : insets.top,
+            borderBottomColor: colors.accent,
+            shadowColor: colors.accent,
+          },
+        ]}
+      >
+        <View style={styles.headerTop}>
+          <View style={styles.headerSide}>
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={[styles.iconBtn, { backgroundColor: colors.bg, borderColor: colors.border }]}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.iconBtnText, { color: colors.text }]}>חזור ←</Text>
+            </TouchableOpacity>
+          </View>
 
-    <ImageBackground
-      source={require('../assets/backgruondcontact.png')}
-      style={{ flex: 1 }}
+          <Text style={[styles.headerTitleMain, { color: colors.text }]} numberOfLines={1}>
+            תכנון האירוע שלך
+          </Text>
+
+          <View style={styles.headerSide} />
+        </View>
+
+        <View style={styles.statsRow}>
+          <View style={[styles.statGlassItem, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
+            <Text style={[styles.statNumber, { color: colors.text }]}>{total}</Text>
+            <Text style={[styles.statLabel, { color: colors.subText }]}>משימות</Text>
+          </View>
+
+          <View style={[styles.statGlassItem, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
+            <Text style={[styles.statNumber, { color: colors.text }]}>{done}</Text>
+            <Text style={[styles.statLabel, { color: colors.subText }]}>הושלמו</Text>
+          </View>
+
+          <View style={[styles.statGlassItem, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
+            <Text style={[styles.statNumber, { color: colors.text }]}>{Math.round(progress * 100)}%</Text>
+            <Text style={[styles.statLabel, { color: colors.subText }]}>התקדמות</Text>
+          </View>
+        </View>
+
+        <View style={[styles.tabContainer, { backgroundColor: isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(2,6,23,0.06)', borderColor: colors.border }]}>
+          <TouchableOpacity
+            style={[
+              styles.tabBtn,
+              selectedTab === 'table' && { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            onPress={() => {
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setSelectedTab('table');
+            }}
+          >
+            <Text style={[styles.tabText, { color: colors.subText }, selectedTab === 'table' && { color: colors.accent }]}>
+              צ'ק ליסט
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.tabBtn,
+              selectedTab === 'notes' && { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            onPress={() => {
+              LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+              setSelectedTab('notes');
+            }}
+          >
+            <Text style={[styles.tabText, { color: colors.subText }, selectedTab === 'notes' && { color: colors.accent }]}>
+              פתקים
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  const renderTaskItem = ({ item, index }) => (
+    <Animated.View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.card,
+          shadowColor: colors.shadow,
+          borderColor: colors.border,
+        },
+      ]}
     >
-        <View
-  style={[
-    styles.header,
-    { height: HEADER_HEIGHT + insets.top, paddingTop: insets.top },
-  ]}
->
-  {/* כותרת */}
-  <Text style={styles.headerTitle}>ניהול משימות</Text>
+      <TouchableOpacity
+        style={[
+          styles.checkboxContainer,
+          { borderColor: colors.border, backgroundColor: colors.bg },
+          item.checked && { backgroundColor: colors.success, borderColor: colors.success },
+        ]}
+        onPress={() => handleCheckBoxChange(index)}
+        activeOpacity={0.75}
+      >
+        {item.checked && <Text style={styles.checkIcon}>✓</Text>}
+      </TouchableOpacity>
 
-  {/* שורת הכפתורים – יושבת בתחתית ה-Header */}
-  <View style={styles.headerButtonsRow}>
-    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
-      <Text style={styles.iconTxt}>←</Text>
-    </TouchableOpacity>
-
-    {selectedTab === 'table' && (
-    <TouchableOpacity
-    onPress={openAddTask}
-    activeOpacity={0.7}
-    /* ↑ חשוב להשאיר activeOpacity כדי לראות feedback בלחיצה */
-    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-    style={styles.iconBtn}
-    >
-    <Text style={styles.addButtonText}>＋</Text>
-    </TouchableOpacity>
-    )}
-  </View>
-</View>
-
-
-      {/*── Tabs ──*/}
-      <View style={[styles.tabContainer, { paddingTop: HEADER_HEIGHT + insets.top }]}>
-        <TouchableOpacity
-          style={[styles.tabButton, selectedTab === 'table' && styles.selectedTab]}
-          onPress={() => setSelectedTab('table')}
+      <View style={styles.textContainer}>
+        <Text
+          style={[
+            styles.taskText,
+            { color: colors.text },
+            item.checked && { textDecorationLine: 'line-through', color: colors.subText, opacity: 0.75 },
+          ]}
+          numberOfLines={2}
         >
-          <Text style={styles.tabText}>צ'ק ליסט</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabButton, selectedTab === 'notes' && styles.selectedTab]}
-          onPress={() => setSelectedTab('notes')}
-        >
-          <Text style={styles.tabText}>פתקים</Text>
-        </TouchableOpacity>
+          {item.text}
+        </Text>
       </View>
 
-      {/*── Dynamic content ──*/}
-      <View style={{ flex: 1, paddingTop: 10 }}>
+      {item.custom && (
+        <TouchableOpacity onPress={() => deleteTask(item.id)} style={styles.deleteBtn} activeOpacity={0.7}>
+          <Text style={{ fontSize: 16, color: colors.subText }}>✕</Text>
+        </TouchableOpacity>
+      )}
+    </Animated.View>
+  );
+
+  return (
+    <View style={[styles.mainContainer, { backgroundColor: colors.bg }]}>
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.headerBg}
+        translucent={false}
+      />
+
+      <BigHeader />
+
+      <View style={styles.contentArea}>
         {selectedTab === 'table' ? (
           <>
-            {/* סטטיסטיקות */}
-            <Animated.View style={[styles.dashboardContainer, { opacity: fadeAnim }]}>
-              <View style={styles.dashboardBox}>
-                <Text style={styles.dashboardText}>כמות המשימות {tableData.length}</Text>
-              </View>
-              <View style={styles.dashboardBox}>
-                <Text style={styles.dashboardText}>משימות מסומנות {countCheckedTasks()}</Text>
-              </View>
-              <View style={styles.dashboardBox}>
-                <Text style={styles.dashboardText}>
-                  משימות שהוספת {tableData.filter(i => i.custom).length}
-                </Text>
-              </View>
-            </Animated.View>
+            <FlatList
+              data={tableData}
+              renderItem={renderTaskItem}
+              keyExtractor={(item) => item.id.toString()}
+              contentContainerStyle={styles.narrowList}
+              showsVerticalScrollIndicator={false}
+              ListFooterComponent={<View style={{ height: 110 }} />}
+            />
 
-            {/* טבלה */}
-            <View style={styles.tableContainer}>
-              <FlatList
-                data={tableData}
-                renderItem={renderTableRow}
-                keyExtractor={item => item.id.toString()}
-              />
-            </View>
-
-            <Text style={styles.title2}>
-              לחץ על כפתור ה־+ להוספת משימה חדשה ולוודא שלא שכחנו כלום.
-            </Text>
+            <TouchableOpacity
+              style={[styles.fab, { backgroundColor: colors.accent, shadowColor: colors.accent }]}
+              onPress={() => setModalVisible(true)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.fabText}>＋</Text>
+            </TouchableOpacity>
           </>
         ) : (
-          /*── Notes screen ──*/
           <View style={styles.notesContainer}>
-            <TextInput
-              style={styles.noteNameInput}
-              placeholder="שם הפתק"
-              value={currentNoteName}
-              onChangeText={setCurrentNoteName}
-            />
+            <View style={[styles.noteEditor, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <TextInput
+                style={[styles.inputTitle, { color: colors.text, backgroundColor: colors.input, borderColor: colors.border }]}
+                placeholder="כותרת הפתק"
+                placeholderTextColor={colors.subText}
+                value={currentNoteName}
+                onChangeText={setCurrentNoteName}
+              />
 
-            <TextInput
-              style={styles.input2}
-              placeholder="הקלד כאן את התוכן"
-              placeholderTextColor="#999"
-              value={currentNote}
-              onChangeText={setCurrentNote}
-              multiline
-              textAlign="right"
-            />
+              <TextInput
+                style={[styles.inputBody, { color: colors.text, backgroundColor: colors.input, borderColor: colors.border }]}
+                placeholder="הקלד כאן..."
+                placeholderTextColor={colors.subText}
+                value={currentNote}
+                onChangeText={setCurrentNote}
+                multiline
+              />
 
-            {/* כפתורים */}
-            <View style={styles.buttonContainer}>
-              <Text style={styles.notesCount}>סך הכול: {notes.length}</Text>
-              <View style={styles.buttonGroup}>
+              <View style={{ flexDirection: 'row-reverse', gap: 10 }}>
                 {isEditMode && (
-                  <TouchableOpacity style={styles.cancelButton} onPress={resetForm}>
-                    <Text style={styles.buttonText}>בטל עריכה</Text>
+                  <TouchableOpacity
+                    style={[styles.secondaryBtn, { backgroundColor: colors.bg, borderColor: colors.border }]}
+                    onPress={resetNoteForm}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={{ color: colors.subText, fontWeight: '800' }}>ביטול עריכה</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity style={styles.addButton} onPress={saveNote}>
-                  <Text style={styles.buttonText}>
-                    {isEditMode ? 'שמור עריכה' : 'הוסף פתק חדש'}
-                  </Text>
+
+                <TouchableOpacity style={[styles.saveNoteBtn, { backgroundColor: colors.accent }]} onPress={saveNote} activeOpacity={0.85}>
+                  <Text style={styles.saveNoteText}>{isEditMode ? 'עדכן' : 'שמור'}</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* רשימת פתקים */}
             <FlatList
               data={notes}
-              keyExtractor={item => item.id}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.narrowList}
               renderItem={({ item }) => (
-                <View style={styles.noteItem}>
-                  <Text style={styles.noteTitle}>{item.name}</Text>
-                  <Text style={styles.noteContent}>{item.content}</Text>
-                  <Text style={styles.noteDate}>עודכן לאחרונה: {item.lastUpdated}</Text>
-                  <View style={styles.noteButtons}>
-                    <TouchableOpacity onPress={() => startEditNote(item)} style={styles.editButton}>
-                      <Text style={styles.editText}>ערוך</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => deleteNote(item.id)} style={styles.deleteButton}>
-                      <Text style={styles.deleteText}>מחק</Text>
-                    </TouchableOpacity>
+                <View style={[styles.noteCard, { backgroundColor: colors.card, shadowColor: colors.shadow, borderColor: colors.border }]}>
+                  <View style={styles.noteHeaderRow}>
+                    <Text style={[styles.noteTitle, { color: colors.text }]} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+
+                    <View style={styles.noteActions}>
+                      <TouchableOpacity onPress={() => startEditNote(item)} activeOpacity={0.8}>
+                        <Text style={{ color: colors.accent, marginHorizontal: 6, fontWeight: '800' }}>ערוך</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => deleteNote(item.id)} activeOpacity={0.8}>
+                        <Text style={{ color: colors.danger, marginHorizontal: 6, fontWeight: '800' }}>מחק</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
+
+                  <Text style={[styles.noteBody, { color: colors.subText }]}>{item.content}</Text>
+                  <Text style={[styles.noteDate, { color: colors.subText }]}>{item.lastUpdated}</Text>
                 </View>
               )}
             />
@@ -564,489 +503,338 @@ return (
         )}
       </View>
 
-      {/*── Add-Task Modal ──*/}
-      <Modal visible={modalVisible} transparent animationType="slide">
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>הוסף משימה חדשה</Text>
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.input3}
-                placeholder="הקלד כאן את המשימה"
-                value={newTask}
-                onChangeText={setNewTask}
-              />
-            </View>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity onPress={addTask} style={styles.modalButton}>
-                <Text style={styles.modalButtonText}>הוסף</Text>
+      <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>משימה חדשה 🚀</Text>
+
+            <TextInput
+              style={[styles.modalInput, { color: colors.text, backgroundColor: colors.input, borderColor: colors.border }]}
+              placeholder="מה צריך לעשות?"
+              placeholderTextColor={colors.subText}
+              value={newTask}
+              onChangeText={setNewTask}
+              autoFocus
+            />
+
+            <View style={styles.modalBtns}>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalCancel} activeOpacity={0.85}>
+                <Text style={{ color: colors.subText, fontWeight: '800' }}>ביטול</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setModalVisible(false)}
-                style={[styles.modalButton, styles.closeButton]}
-              >
-                <Text style={styles.modalButtonText}>ביטול</Text>
+
+              <TouchableOpacity onPress={addTask} style={[styles.modalAdd, { backgroundColor: colors.accent }]} activeOpacity={0.85}>
+                <Text style={{ color: '#fff', fontWeight: '900' }}>הוסף לרשימה</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-    </ImageBackground>
-  </SafeAreaView>
-);
-
-
+    </View>
+  );
 };
 
+// --- Initial Data ---
+const getInitialTasks = () => ([
+  { id: 1, text: 'האם סגרתם אולם אירועים?', checked: false },
+  { id: 2, text: 'האם סגרתם גן אירועים?', checked: false },
+  { id: 3, text: 'האם סגרתם צלם לאירוע?', checked: false },
+  { id: 4, text: 'האם סגרתם צלם וידאו?', checked: false },
+  { id: 5, text: 'האם סגרתם DJ לאירוע?', checked: false },
+  { id: 6, text: 'האם סגרתם להקה חיה?', checked: false },
+  { id: 7, text: 'האם סגרתם קייטרינג?', checked: false },
+  { id: 8, text: 'האם סגרתם עיצוב שולחנות?', checked: false },
+  { id: 9, text: 'האם סגרתם סידורי פרחים?', checked: false },
+  { id: 10, text: 'האם סגרתם הסעות לאורחים?', checked: false },
+  { id: 11, text: 'האם סגרתם שמלת כלה?', checked: false },
+  { id: 12, text: 'האם סגרתם חליפת חתן?', checked: false },
+  { id: 13, text: 'האם סגרתם תכשיטים לכלה?', checked: false },
+  { id: 14, text: 'האם סגרתם חופה?', checked: false },
+  { id: 15, text: 'האם סגרתם בר שתייה?', checked: false },
+  { id: 16, text: 'האם סגרתם תא צילום?', checked: false },
+  { id: 17, text: 'האם סגרתם בלונים מעוצבים?', checked: false },
+  { id: 18, text: 'האם סגרתם קונפטי לאירוע?', checked: false },
+  { id: 19, text: 'האם סגרתם מופע זיקוקים?', checked: false },
+  { id: 20, text: 'האם סגרתם מפל שוקולד?', checked: false },
+  { id: 21, text: 'האם סגרתם שירותי ניקיון?', checked: false },
+  { id: 22, text: 'האם סגרתם שירותי אבטחה?', checked: false },
+  { id: 23, text: 'האם סגרתם רקדנים מקצועיים?', checked: false },
+  { id: 24, text: 'האם סגרתם מתופפים ושופרות?', checked: false },
+  { id: 25, text: 'האם סגרתם מאפרת מקצועית?', checked: false },
+  { id: 26, text: 'האם סגרתם מעצב שיער?', checked: false },
+  { id: 27, text: 'האם סגרתם פינת יצירה לילדים?', checked: false },
+  { id: 28, text: 'האם סגרתם בר קפה?', checked: false },
+  { id: 29, text: 'האם סגרתם שולחן קינוחים?', checked: false },
+  { id: 30, text: 'האם סגרתם עמדת שייקים?', checked: false },
+  { id: 31, text: 'האם סגרתם בר קוקטיילים?', checked: false },
+  { id: 32, text: 'האם סגרתם קרפ צרפתי?', checked: false },
+  { id: 33, text: 'האם סגרתם דוכן גלידה?', checked: false },
+  { id: 34, text: 'האם סגרתם מופע קסמים?', checked: false },
+  { id: 35, text: 'האם סגרתם עיצוב חופה?', checked: false },
+  { id: 36, text: 'האם סגרתם צלם מגנטים?', checked: false },
+  { id: 37, text: 'האם סגרתם שירותי חניה?', checked: false },
+  { id: 38, text: 'האם סגרתם פינת טעימות?', checked: false },
+  { id: 39, text: 'האם סגרתם מנהל אירוע?', checked: false },
+  { id: 40, text: 'האם סגרתם עיצוב כניסה לאולם?', checked: false },
+  { id: 41, text: 'האם סגרתם צלם סטילס?', checked: false },
+  { id: 42, text: 'האם סגרתם תאורת במה?', checked: false },
+  { id: 43, text: 'האם סגרתם מערכת הגברה?', checked: false },
+  { id: 44, text: 'האם סגרתם מפיק אירועים?', checked: false },
+  { id: 45, text: 'האם סגרתם להקת נגנים?', checked: false },
+  { id: 46, text: 'האם סגרתם מופע אומנותי?', checked: false },
+  { id: 47, text: 'האם סגרתם קריינות לאירוע?', checked: false },
+  { id: 48, text: 'האם סגרתם מתנות לאורחים?', checked: false },
+  { id: 49, text: 'האם סגרתם פינת צילום עם אביזרים?', checked: false },
+  { id: 50, text: 'האם סגרתם פינת צילום 360?', checked: false },
+  { id: 51, text: 'האם סגרתם עיצוב כיסאות?', checked: false },
+  { id: 52, text: 'האם סגרתם שף פרטי?', checked: false },
+  { id: 53, text: 'האם סגרתם מופע לייזרים?', checked: false },
+  { id: 54, text: 'האם סגרתם רכב חתונה?', checked: false },
+  { id: 55, text: 'האם סגרתם תפאורה לחינה?', checked: false },
+  { id: 56, text: 'האם סגרתם תלבושות לחינה?', checked: false },
+  { id: 57, text: 'האם סגרתם תכשיטים לחינה?', checked: false },
+  { id: 58, text: 'האם סגרתם מאפרת לחינה?', checked: false },
+  { id: 59, text: 'האם סגרתם צלם לחינה?', checked: false },
+  { id: 60, text: 'האם סגרתם הזמנות דיגיטליות?', checked: false },
+  { id: 61, text: 'האם סגרתם חבילת צילום לחתונה?', checked: false },
+  { id: 62, text: 'האם סגרתם חבילת צילום לחינה?', checked: false },
+  { id: 63, text: 'האם סגרתם אולם קטן לאירוע משפחתי?', checked: false },
+  { id: 64, text: 'האם סגרתם הפקת חינה?', checked: false },
+  { id: 65, text: 'האם סגרתם תפאורה לאירוע?', checked: false },
+]);
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
+  mainContainer: { flex: 1 },
 
-  },
-  topBar: {
-    padding: 15,
-    borderRadius: 8,
+  bigHeaderContainer: {
+    width: '100%',
+    paddingBottom: 18,
+    paddingHorizontal: 16,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    borderBottomWidth: 3,
+    elevation: 10,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
     alignItems: 'center',
-    marginBottom: 15,
-    marginTop: 30,
+    zIndex: 10,
+  },
 
-  },
-  title: {
-    marginTop: 10, // הגדלת המרווח העליון
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 10, // מרווח תחתון להפרדה טובה יותר
-  },
-  
-  title2: {
-    marginTop: 14,
-    color: '#000', // טקסט כהה
-    fontSize: 15,
-    textAlign: 'center',
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
     marginBottom: 10,
+    width: '100%',
   },
-  counterContainer: {
+  headerSide: {
+    width: 96,
+    alignItems: 'flex-start',
+  },
+  iconBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  iconBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  headerTitleMain: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '900',
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    width: '100%',
+    marginBottom: 12,
+    gap: 12,
+  },
+  statGlassItem: {
+    borderRadius: 16,
+    width: 92,
+    height: 70,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: 10,
+    borderWidth: 1,
   },
-  counterText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'rgba(108, 99, 255, 0.9)',
-  },
-  buttonGroup: {
-    flexDirection: 'row',             // מסדר את הכפתורים בשורה אופקית
-    justifyContent: 'center',         // ממרכז את הכפתורים
-    alignItems: 'center',      
-    gap: 10,                          // מרווח של 20 פיקסלים בין הכפתורים (נתמך ב-React Native גרסה 0.71 ומעלה)
-    // מיישר את הכפתורים אנכית
-  },
-  backIcon: {
-    width: 40,
-    height: 40,
-  },
+  statNumber: { fontSize: 20, fontWeight: '900' },
+  statLabel: { fontSize: 12, fontWeight: '700', marginTop: 2 },
+
   tabContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginVertical: 0,
-    marginTop: -40,      // ▲   שלב את המספר עד שמרגיש נכון (-6,-8,-12…)
-    marginBottom: 0,
-    paddingVertical: 6,
+    borderRadius: 30,
+    padding: 4,
+    width: '70%',
+    borderWidth: 1,
   },
-  tabButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderBottomWidth: 2,
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    alignItems: 'center',
+    borderRadius: 25,
+    borderWidth: 1,
     borderColor: 'transparent',
   },
-  selectedTab: {
-    borderColor: 'rgba(108, 99, 255, 0.9)',
-
-  },
-  noteButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 10,
-  },
-  editButton: {
-    marginRight: 15,
-  },
-  tableContainer: {
-    width: '90%',
-    alignSelf: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 5,
-    elevation: 5, // צללית לאנדרואיד
-    shadowColor: '#000', // צללית ל-iOS
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    maxHeight: 450, // מגביל את גובה הטבלה
-    marginVertical: 10, // מרווח למעלה ולמטה
-
-  },
-  cancelButton: {
-    backgroundColor: '#ff4d4d', // צבע אדום עבור כפתור הביטול
-    paddingVertical: 5,
-    paddingHorizontal: 15,
-    borderRadius: 10,
-    marginLeft: 20, // מרווח בין הכפתורים
-  },
-  
   tabText: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '900',
+    fontSize: 13,
   },
-  notesContainer: {
-    flex: 1,
-    padding: 20,
+
+  contentArea: { flex: 1, marginTop: 14 },
+  narrowList: { paddingHorizontal: 16, paddingBottom: 110, maxWidth: 620, alignSelf: 'center', width: '100%' },
+
+  card: {
+    flexDirection: 'row-reverse',
     alignItems: 'center',
-    justifyContent: 'center',
-
-  },
-  buttonContainer: {
-    width: '100%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-
-  buttonText: {
-    color: '#fff',
-    fontSize: 10,
-    
-  },
-  background: {
-    flex: 1,
-    resizeMode: 'cover', // התאמת התמונה לגודל המסך
-    justifyContent: 'center',
-  },
-  noteNameInput: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    padding: 12,
-    fontSize: 15,
-    borderRadius: 10,
-    backgroundColor: '#fff',
-    marginBottom: 10,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
     elevation: 3,
-    alignItems: 'flex-end', // מיישר את שדה הקלט לצד ימין
-    textAlign: 'right',
-
-  },
-  textInput: {
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
     borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 10,
-    fontSize: 16,
-    borderRadius: 5,
-    alignItems: 'flex-end', // מיישר את שדה הקלט לצד ימין
-    textAlign: 'right',
-
-    backgroundColor: '#fdfdfd',
-    textAlignVertical: 'top',
-    lineHeight: 24,
-    minHeight: 200,
-    marginBottom: 10,
   },
-  noteItem: {
-    width: '100%',
-    padding: 15,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 10,
-    marginBottom: 15,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    borderWidth: 0.2,
-    borderColor: '#333',            // מסגרת כהה יותר
-
-  },
-  noteTitle: {
-    textAlign: 'center',
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 5,
-  },
-  noteContent: {
-    fontSize: 16,
-    color: '#000',
-    marginBottom: 5,
-    textAlign: 'right',
-
-  },
-  noteDate: {
-    fontSize: 14,
-    color: '#888',
-  },
-  deleteText: {
-    color: 'red',
-    fontSize: 16,
-    textAlign: 'right',
-    marginTop: 10,
-    fontWeight: 'bold',
-  },
-  inputContainer: {
-    alignItems: 'flex-end', // מיישר את שדה הקלט לצד ימין
-    width: '100%',
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderColor: '#ddd',
-  },
-  input2: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    padding: 12,
-    fontSize: 15,
-    borderRadius: 10,
-    backgroundColor: '#fff',
-    marginBottom: 20,
-    elevation: 3,
-    textAlign: 'right',
-    minHeight: 100,    
-    maxHeight: 150,         // גובה מינימלי שמאפשר הרבה שורות
-    textAlignVertical: 'top', // מיישר את הטקסט לחלק העליון של התיב
-    textAlign: 'right',           // יישור הטקסט לימין
-
-  },
-  input3: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#ccc',
-    padding: 12,
-    fontSize: 15,
-    borderRadius: 10,
-    backgroundColor: '#fff',
-    marginBottom: 20,
-    elevation: 3,
-    textAlign: 'right',
-    // גובה מינימלי שמאפשר הרבה שורות
-    // גובה מינימלי שמאפשר הרבה שורות
-    textAlignVertical: 'top', // מיישר את הטקסט לחלק העליון של התיב
-  },
-  cell: {
-    width: 30,
-    textAlign: 'center',
-    fontSize: 16,
-  },
-  textCell: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 16,
-  },
-  checkbox: {
-    width: 30,
-    height: 30,
+  checkboxContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
     borderWidth: 2,
-    borderColor: 'rgba(108, 99, 255, 0.9)',
+    alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 14,
+  },
+  checkIcon: { color: '#fff', fontSize: 14, fontWeight: '900' },
+  textContainer: { flex: 1 },
+  taskText: { fontSize: 16, fontWeight: '800', textAlign: 'right' },
+  deleteBtn: { padding: 6, marginRight: 2 },
+
+  fab: {
+    position: 'absolute',
+    bottom: 30,
+    left: 24,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     alignItems: 'center',
-    borderRadius: 4,
+    justifyContent: 'center',
+    elevation: 10,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
   },
-  checkboxText: {
-    fontSize: 18,
-    color: '#000',
-  },
-header: {
-  backgroundColor: 'rgba(108,99,255,0.9)',
-  justifyContent: 'center',           // ממקם את הכותרת במרכז אנכי
-},
+  fabText: { color: '#fff', fontSize: 34, marginTop: -4, fontWeight: '900' },
 
-headerTitle: {
-  fontSize: 22,
-  fontWeight: 'bold',
-  color: '#fff',
-  textAlign: 'center',
-},
-
-/* כפתורים מיושרים לימין/שמאל בתחתית ה-Header */
-headerButtonsRow: {
-  position: 'absolute',
-  bottom: 12,                          // מרחק מהקצה התחתון של ה-Header
-  left: 0,
-  right: 0,
-  flexDirection: 'row',
-  justifyContent: 'space-between',
-  paddingHorizontal: 18,
-},
-
-
-iconBtn: {
-  width: 24,                     // רוחב / גובה אחידים לאייקונים
-  height: 24,
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding:20,                  // אזור לחיץ גדול יותר
-
-},
-
-
-  header2: {
-    backgroundColor: 'rgba(108, 99, 255, 0.9)',
-    paddingTop: 25,
-    paddingBottom: 15,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    marginTop: 0,
-
-  },
-  headerButtons: {
-    marginBottom: -40,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  notesContainer: { flex: 1 },
+  noteEditor: {
+    marginHorizontal: 16,
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 14,
+    elevation: 2,
+    borderWidth: 1,
+    maxWidth: 620,
+    alignSelf: 'center',
     width: '100%',
-    
   },
-  backButtonText: {
-    fontSize: 29,
-    color: '#fff',
-    marginBottom: 20,
-
-  },
-  addButtonText:{
-    fontSize: 29,
-    color: '#fff',
-    marginBottom: 20,
-
-},
-  backButton: {
-    padding: 10,
-    marginLeft: -10, // מרווח משמאל לכפתור פלוס
-    marginTop: -30,
-
-  },
-  addButton: {
-    backgroundColor: '#6c63ff',
-    paddingVertical: 5,
-    paddingHorizontal: 15,
-    borderRadius: 10,
-    justifyContent: 'center',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 18,   // הקטן את גודל הטקסט של הכפתור
-    fontWeight: 'bold',
-  },
-  notesCount: {
-    fontSize: 17,
-    color: '#6c63ff',
-    fontWeight: 'bold',
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalContent: {
-    width: '80%',
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 10,
-    elevation: 5,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    textAlign: 'center', // ממקם את הכותרת באמצע
-
-  },
-  input: {
+  inputTitle: {
+    borderRadius: 12,
+    padding: 12,
+    fontWeight: '900',
+    textAlign: 'right',
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 5,
-    padding: 10,
-    alignItems: 'flex-end', // מיישר את שדה הקלט לצד ימין
-
-    fontSize: 16,
-    width: '100%', // שדה הקלט ימלא את כל הרוחב של הקונטיינר
   },
-  modalButtons: {
-    flexDirection: 'row',
+  inputBody: {
+    borderRadius: 12,
+    padding: 12,
+    textAlign: 'right',
+    textAlignVertical: 'top',
+    minHeight: 90,
+    marginBottom: 12,
+    borderWidth: 1,
+  },
+  saveNoteBtn: {
+    flex: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  secondaryBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  saveNoteText: { color: '#fff', fontWeight: '900', fontSize: 15 },
+
+  noteCard: {
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 12,
+    elevation: 3,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    borderWidth: 1,
+  },
+  noteHeaderRow: {
+    flexDirection: 'row-reverse',
     justifyContent: 'space-between',
-    marginTop: 10, // מרווח עליון להפרדה משדה הקלט
-
-  },
-  modalButton: {
-    backgroundColor: '#000',
-    padding: 10,
-    borderRadius: 5,
-    flex: 1,
-    marginHorizontal: 5,
-  },
-  closeButton: {
-    backgroundColor: '#808080',
-  },
-  modalButtonText: {
-    color: '#fff',
-    textAlign: 'center',
-    fontSize: 16,
-  },
-  editText: {
-    color: 'blue',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  deleteButton: {
-    marginRight: 10,
-  },
-  deleteText: {
-    color: 'red',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  dashboardContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginVertical: 0,
-    padding: 10,
-  },
-  
-  dashboardBox: {
+    marginBottom: 8,
     alignItems: 'center',
-    padding: 15,
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    width: '30%',
-    elevation: 5, // צללית לאנדרואיד
-    shadowColor: '#000', // צללית ל-iOS
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
+    gap: 10,
+  },
+  noteTitle: { fontSize: 16, fontWeight: '900', flex: 1, textAlign: 'right' },
+  noteBody: { fontSize: 14, textAlign: 'right', marginBottom: 10, lineHeight: 22, fontWeight: '600' },
+  noteDate: { fontSize: 12, textAlign: 'left', fontWeight: '700' },
+  noteActions: { flexDirection: 'row' },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  modalBox: {
+    width: '100%',
+    maxWidth: 460,
+    borderRadius: 20,
+    padding: 18,
+    alignItems: 'center',
+    elevation: 14,
     borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.3)',
   },
-  
-  dashboardText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#6c63ff', // צבע סגול מעודן
-    textAlign: 'center',
+  modalTitle: { fontSize: 20, fontWeight: '900', marginBottom: 14, textAlign: 'center' },
+  modalInput: {
+    width: '100%',
+    padding: 14,
+    borderRadius: 14,
+    fontSize: 16,
+    textAlign: 'right',
+    marginBottom: 16,
+    borderWidth: 1,
   },
-  
-
-
-iconTxt: {
-  fontSize: 28,
-  color: '#fff',
-},
-  
+  modalBtns: {
+    flexDirection: 'row-reverse',
+    width: '100%',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  modalCancel: { padding: 10 },
+  modalAdd: { paddingVertical: 12, paddingHorizontal: 18, borderRadius: 14 },
 });
 
 export default Task;

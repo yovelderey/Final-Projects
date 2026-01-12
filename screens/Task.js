@@ -5,6 +5,7 @@ import {
   Image,
   FlatList,
   TextInput,
+  SafeAreaView,
   StyleSheet,
   StatusBar,
   TouchableOpacity,
@@ -12,9 +13,10 @@ import {
   Alert,
   Animated,
   ImageBackground,
+  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getDatabase, ref, set, get, push, remove } from 'firebase/database';
+import { getDatabase, ref, set, get, push, remove, onValue } from 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import { useNavigation } from '@react-navigation/native';
@@ -23,6 +25,7 @@ const Task = ({route,props}) => {
   
   const { id } = route.params;
   const [fadeAnim] = useState(new Animated.Value(0));
+  const screenWidth = Dimensions.get('window').width;
 
   const insets = useSafeAreaInsets();
   const [selectedTab, setSelectedTab] = useState('table');
@@ -105,6 +108,7 @@ const Task = ({route,props}) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editNoteId, setEditNoteId] = useState(null); // מזהה הפתק שנערך
   const [isEditMode, setIsEditMode] = useState(false); // מצב עריכה
+  const [themeMode, setThemeMode] = useState('auto'); // 'auto', 'light', 'dark'
 
   useEffect(() => {
     if (user) {
@@ -123,6 +127,17 @@ const Task = ({route,props}) => {
           setNotes(Object.entries(data).map(([key, value]) => ({ id: key, ...value })));
         }
       });
+
+      // האזנה לשינויים במצב התמה בפיירבייס
+      const themeRef = ref(database, 'theme/mode');
+      const unsubscribe = onValue(themeRef, (snapshot) => {
+        if (snapshot.exists()) {
+          setThemeMode(snapshot.val());
+        }
+      });
+
+      // הסרת האזנה כאשר הרכיב מוסר
+      return () => unsubscribe();
     }
   }, [user]);
 
@@ -298,6 +313,11 @@ const Task = ({route,props}) => {
     }
   }, [user]);
   
+  const openAddTask = () => {
+  setNewTask('');          // ננקה שדה קלט
+  setModalVisible(true);   // נפתח את המודל
+};
+
   const addTask = () => {
     if (newTask.trim() === '') {
       Alert.alert('שגיאה', 'אנא הזן טקסט למשימה');
@@ -343,17 +363,17 @@ const Task = ({route,props}) => {
     setSelectedTab(tab);
   };
   const renderTableRow = ({ item, index }) => (
-    <View style={styles.row}>
-      <TouchableOpacity style={styles.checkbox} onPress={() => handleCheckBoxChange(index)}>
-        <Text style={styles.checkboxText}>{item.checked ? 'V' : ''}</Text>
+    <View style={[styles.row, { borderColor: themeMode === 'dark' ? '#555' : '#ddd' }]}>
+      <TouchableOpacity style={[styles.checkbox, { borderColor: themeMode === 'dark' ? '#bbb' : 'rgba(108, 99, 255, 0.9)' }]} onPress={() => handleCheckBoxChange(index)}>
+        <Text style={[styles.checkboxText, { color: themeMode === 'dark' ? '#fff' : '#000' }]}>{item.checked ? 'V' : ''}</Text>
       </TouchableOpacity>
-      <Text style={styles.textCell}>{item.text}</Text>
+      <Text style={[styles.textCell, { color: themeMode === 'dark' ? '#fff' : '#000' }]}>{item.text}</Text>
       {item.custom && (
         <TouchableOpacity onPress={() => deleteTask(item.id)} style={styles.deleteButton}>
           <Text style={styles.deleteButtonText}>🗑️</Text>
         </TouchableOpacity>
       )}
-      <Text style={styles.cell}>{item.id}</Text>
+      <Text style={[styles.cell, { color: themeMode === 'dark' ? '#bbb' : '#000' }]}>{item.id}</Text>
 
     </View>
   );
@@ -402,184 +422,172 @@ const Task = ({route,props}) => {
     }
   };
   
+const HEADER_HEIGHT = 80;  // px – אפשר לשנות לפי העיצוב הרצוי
 
   
 
-  return (
-    <ImageBackground source={require('../assets/backgruondcontact.png')} style={styles.background}>
-    <StatusBar backgroundColor="rgba(108, 99, 255, 0.9)" barStyle="light-content" />
+ // …כל הקוד שמעל return נשאר ללא שינוי
+/* =========  Return  ========= */
+return (
+  <SafeAreaView style={{ flex: 1, backgroundColor: themeMode === 'dark' ? '#121212' : '#fff' }}>
+    <StatusBar backgroundColor={themeMode === 'dark' ? '#1f1f1f' : 'rgba(108,99,255,0.9)'} barStyle={themeMode === 'dark' ? 'light-content' : 'light-content'} />
+
+    <ImageBackground
+      source={themeMode === 'dark' ? require('../assets/backgruondcontact.png') : require('../assets/backgruondcontact.png')}
+      style={{ flex: 1 }}
+      imageStyle={{ opacity: themeMode === 'dark' ? 0.2 : 1 }}
+    >
+        <View
+  style={[
+    styles.header,
+    { height: HEADER_HEIGHT + insets.top, paddingTop: insets.top, backgroundColor: themeMode === 'dark' ? '#1f1f1f' : 'rgba(108,99,255,0.9)' },
+  ]}
+>
+  {/* כותרת */}
+  <Text style={[styles.headerTitle, { color: themeMode === 'dark' ? '#fff' : '#fff' }]}>ניהול משימות</Text>
+
+  {/* שורת הכפתורים – יושבת בתחתית ה-Header */}
+  <View style={styles.headerButtonsRow}>
+    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
+      <Text style={[styles.iconTxt, { color: themeMode === 'dark' ? '#fff' : '#fff' }]}>←</Text>
+    </TouchableOpacity>
 
     {selectedTab === 'table' && (
-      <View style={styles.header}>
-        <Text style={styles.title}>ניהול משימות</Text>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>←</Text>
-          </TouchableOpacity>
-
-          {selectedTab === 'table' && (
-            <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.backButton}>
-            <Text style={styles.addButtonText}>+</Text>
-          </TouchableOpacity>
-           )}
-
-        </View>
-      </View>
+    <TouchableOpacity
+    onPress={openAddTask}
+    activeOpacity={0.7}
+    /* ↑ חשוב להשאיר activeOpacity כדי לראות feedback בלחיצה */
+    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+    style={styles.iconBtn}
+    >
+    <Text style={[styles.addButtonText, { color: themeMode === 'dark' ? '#fff' : '#fff' }]}>＋</Text>
+    </TouchableOpacity>
     )}
-    {selectedTab === 'table' && (
-
-
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tabButton, selectedTab === 'table' && styles.selectedTab]}
-          onPress={() => setSelectedTab('table')}
-        >
-          <Text style={styles.tabText}>צ'ק ליסט</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabButton, selectedTab === 'notes' && styles.selectedTab]}
-          onPress={() => setSelectedTab('notes')}
-        >
-          <Text style={styles.tabText}>פתקים</Text>
-        </TouchableOpacity>
-      </View>
-    )}
-
-      {selectedTab === 'table' && (
-        <Animated.View style={[styles.dashboardContainer, { opacity: fadeAnim }]}>
-        <View style={styles.dashboardBox}>
-          <Text style={styles.dashboardText}>כמות המשימות {tableData.length}</Text>
-        </View>
-        <View style={styles.dashboardBox}>
-          <Text style={styles.dashboardText}>משימות מסומנות {countCheckedTasks()}</Text>
-        </View>
-        <View style={styles.dashboardBox}>
-          <Text style={styles.dashboardText}>
-            משימות שהוספת {tableData.filter((item) => item.custom).length}
-          </Text>
-        </View>
-      </Animated.View>
-      )}
-
-
-      {selectedTab === 'table' && (
-        <View style={styles.tableContainer}>
-          <FlatList
-            data={tableData}
-            renderItem={renderTableRow}
-            keyExtractor={(item) => item.id.toString()}
-          />
-        </View>
-        
-      )}
-      {selectedTab === 'table' && (
-        <Text style={styles.title2}>לחץ על כפתור ה- + ליצירת משימה חדשה לביצוע, מומלץ לעבור על הרשימה ולודא שלא שכחנו כלום.</Text>
-      )}
-
-
-      {selectedTab === 'notes' && (
-      <View style={styles.header2}>
-        <Text style={styles.title}>ניהול משימות</Text>
-        <View style={styles.headerButtons}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>←</Text>
-          </TouchableOpacity>
-
-          {selectedTab === 'table' && (
-            <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.backButton}>
-            <Text style={styles.addButtonText}>+</Text>
-          </TouchableOpacity>
-           )}
-
-        </View>
-      </View>
-    )}
-    {selectedTab === 'notes' && (
-
-
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tabButton, selectedTab === 'table' && styles.selectedTab]}
-          onPress={() => setSelectedTab('table')}
-        >
-          <Text style={styles.tabText}>צ'ק ליסט</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabButton, selectedTab === 'notes' && styles.selectedTab]}
-          onPress={() => setSelectedTab('notes')}
-        >
-          <Text style={styles.tabText}>פתקים</Text>
-        </TouchableOpacity>
-      </View>
-    )}
-
-      {selectedTab === 'notes' && (
-        <View style={styles.notesContainer}>
-  <TextInput
-    style={styles.noteNameInput}
-    placeholder="שם הפתק"
-    value={currentNoteName}
-    onChangeText={setCurrentNoteName}
-  />
-
-  <TextInput
-    style={styles.input2}
-    placeholder="הקלד כאן את התוכן"
-    placeholderTextColor="#999"
-    value={currentNote}
-    onChangeText={setCurrentNote}
-    multiline={true}
-    textAlign="right"                 // מיישר את הטקסט וה-placeholder לצד ימין
-
-  />
-
-      <View style={styles.buttonContainer}>
-        <Text style={styles.notesCount}>סך הכל: {notes.length}</Text>
-        <View style={styles.buttonGroup}>
-        {isEditMode && (
-            <TouchableOpacity style={styles.cancelButton} onPress={resetForm}>
-              <Text style={styles.buttonText}>בטל עריכה</Text>
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity style={styles.addButton} onPress={saveNote}>
-            <Text style={styles.buttonText}>{isEditMode ? 'שמור עריכה' : 'הוסף פתק חדש'}</Text>
-          </TouchableOpacity>
-
-        </View>
-      </View>
-
-
-
-  <FlatList
-    data={notes}
-    renderItem={({ item }) => (
-      <View style={styles.noteItem}>
-        <Text style={styles.noteTitle}>{item.name}</Text>
-        <Text style={styles.noteContent}>{item.content}</Text>
-        <Text style={styles.noteDate}>עודכן לאחרונה: {item.lastUpdated}</Text>
-        <View style={styles.noteButtons}>
-          <TouchableOpacity onPress={() => startEditNote(item)} style={styles.editButton}>
-            <Text style={styles.editText}>ערוך</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => deleteNote(item.id)} style={styles.deleteButton}>
-            <Text style={styles.deleteText}>מחק</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    )}
-    keyExtractor={(item) => item.id}
-  />
+  </View>
 </View>
 
-      )}
+
+      {/*── Tabs ──*/}
+      <View style={[styles.tabContainer, { paddingTop: HEADER_HEIGHT + insets.top }]}>
+        <TouchableOpacity
+          style={[styles.tabButton, selectedTab === 'table' && styles.selectedTab]}
+          onPress={() => setSelectedTab('table')}
+        >
+          <Text style={[styles.tabText, { color: themeMode === 'dark' ? '#fff' : '#000' }]}>צ'ק ליסט</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tabButton, selectedTab === 'notes' && styles.selectedTab]}
+          onPress={() => setSelectedTab('notes')}
+        >
+          <Text style={[styles.tabText, { color: themeMode === 'dark' ? '#fff' : '#000' }]}>פתקים</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/*── Dynamic content ──*/}
+      <View style={{ flex: 1, paddingTop: 10 }}>
+        {selectedTab === 'table' ? (
+          <>
+            {/* סטטיסטיקות */}
+            <Animated.View style={[styles.dashboardContainer, { opacity: fadeAnim }]}>
+              <View style={[styles.dashboardBox, { backgroundColor: themeMode === 'dark' ? '#333' : '#fff', borderColor: themeMode === 'dark' ? '#555' : 'rgba(108, 99, 255, 0.3)' }]}>
+                <Text style={[styles.dashboardText, { color: themeMode === 'dark' ? '#fff' : '#6c63ff' }]}>כמות המשימות {tableData.length}</Text>
+              </View>
+              <View style={[styles.dashboardBox, { backgroundColor: themeMode === 'dark' ? '#333' : '#fff', borderColor: themeMode === 'dark' ? '#555' : 'rgba(108, 99, 255, 0.3)' }]}>
+                <Text style={[styles.dashboardText, { color: themeMode === 'dark' ? '#fff' : '#6c63ff' }]}>משימות מסומנות {countCheckedTasks()}</Text>
+              </View>
+              <View style={[styles.dashboardBox, { backgroundColor: themeMode === 'dark' ? '#333' : '#fff', borderColor: themeMode === 'dark' ? '#555' : 'rgba(108, 99, 255, 0.3)' }]}>
+                <Text style={[styles.dashboardText, { color: themeMode === 'dark' ? '#fff' : '#6c63ff' }]}>
+                  משימות שהוספת {tableData.filter(i => i.custom).length}
+                </Text>
+              </View>
+            </Animated.View>
+
+            {/* טבלה */}
+            <View style={[styles.tableContainer, { backgroundColor: themeMode === 'dark' ? '#222' : '#fff' }]}>
+              <FlatList
+                data={tableData}
+                renderItem={renderTableRow}
+                keyExtractor={item => item.id.toString()}
+              />
+            </View>
+
+            <Text style={[styles.title2, { color: themeMode === 'dark' ? '#bbb' : '#000' }]}>
+              לחץ על כפתור ה־+ להוספת משימה חדשה ולוודא שלא שכחנו כלום.
+            </Text>
+          </>
+        ) : (
+          /*── Notes screen ──*/
+          <View style={styles.notesContainer}>
+            <TextInput
+              style={[styles.noteNameInput, { backgroundColor: themeMode === 'dark' ? '#333' : '#fff', color: themeMode === 'dark' ? '#fff' : '#000', borderColor: themeMode === 'dark' ? '#555' : '#ccc' }]}
+              placeholder="שם הפתק"
+              placeholderTextColor={themeMode === 'dark' ? '#bbb' : '#999'}
+              value={currentNoteName}
+              onChangeText={setCurrentNoteName}
+            />
+
+            <TextInput
+              style={[styles.input2, { backgroundColor: themeMode === 'dark' ? '#333' : '#fff', color: themeMode === 'dark' ? '#fff' : '#000', borderColor: themeMode === 'dark' ? '#555' : '#ccc' }]}
+              placeholder="הקלד כאן את התוכן"
+              placeholderTextColor={themeMode === 'dark' ? '#bbb' : '#999'}
+              value={currentNote}
+              onChangeText={setCurrentNote}
+              multiline
+              textAlign="right"
+            />
+
+            {/* כפתורים */}
+            <View style={styles.buttonContainer}>
+              <Text style={[styles.notesCount, { color: themeMode === 'dark' ? '#fff' : '#6c63ff' }]}>סך הכול: {notes.length}</Text>
+              <View style={styles.buttonGroup}>
+                {isEditMode && (
+                  <TouchableOpacity style={styles.cancelButton} onPress={resetForm}>
+                    <Text style={styles.buttonText}>בטל עריכה</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity style={styles.addButton} onPress={saveNote}>
+                  <Text style={styles.buttonText}>
+                    {isEditMode ? 'שמור עריכה' : 'הוסף פתק חדש'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* רשימת פתקים */}
+            <FlatList
+              data={notes}
+              keyExtractor={item => item.id}
+              renderItem={({ item }) => (
+                <View style={[styles.noteItem, { backgroundColor: themeMode === 'dark' ? '#333' : '#f9f9f9', borderColor: themeMode === 'dark' ? '#555' : '#333' }]}>
+                  <Text style={[styles.noteTitle, { color: themeMode === 'dark' ? '#fff' : '#333' }]}>{item.name}</Text>
+                  <Text style={[styles.noteContent, { color: themeMode === 'dark' ? '#ddd' : '#000' }]}>{item.content}</Text>
+                  <Text style={[styles.noteDate, { color: themeMode === 'dark' ? '#bbb' : '#888' }]}>עודכן לאחרונה: {item.lastUpdated}</Text>
+                  <View style={styles.noteButtons}>
+                    <TouchableOpacity onPress={() => startEditNote(item)} style={styles.editButton}>
+                      <Text style={styles.editText}>ערוך</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => deleteNote(item.id)} style={styles.deleteButton}>
+                      <Text style={styles.deleteText}>מחק</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            />
+          </View>
+        )}
+      </View>
+
+      {/*── Add-Task Modal ──*/}
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>הוסף משימה חדשה</Text>
+          <View style={[styles.modalContent, { backgroundColor: themeMode === 'dark' ? '#333' : '#fff' }]}>
+            <Text style={[styles.modalTitle, { color: themeMode === 'dark' ? '#fff' : '#000' }]}>הוסף משימה חדשה</Text>
             <View style={styles.inputContainer}>
               <TextInput
-                style={styles.input3}
+                style={[styles.input3, { backgroundColor: themeMode === 'dark' ? '#444' : '#fff', color: themeMode === 'dark' ? '#fff' : '#000', borderColor: themeMode === 'dark' ? '#555' : '#ccc' }]}
                 placeholder="הקלד כאן את המשימה"
+                placeholderTextColor={themeMode === 'dark' ? '#bbb' : '#999'}
                 value={newTask}
                 onChangeText={setNewTask}
               />
@@ -588,25 +596,27 @@ const Task = ({route,props}) => {
               <TouchableOpacity onPress={addTask} style={styles.modalButton}>
                 <Text style={styles.modalButtonText}>הוסף</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => setModalVisible(false)} style={[styles.modalButton, styles.closeButton]}>
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                style={[styles.modalButton, styles.closeButton]}
+              >
                 <Text style={styles.modalButtonText}>ביטול</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-
-
-
     </ImageBackground>
+  </SafeAreaView>
+);
 
-  );
+
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#000',
 
   },
   topBar: {
@@ -618,7 +628,7 @@ const styles = StyleSheet.create({
 
   },
   title: {
-    marginTop: 30, // הגדלת המרווח העליון
+    marginTop: 10, // הגדלת המרווח העליון
     color: '#fff',
     fontSize: 28,
     fontWeight: 'bold',
@@ -657,6 +667,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     marginVertical: 0,
+    marginTop: -40,      // ▲   שלב את המספר עד שמרגיש נכון (-6,-8,-12…)
+    marginBottom: 0,
+    paddingVertical: 6,
   },
   tabButton: {
     paddingVertical: 10,
@@ -864,22 +877,47 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#000',
   },
-  header: {
-    backgroundColor: 'rgba(108, 99, 255, 0.9)',
-    paddingTop: 25,
-    paddingBottom: 15,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-    marginTop: -50,
+header: {
+  backgroundColor: 'rgba(108,99,255,0.9)',
+  justifyContent: 'center',           // ממקם את הכותרת במרכז אנכי
+},
 
-  },
+headerTitle: {
+  fontSize: 22,
+  fontWeight: 'bold',
+  color: '#fff',
+  textAlign: 'center',
+},
+
+/* כפתורים מיושרים לימין/שמאל בתחתית ה-Header */
+headerButtonsRow: {
+  position: 'absolute',
+  bottom: 12,                          // מרחק מהקצה התחתון של ה-Header
+  left: 0,
+  right: 0,
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  paddingHorizontal: 18,
+},
+
+
+iconBtn: {
+  width: 24,                     // רוחב / גובה אחידים לאייקונים
+  height: 24,
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding:20,                  // אזור לחיץ גדול יותר
+
+},
+
+
   header2: {
     backgroundColor: 'rgba(108, 99, 255, 0.9)',
     paddingTop: 25,
     paddingBottom: 15,
     paddingHorizontal: 20,
     alignItems: 'center',
-    marginTop: -3,
+    marginTop: 0,
 
   },
   headerButtons: {
@@ -1017,7 +1055,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   
-  
+
+
+iconTxt: {
+  fontSize: 28,
+  color: '#fff',
+},
   
 });
 

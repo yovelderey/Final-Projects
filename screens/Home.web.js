@@ -1,24 +1,20 @@
-// Home.js — רספונסיבי לכל המסכים + גלילה + כפתור יציאה ללובי
-import React, { useState, useEffect } from 'react';
+// Home.js — רספונסיבי + גלילה + "יציאה ללובי" בלי ניתוק משתמש + כתיבת Event רק בלחיצה על "המשך" + שמירת DarkMode audit ב-Firebase
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   TouchableOpacity,
   Image,
   Text,
   TextInput,
-  ImageBackground,
   StyleSheet,
   Animated,
   View,
   Alert,
   ScrollView,
   Dimensions,
+  Platform,
+  useColorScheme,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { Picker } from '@react-native-picker/picker';
-import { format } from 'date-fns';
-import { he } from 'date-fns/locale';
-import 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
@@ -57,10 +53,33 @@ const Home = (props) => {
 
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
-  const contentW = Math.min(screenWidth * 0.96, 980); // רוחב מקסימלי נעים לקריאה
+  const contentW = Math.min(screenWidth * 0.96, 980);
 
   const user = firebase.auth().currentUser;
   const database = getDatabase();
+
+  // ===== Dark Mode (UI + audit write) =====
+  const systemScheme = useColorScheme(); // 'dark' | 'light' | null
+  const resolvedIsDark = systemScheme === 'dark';
+
+  const theme = useMemo(() => {
+    const isDark = resolvedIsDark;
+    return {
+      isDark,
+      bg: isDark ? '#0B0F19' : '#FFFFFF',
+      card: isDark ? '#111827' : '#FFFFFF',
+      text: isDark ? '#E5E7EB' : '#111827',
+      subText: isDark ? '#C7CED9' : '#333333',
+      border: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(108, 99, 255, 0.35)',
+      borderStrong: isDark ? 'rgba(255,255,255,0.22)' : 'rgba(108, 99, 255, 0.9)',
+      primary: 'rgba(108, 99, 255, 0.9)',
+      primaryTextOn: '#FFFFFF',
+      mutedBtn: isDark ? '#374151' : 'gray',
+      shadow: isDark ? '#000' : '#000',
+    };
+  }, [resolvedIsDark]);
+
+  const styles = useMemo(() => createStyles(theme), [theme]);
 
   const handleCategorySelection = (category) => {
     setSelectedCategory(category);
@@ -80,33 +99,36 @@ const Home = (props) => {
       friction: 2,
       useNativeDriver: true,
     }).start();
-  }, [eventName, secondOwnerName, selectedCategory]);
+  }, [eventName, secondOwnerName, selectedCategory, buttonScale]);
 
-  // יציאה ללובי (Sign out + reset)
-  const exitToLobby = async () => {
-    try {
-      await firebase.auth().signOut();
-    } catch (e) {
-      // גם אם נכשל – ננווט ללובי
-    }
-    props.navigation.reset({
-      index: 0,
-      routes: [{ name: 'LoginEmail' }], // ← אם שם הלובי שונה, להחליף כאן
-    });
-  };
-
-  const handleCreateEvent = () => {
-    let finalEventName = eventName;
-    if (selectedCategory === 'חתונה') {
-      finalEventName = eventName + ' & ' + secondOwnerName;
-    }
-
-    if (!user) {
-      Alert.alert('Error', 'User is not logged in.');
+  // ✅ יציאה ללובי בלי SignOut (לא מנתק משתמש)
+  const exitToLobby = () => {
+    // אם יש לאן לחזור בסטאק – חזור אחורה
+    if (props?.navigation?.canGoBack?.()) {
+      props.navigation.goBack();
       return;
     }
 
-    const databaseRef = ref(database, `Events/${user.uid}/${finalEventName}/`);
+    // אחרת – ריסט ללובי (לא עושים signOut)
+    props.navigation.reset({
+      index: 0,
+      routes: [{ name: 'LoginEmail' }], // אם הלובי אצלך בשם אחר — תחליף כאן
+    });
+  };
+
+  // ✅ יצירת אירוע: הכל נכתב לפיירבייס רק אחרי לחיצה על "המשך"
+  const handleCreateEvent = async () => {
+    let finalEventName = eventName.trim();
+    if (selectedCategory === 'חתונה') {
+      finalEventName = `${eventName.trim()} & ${secondOwnerName.trim()}`;
+    }
+
+    if (!user) {
+      Alert.alert('שגיאה', 'המשתמש לא מחובר.');
+      return;
+    }
+
+    const basePath = `Events/${user.uid}/${finalEventName}`;
 
     const defaultTableData = [
       { id: '1', col1: '00.00.0000', col2: '300', col3: '0', col4: 'הזמנות', col5: '1' },
@@ -132,249 +154,268 @@ const Home = (props) => {
       plan: 'no plan',
     };
 
-    set(databaseRef, userData)
-      .then(() => {
-        props.navigation.navigate('HomeOne', { finalEventName });
-      })
-      .catch((error) => {
-        console.error('Error writing data to the database:', error);
-      });
+    // audit theme בדיוק כמו שביקשת:
+    // Events/{uid}/{eventName}/__admin/audit/ui/theme
+    const themeAudit = {
+      mode: 'auto',
+      platform: Platform.OS,
+      resolvedIsDark: theme.isDark === true,
+      systemScheme: systemScheme || 'unknown',
+      ts: Date.now(),
+    };
 
-    set(ref(database, `Events/${user.uid}/${finalEventName}/yes_caming`), 0);
-    set(ref(database, `Events/${user.uid}/${finalEventName}/maybe`), 0);
-    set(ref(database, `Events/${user.uid}/${finalEventName}/no_cuming`), 0);
-    set(ref(database, `Events/${user.uid}/${finalEventName}/no_answear`), 0);
+    try {
+      // 1) קודם יוצרים בסיס אירוע
+      await set(ref(database, `${basePath}/`), userData);
 
-    set(ref(database, `Events/${user.uid}/${finalEventName}/Numberofimage/`), 0);
-    set(ref(database, `Events/${user.uid}/${finalEventName}/NumberofSizeimage/`), 0);
-    set(ref(database, `Events/${user.uid}/${finalEventName}/Table_RSVPs/`), defaultTableData);
+      // 2) ואז כל שאר הנתיבים (כדי לא להידרס בגלל set במקביל)
+      await Promise.all([
+        set(ref(database, `${basePath}/yes_caming`), 0),
+        set(ref(database, `${basePath}/maybe`), 0),
+        set(ref(database, `${basePath}/no_cuming`), 0),
+        set(ref(database, `${basePath}/no_answear`), 0),
 
-    setEventDate('0000-00-00');
-    setEventTime('00:00');
-    setEventLocation('לא הוגדר');
-    setNumberofguests('0');
-    setBudget('0');
-    setEventDescription('אין הערות');
+        set(ref(database, `${basePath}/Numberofimage/`), 0),
+        set(ref(database, `${basePath}/NumberofSizeimage/`), 0),
+        set(ref(database, `${basePath}/Table_RSVPs/`), defaultTableData),
+
+        set(ref(database, `${basePath}/__admin/audit/ui/theme`), themeAudit),
+      ]);
+
+      // 3) ניווט רק אחרי שכל הכתיבות הצליחו
+      props.navigation.navigate('HomeOne', { finalEventName });
+
+      // 4) איפוס שדות (אופציונלי)
+      setEventDate('0000-00-00');
+      setEventTime('00:00');
+      setEventLocation('לא הוגדר');
+      setNumberofguests('0');
+      setBudget('0');
+      setEventDescription('אין הערות');
+    } catch (error) {
+      console.error('Error writing data to the database:', error);
+      Alert.alert('שגיאה', 'לא הצלחתי ליצור אירוע. נסה שוב.');
+    }
   };
 
   return (
+    <ScrollView
+      style={{ flex: 1, width: '100%', backgroundColor: theme.bg }}
+      contentContainerStyle={[styles.scrollContent, { minHeight: screenHeight * 0.98 }]}
+      keyboardShouldPersistTaps="handled"
+    >
+      {/* כותרות */}
+      <Text style={styles.title1}>יצירת אירוע חדש</Text>
 
-      <ScrollView
-        style={{ flex: 1, width: '100%' }}
-        contentContainerStyle={[styles.scrollContent, { minHeight: screenHeight * 0.98 }]}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* כותרות */}
-        <Text style={styles.title1}>יצירת אירוע חדש</Text>
+      {/* פעולות עליונות (יציאה ללובי) */}
+      <View style={[styles.topActions, { width: contentW }]}>
+        <TouchableOpacity
+          onPress={exitToLobby}
+          style={styles.exitBtn}
+          activeOpacity={0.9}
+          accessibilityLabel="יציאה ללובי"
+        >
+          <Ionicons name="log-out-outline" size={18} color={theme.primary} />
+          <Text style={styles.exitBtnText}>יציאה ללובי</Text>
+        </TouchableOpacity>
+      </View>
 
-        {/* פעולות עליונות (יציאה ללובי) */}
-        <View style={[styles.topActions, { width: contentW }]}>
+      <Text style={styles.title2}>מה אתם חוגגים?</Text>
+
+      {/* קטגוריות */}
+      <View style={[styles.buttonContainer, { width: contentW }]}>
+        {[
+          { category: 'חתונה', icon: require('../assets/rings.png') },
+          { category: 'חינה', icon: require('../assets/camel.png') },
+          { category: 'בר/ת מצווה', icon: require('../assets/children.png') },
+          { category: 'בריתה', icon: require('../assets/baby-carriage.png') },
+          { category: 'יום הולדת', icon: require('../assets/happy-birthday.png') },
+          { category: 'כנס', icon: require('../assets/conference.png') },
+          { category: 'וובינר', icon: require('../assets/webinar.png') },
+          { category: 'אחר', icon: require('../assets/more.png') },
+        ].map((item) => (
           <TouchableOpacity
-            onPress={exitToLobby}
-            style={styles.exitBtn}
+            key={item.category}
+            style={[
+              styles.categoryButton,
+              selectedCategory === item.category && styles.selectedCategoryButton,
+            ]}
+            onPress={() => handleCategorySelection(item.category)}
             activeOpacity={0.9}
-            accessibilityLabel="יציאה משמשתמש"
           >
-            <Ionicons name="log-out-outline" size={18} color="rgba(108, 99, 255, 0.9)" />
-            <Text style={styles.exitBtnText}>יציאה ללובי</Text>
+            <Image source={item.icon} style={styles.categoryIcon} />
+            <Text style={styles.categoryButtonText}>{item.category}</Text>
           </TouchableOpacity>
-        </View>
+        ))}
+      </View>
 
-        <Text style={styles.title2}>מה אתם חוגגים?</Text>
+      {/* שדות טקסט רספונסיביים */}
+      <TextInput
+        style={[
+          styles.input,
+          { width: screenWidth >= 900 ? '32%' : screenWidth >= 600 ? '48%' : '80%' },
+        ]}
+        placeholder="שם בעל האירוע"
+        placeholderTextColor={theme.isDark ? 'rgba(229,231,235,0.55)' : 'rgba(17,24,39,0.45)'}
+        value={eventName}
+        onChangeText={(text) => setEventName(text)}
+      />
 
-        {/* קטגוריות */}
-        <View style={[styles.buttonContainer, { width: contentW }]}>
-          {[
-            { category: 'חתונה', icon: require('../assets/rings.png') },
-            { category: 'חינה', icon: require('../assets/camel.png') },
-            { category: 'בר/ת מצווה', icon: require('../assets/children.png') },
-            { category: 'בריתה', icon: require('../assets/baby-carriage.png') },
-            { category: 'יום הולדת', icon: require('../assets/happy-birthday.png') },
-            { category: 'כנס', icon: require('../assets/conference.png') },
-            { category: 'וובינר', icon: require('../assets/webinar.png') },
-            { category: 'אחר', icon: require('../assets/more.png') },
-          ].map((item) => (
-            <TouchableOpacity
-              key={item.category}
-              style={[
-                styles.categoryButton,
-                selectedCategory === item.category && styles.selectedCategoryButton,
-              ]}
-              onPress={() => handleCategorySelection(item.category)}
-              activeOpacity={0.9}
-            >
-              <Image source={item.icon} style={styles.categoryIcon} />
-              <Text style={styles.categoryButtonText}>{item.category}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* שדות טקסט רספונסיביים */}
+      {selectedCategory === 'חתונה' && (
         <TextInput
           style={[
             styles.input,
             { width: screenWidth >= 900 ? '32%' : screenWidth >= 600 ? '48%' : '80%' },
           ]}
-          placeholder="שם בעל האירוע"
-          value={eventName}
-          onChangeText={(text) => setEventName(text)}
+          placeholder="שם בעלת האירוע"
+          placeholderTextColor={theme.isDark ? 'rgba(229,231,235,0.55)' : 'rgba(17,24,39,0.45)'}
+          value={secondOwnerName}
+          onChangeText={(text) => setSecondOwnerName(text)}
         />
+      )}
 
-        {selectedCategory === 'חתונה' && (
-          <TextInput
-            style={[
-              styles.input,
-              { width: screenWidth >= 900 ? '32%' : screenWidth >= 600 ? '48%' : '80%' },
-            ]}
-            placeholder="שם בעלת האירוע"
-            value={secondOwnerName}
-            onChangeText={(text) => setSecondOwnerName(text)}
-          />
-        )}
+      <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+        <TouchableOpacity
+          style={[
+            styles.nextButton,
+            !canProceed && { backgroundColor: theme.mutedBtn },
+          ]}
+          onPress={handleCreateEvent}
+          disabled={!canProceed}
+          activeOpacity={0.9}
+        >
+          <Text style={styles.nextButtonText}>המשך</Text>
+        </TouchableOpacity>
+      </Animated.View>
 
-        <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
-          <TouchableOpacity
-            style={[styles.nextButton, !canProceed && { backgroundColor: 'gray' }]}
-            onPress={handleCreateEvent}
-            disabled={!canProceed}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.nextButtonText}>המשך</Text>
-          </TouchableOpacity>
-        </Animated.View>
-
-        {/* מרווח תחתון קטן כדי שלא "יידבק" לקצה במסכים קטנים */}
-        <View style={{ height: 24 }} />
-      </ScrollView>
+      <View style={{ height: 24 }} />
+    </ScrollView>
   );
 };
 
-const styles = StyleSheet.create({
-  backgroundImage: {
-    flex: 1,
-    width: '100%',
-    justifyContent: 'flex-start',
-  },
-  scrollContent: {
-    paddingTop: 50,
-    paddingBottom: 30,
-    alignItems: 'center',
-    backgroundColor: '#fff',
+function createStyles(theme) {
+  return StyleSheet.create({
+    scrollContent: {
+      paddingTop: 50,
+      paddingBottom: 30,
+      alignItems: 'center',
+      backgroundColor: theme.bg,
+    },
 
-  },
+    title1: {
+      fontSize: 26,
+      fontWeight: 'bold',
+      alignSelf: 'center',
+      color: theme.primary,
+      marginBottom: 8,
+    },
+    title2: {
+      fontSize: 19,
+      alignSelf: 'center',
+      marginTop: 60,
+      marginBottom: 12,
+      color: theme.text,
+    },
 
+    // אזור פעולות עליון
+    topActions: {
+      alignSelf: 'center',
+      marginTop: 6,
+      marginBottom: 6,
+      flexDirection: 'row-reverse',
+      justifyContent: 'flex-start',
+    },
+    exitBtn: {
+      flexDirection: 'row-reverse',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 12,
+      height: 36,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: theme.borderStrong,
+      backgroundColor: theme.card,
+      alignSelf: 'flex-start',
+    },
+    exitBtnText: {
+      color: theme.primary,
+      fontWeight: '700',
+      fontSize: 14,
+    },
 
-  title1: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    alignSelf: 'center',
-    color: 'rgba(108, 99, 255, 0.9)',
-    marginBottom: 8,
-  },
-  title2: {
-    fontSize: 19,
-    alignSelf: 'center',
-    marginTop: 60,
-    marginBottom: 12,
-  },
+    // רשת כפתורי קטגוריות
+    buttonContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignSelf: 'center',
+      justifyContent: 'center',
+      marginVertical: 10,
+      columnGap: 10,
+    },
+    categoryButton: {
+      width: 130,
+      height: 90,
+      margin: 8,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.card,
+      borderWidth: 2,
+      borderColor: theme.isDark ? 'rgba(255,255,255,0.18)' : 'gray',
+      borderRadius: 12,
+      shadowColor: theme.shadow,
+      shadowOpacity: theme.isDark ? 0.18 : 0.06,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 2,
+    },
+    selectedCategoryButton: {
+      borderColor: 'orange',
+      borderWidth: 4,
+    },
+    categoryIcon: {
+      width: 40,
+      height: 40,
+      marginBottom: 6,
+    },
+    categoryButtonText: {
+      fontSize: 15,
+      fontWeight: 'bold',
+      color: theme.text,
+    },
 
-  // אזור פעולות עליון
-  topActions: {
-    alignSelf: 'center',
-    marginTop: 6,
-    marginBottom: 6,
-    flexDirection: 'row-reverse',
-    justifyContent: 'flex-start',
-  },
-  exitBtn: {
-    flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(108, 99, 255, 0.9)',
-    backgroundColor: '#fff',
-    alignSelf: 'flex-start',
-  },
-  exitBtnText: {
-    color: 'rgba(108, 99, 255, 0.9)',
-    fontWeight: '700',
-    fontSize: 14,
-  },
+    // שדות
+    input: {
+      height: 42,
+      borderWidth: 1,
+      borderRadius: 7,
+      borderColor: theme.borderStrong,
+      backgroundColor: theme.card,
+      paddingHorizontal: 12,
+      textAlign: 'right',
+      marginBottom: 14,
+      alignSelf: 'center',
+      color: theme.text,
+    },
 
-  // רשת כפתורי קטגוריות
-  buttonContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignSelf: 'center',
-    justifyContent: 'center',
-    marginVertical: 10,
-    columnGap: 10,
-  },
-  categoryButton: {
-    width: 130,
-    height: 90,
-    margin: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    borderWidth: 2,
-    borderColor: 'gray',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  selectedCategoryButton: {
-    borderColor: 'orange',
-    borderWidth: 4,
-  },
-  categoryIcon: {
-    width: 40,
-    height: 40,
-    marginBottom: 6,
-  },
-  categoryButtonText: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: 'black',
-  },
-
-  // שדות
-  input: {
-    height: 42,
-    borderWidth: 1,
-    borderRadius: 7,
-    borderColor: 'rgba(108, 99, 255, 0.9)',
-    backgroundColor: 'white',
-    paddingHorizontal: 12,
-    textAlign: 'right',
-    marginBottom: 14,
-    alignSelf: 'center',
-  },
-
-  // כפתור הבא
-  nextButton: {
-    marginTop: 6,
-    backgroundColor: 'rgba(108, 99, 255, 0.9)',
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 260,
-    height: 44,
-    elevation: 5,
-    alignSelf: 'center',
-  },
-  nextButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-});
+    // כפתור הבא
+    nextButton: {
+      marginTop: 6,
+      backgroundColor: theme.primary,
+      paddingHorizontal: 16,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: 260,
+      height: 44,
+      elevation: 5,
+      alignSelf: 'center',
+    },
+    nextButtonText: {
+      color: theme.primaryTextOn,
+      fontWeight: '700',
+      fontSize: 16,
+    },
+  });
+}
 
 export default Home;

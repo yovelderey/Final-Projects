@@ -43,66 +43,88 @@ if (!firebase.apps.length) {
 function Main(props) {
   const navigation = useNavigation();
   const { width: windowWidth } = useWindowDimensions();
-
   const MEDIA_VISIBILITY = 0.6;
-
+  const fetchSeqRef = useRef(0);
+  const lastUidRef = useRef(null);
   const [isLoggedIn, setLoggedIn] = useState(false);
   const [isCreate, setIsCreate] = useState(false);
   const [user, setUser] = useState(null);
-
   const [data, setData] = useState([]);
   const [isConnected, setIsConnected] = useState(true);
-
   const [showWebDialog, setShowWebDialog] = useState(false);
   const [showWebClearConfirm, setShowWebClearConfirm] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
-
   const slideAnim = useRef(new Animated.Value(-40)).current;
+  const fetchDataForUid = async (uid) => {
+  const seq = ++fetchSeqRef.current;
+
+  try {
+    // ✅ אם אין יוזר — חייבים לנקות כדי שלא יישאר data ישן
+    if (!uid) {
+      setData([]);
+      return;
+    }
+
+    const db = getDatabase();
+    const r = ref(db, `Events/${uid}/`);
+    const snap = await get(r);
+    const val = snap.val();
+
+    // ✅ הגנה: אם בינתיים התחלף יוזר / הגיע fetch חדש — מתעלמים
+    const stillSameUser = firebase.auth().currentUser?.uid === uid;
+    if (seq !== fetchSeqRef.current || !stillSameUser) return;
+
+    setData(val ? Object.keys(val).map((k) => ({ id: k, ...val[k] })) : []);
+  } catch (e) {
+    // ✅ אם נכשל, עדיף לא להשאיר “ישן”
+    if (seq === fetchSeqRef.current) setData([]);
+    console.log('Error fetching data:', e);
+  }
+};
 
   // ─────────────────────────── subscriptions ───────────────────────────
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const u = firebase.auth().currentUser;
-        if (!u) return;
+useEffect(() => {
+  const unsubNet = NetInfo.addEventListener((state) => {
+    setIsConnected(!!state.isConnected);
+  });
 
-        const db = getDatabase();
-        const r = ref(db, `Events/${u.uid}/`);
-        const snap = await get(r);
-        const val = snap.val();
+  const unsubAuth = firebase.auth().onAuthStateChanged((authUser) => {
+    const uid = authUser?.uid || null;
 
-        setData(val ? Object.keys(val).map((k) => ({ id: k, ...val[k] })) : []);
-      } catch (e) {
-        console.log('Error fetching data:', e);
-      }
-    };
+    // ✅ אם התחלף יוזר — נקה מייד כדי שלא יראו את הישן אפילו לשנייה
+    if (lastUidRef.current !== uid) {
+      lastUidRef.current = uid;
+      setData([]);
+    }
 
-    const unsubNet = NetInfo.addEventListener((state) => {
-      setIsConnected(!!state.isConnected);
-    });
+    if (authUser) {
+      setUser(authUser);
+      setLoggedIn(true);
+      setIsCreate(false);
+      fetchDataForUid(uid); // ✅ מביא נתונים *אחרי* שהיוזר התעדכן
+    } else {
+      setUser(null);
+      setLoggedIn(false);
+      setIsCreate(true);
+      setData([]); // ✅ קריטי
+    }
+  });
 
-    const unsubNav = props.navigation.addListener('focus', fetchData);
+  const unsubNav = props.navigation.addListener('focus', () => {
+    const uid = firebase.auth().currentUser?.uid || null;
+    fetchDataForUid(uid);
+  });
 
-    const unsubAuth = firebase.auth().onAuthStateChanged((authUser) => {
-      if (authUser) {
-        setUser(authUser);
-        setLoggedIn(true);
-        setIsCreate(false);
-      } else {
-        setUser(null);
-        setLoggedIn(false);
-        setIsCreate(true);
-      }
-    });
+  // ✅ טעינה ראשונית
+  fetchDataForUid(firebase.auth().currentUser?.uid || null);
 
-    fetchData();
+  return () => {
+    unsubNet();
+    unsubNav();
+    unsubAuth();
+  };
+}, [props.navigation]);
 
-    return () => {
-      unsubNet();
-      unsubNav();
-      unsubAuth();
-    };
-  }, [props.navigation]);
 
   useEffect(() => {
     if (!isCreate) {
