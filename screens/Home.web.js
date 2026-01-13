@@ -179,7 +179,7 @@ const Home = (props) => {
         set(ref(database, `${basePath}/NumberofSizeimage/`), 0),
         set(ref(database, `${basePath}/Table_RSVPs/`), defaultTableData),
 
-        set(ref(database, `${basePath}/__admin/audit/ui/theme`), themeAudit),
+        set(ref(database, `${basePath}/__admin/ui/theme`), themeAudit),
       ]);
 
       // 3) ניווט רק אחרי שכל הכתיבות הצליחו

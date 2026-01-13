@@ -781,6 +781,33 @@ const ACTIONS_W = headerBtnSize * 3 + 16; // ✅ מקום ל-3 אייקונים
   const imagesToShow = selectedImage ? [{ uri: selectedImage }] : imagesFallback;
   const scrollRef = useRef(null);
   const latestWhatsStatusRef = useRef({});
+// ✅ Firebase is source of truth for themeMode
+const themePath = useMemo(() => {
+  if (!user?.uid || !id) return null;
+  return `Events/${user.uid}/${id}/__admin/ui/theme`; // אותו מקום שאתה כבר כותב אליו
+}, [user?.uid, id]);
+
+useEffect(() => {
+  if (!themePath) return;
+
+  const r = ref(database, themePath);
+
+  const unsub = meteredOnValue(r, (snap) => {
+    const v = snap.val() || {};
+    const modeFromDb = v?.mode;
+
+    const safeMode = ['auto', 'light', 'dark'].includes(modeFromDb) ? modeFromDb : 'auto';
+
+    // ✅ חשוב: למנוע "echo" אם נשארה אצלך כתיבה אוטומטית במקום אחר
+    applyingRemoteThemeRef.current = true;
+    setThemeMode(safeMode);
+
+    // לשחרר מיד אחרי הסטייט
+    setTimeout(() => { applyingRemoteThemeRef.current = false; }, 0);
+  });
+
+  return () => { try { unsub?.(); } catch {} };
+}, [database, themePath]);
 
   // שורת "מד רשת" במסך
   const [netLine, setNetLine] = useState('');
@@ -823,40 +850,7 @@ const ACTIONS_W = headerBtnSize * 3 + 16; // ✅ מקום ל-3 אייקונים
   }, [user, id, database]);
 
   // תמה — טעינה/שמירה ב־AsyncStorage
-// תמה — טעינה מ-AsyncStorage (לא לוג בפעם הראשונה)
-useEffect(() => {
-  (async () => {
-    try {
-      const saved = await AsyncStorage.getItem('themeMode');
-      if (['auto', 'light', 'dark'].includes(saved)) {
-        setThemeMode(saved);
-      }
-    } catch {}
-    finally {
-      themeHydratedRef.current = true;
-    }
-  })();
-}, []);
 
-// תמה — שמירה ל-AsyncStorage + כתיבה לפיירבייס רק כשבאמת השתנה (אחרי hydration)
-useEffect(() => {
-  AsyncStorage.setItem('themeMode', themeMode).catch(() => {});
-
-  if (!themeHydratedRef.current) return;
-
-  // ✅ אם זה עדכון שהגיע מהפיירבייס — לא עושים echo לשרת
-  if (applyingRemoteThemeRef.current) return;
-
-  if (prevThemeModeRef.current === null) {
-    prevThemeModeRef.current = themeMode;
-    return;
-  }
-
-  if (prevThemeModeRef.current === themeMode) return;
-
-  prevThemeModeRef.current = themeMode;
-  writeThemeModeToFirebase(themeMode);
-}, [themeMode, writeThemeModeToFirebase]);
 
 useEffect(() => {
   const nav = props.navigation ?? navigation;
@@ -903,8 +897,15 @@ useEffect(() => {
   }
 }, [user?.uid, id, writeThemeModeToFirebase]);
 const cycleThemeMode = () => {
-  setThemeMode((m) => (m === 'auto' ? 'dark' : m === 'dark' ? 'light' : 'auto'));
+  const next = themeMode === 'auto' ? 'dark' : themeMode === 'dark' ? 'light' : 'auto';
+
+  // אופציונלי: UI מיידי
+  setThemeMode(next);
+
+  // ✅ מקור האמת = Firebase
+  writeThemeModeToFirebase(next);
 };
+
 
   const themeIconName = themeMode === 'auto' ? 'contrast' : isDark ? 'sunny' : 'moon';
   const themeA11yLabel = themeMode === 'auto' ? 'מצב מערכת (אוטומטי)' : isDark ? 'מצב כהה' : 'מצב בהיר';

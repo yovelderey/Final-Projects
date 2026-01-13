@@ -19,7 +19,7 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 
-import { getDatabase, ref, set, get } from 'firebase/database';
+import { getDatabase, ref, set, get, onValue } from 'firebase/database';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import { useNavigation } from '@react-navigation/native';
@@ -382,19 +382,96 @@ const Budget = (props) => {
   const navigation = useNavigation();
   const { width: screenW } = useWindowDimensions();
   const isMobile = screenW < 700;
+// Firebase (חייב להיות לפני כל useEffect שמשתמש בזה)
+const database = getDatabase();
+
+// user כ-state כדי שאם הוא נטען אחרי רגע, האפקטים ירוצו שוב
+const [user, setUser] = useState(firebase.auth().currentUser);
+
+useEffect(() => {
+  const unsub = firebase.auth().onAuthStateChanged((u) => setUser(u));
+  return () => unsub && unsub();
+}, []);
 
   // Theme
+  // Theme (from Firebase)
   const systemScheme = useColorScheme();
-  const [themeMode, setThemeMode] = useState('auto');
-  useEffect(() => {
-    (async () => {
-      try {
-        const saved = await AsyncStorage.getItem('themeMode');
-        if (saved) setThemeMode(saved);
-      } catch {}
-    })();
-  }, []);
-  const isDark = themeMode === 'dark' || (themeMode === 'auto' && systemScheme === 'dark');
+  const [themeMode, setThemeMode] = useState('auto'); // 'auto' | 'light' | 'dark'
+
+  const normalizeThemeMode = (v) => {
+    const s = String(v || '').toLowerCase().trim();
+    if (s === 'dark' || s === 'light' || s === 'auto') return s;
+    return 'auto';
+  };
+
+ useEffect(() => {
+  if (!user?.uid || !id) return;
+
+  let unsubscribe = null;
+  let cancelled = false;
+
+  const candidates = [
+    `Events/${user.uid}/${id}/Table_RSVPs/__admin/audit/ui/theme/mode`, // כמו שביקשת
+    `Events/${user.uid}/${id}/__admin/audit/ui/theme/mode`,            // לפעמים זה פה
+    `Events/${user.uid}/${id}/__admin/ui/theme/mode`,                  // לפעמים בלי audit
+    `Events/${user.uid}/${id}/admin/ui/theme/mode`,                    // אם יש לך "admin" בלי __
+    `Events/${user.uid}/${id}/Table_RSVPs/__admin/ui/theme/mode`,      // Table_RSVPs בלי audit
+  ];
+
+  const run = async () => {
+    try {
+      let foundPath = null;
+      let foundVal = null;
+
+      for (const p of candidates) {
+        const s = await get(ref(database, p));
+        if (s.exists()) {
+          foundPath = p;
+          foundVal = s.val();
+          break;
+        }
+      }
+
+      if (cancelled) return;
+
+      if (!foundPath) {
+        console.log('[Theme] NOT FOUND in candidates. using auto', { uid: user.uid, id });
+        setThemeMode('auto');
+        return;
+      }
+
+      console.log('[Theme] RESOLVED PATH:', foundPath, 'VALUE:', foundVal);
+      setThemeMode(normalizeThemeMode(foundVal));
+
+      // מאזין רק לנתיב שנמצא
+      const r = ref(database, foundPath);
+      unsubscribe = onValue(
+        r,
+        (snap) => {
+          console.log('[Theme] LIVE UPDATE:', foundPath, '=>', snap.val());
+          if (snap.exists()) setThemeMode(normalizeThemeMode(snap.val()));
+          else setThemeMode('auto');
+        },
+        (err) => console.log('[Theme] listener error:', err)
+      );
+    } catch (e) {
+      console.log('[Theme] resolve error:', e);
+      setThemeMode('auto');
+    }
+  };
+
+  run();
+
+  return () => {
+    cancelled = true;
+    if (typeof unsubscribe === 'function') unsubscribe();
+  };
+}, [user?.uid, id]);
+
+
+  // חישוב סופי
+  const isDark =
+    themeMode === 'dark' || (themeMode === 'auto' && systemScheme === 'dark');
 
   const COLORS = useMemo(() => {
     const primary = '#6C63FF';
@@ -433,8 +510,7 @@ const Budget = (props) => {
     Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : insets.top;
 
   // Firebase & State
-  const database = getDatabase();
-  const user = firebase.auth().currentUser;
+
 
   const [rows, setRows] = useState([{ checked: false, price: '', content: '', date: '', name: '' }]);
   const [eventDetails, setEventDetails] = useState({});
