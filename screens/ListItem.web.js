@@ -18,7 +18,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { StatusBar } from 'expo-status-bar';
 import * as Progress from 'react-native-progress';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, AntDesign } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import XLSX, { utils, writeFileXLSX } from 'xlsx';
@@ -394,18 +394,49 @@ const adminLog = (action) => {
     aRef.set({ ts: Date.now(), action });
   } catch {}
 };
+// helpers (שים למעלה בקובץ)
+const _hashStr = (str = '') => {
+  // DJB2 hash יציב
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i);
+  return (h >>> 0).toString(16);
+};
 
-const pushNotif = useCallback((title, body = '', extra = {}) => {
+const _dayKeyIL = (ms) => {
+  // YYYY-MM-DD לפי אזור זמן ישראל
+  return new Date(ms).toLocaleDateString('sv-SE', { timeZone: 'Asia/Jerusalem' });
+};
+
+// בתוך הקומפוננטה
+const pushNotif = useCallback(async (title, body = '', extra = {}) => {
   try {
     if (!user?.uid || !id) return;
-    firebase.database().ref(`Events/${user.uid}/${id}/__admin/notifications`).push({
+
+    const now = Date.now();
+    const day = _dayKeyIL(now);
+
+    // ✅ אותו תוכן => אותו notifId => אין כפילות
+    const fp = `${String(title || '').trim()}|${String(body || '').trim()}`;
+    const notifId = `${day}_${_hashStr(fp)}`;
+
+    const notifPath = `Events/${user.uid}/${id}/__admin/notifications/${notifId}`;
+
+    await firebase.database().ref(notifPath).set({
       ts: firebase.database.ServerValue.TIMESTAMP,
+      clientTs: now,
       title,
       body,
+      notifId,
       ...extra,
     });
-  } catch {}
+
+  } catch (e) {
+    console.warn('[pushNotif] failed:', e?.message || e);
+  }
 }, [user?.uid, id]);
+
+
+
 
 // ========================= GUEST CHANGE ALERTS (RSVP / AMOUNT / BLESSING) =========================
 const _normAmount = (v) => Number(String(v ?? 0).replace(/[^\d]/g, '')) || 0;
@@ -419,7 +450,7 @@ const _short = (s, n = 110) => {
 const alertsPrimedRef = useRef({ contacts: false, responses: false });
 const prevGiftRef = useRef({});      // { guestKey: { amount, blessing } }
 const prevRespRef = useRef({});      // { guestKey: { response, guests } }
-
+const localDedupeRef = useRef(new Set()); // ✅ הוסף את השורה הזו (זיכרון מקומי לחסימה מיידית)
 // אינדקס שמות לפי recordID/id (כדי לקשר responses לשם)
 const buildNameIndex = (contactsObj = {}) => {
   const map = {};
@@ -553,8 +584,42 @@ const emitRsvpNotifs = useCallback((responsesObj = {}, contactsObj = {}) => {
 }, [pushNotif]);
 
 // ========================= NOTIFICATIONS (bell + badge) =========================
-const [notifLastReadAt, setNotifLastReadAt] = useState(0);
+const [notifLastReadAt, setNotifLastReadAt] = useState(null);
+const [notifMutedUntil, setNotifMutedUntil] = useState(0);
 const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+
+
+// ✅ Local "seen"
+const [localNotifSeenAt, setLocalNotifSeenAt] = useState(-1); // -1 = עדיין לא נטען
+const latestNotifTsRef = useRef(0);
+
+// ✅ קודם מגדירים, ואז משתמשים
+const notifSeenHydrated = localNotifSeenAt > -1;
+const notifReady = notifSeenHydrated && notifLastReadAt !== null;
+
+
+const notifSeenKey = useMemo(() => {
+  if (!user?.uid || !id) return null;
+  return cacheKey(user.uid, id, 'notifSeenAt');
+}, [user?.uid, id]);
+
+useEffect(() => {
+  if (!notifSeenKey) return;
+  (async () => {
+    const cached = await loadCache(notifSeenKey, 0);
+    const v = Number(unwrap(cached) || 0);
+    setLocalNotifSeenAt(v);
+  })();
+}, [notifSeenKey]);
+
+const effectiveNotifSeenAt = useMemo(() => {
+  const a = Number(notifLastReadAt || 0);
+  const b = Number(localNotifSeenAt > -1 ? localNotifSeenAt : 0);
+  return Math.max(a, b);
+}, [notifLastReadAt, localNotifSeenAt]);
+
+
+
 
 const notifLastReadPath = useMemo(() => {
   if (!user?.uid || !id) return null;
@@ -566,14 +631,24 @@ const notifListPath = useMemo(() => {
   return `Events/${user.uid}/${id}/__admin/notifications`;
 }, [user?.uid, id]);
 
-const markNotificationsRead = useCallback(async () => {
-  if (!user?.uid || !id) return;
-  try {
-    await update(ref(database, `Events/${user.uid}/${id}/__meta`), {
-      notificationsLastReadAt: firebase.database.ServerValue.TIMESTAMP,
-    });
-  } catch {}
-}, [user?.uid, id, database]);
+
+
+
+const notifMutedPath = useMemo(() => {
+  if (!user?.uid || !id) return null;
+  return `Events/${user.uid}/${id}/__meta/notificationsMutedUntil`;
+}, [user?.uid, id]);
+useEffect(() => {
+  if (!notifMutedPath) return;
+  const r = ref(database, notifMutedPath);
+
+  const unsub = meteredOnValue(r, (snap) => {
+    const v = snap.val();
+    setNotifMutedUntil(typeof v === 'number' ? v : 0);
+  });
+
+  return () => { try { unsub?.(); } catch {} };
+}, [database, notifMutedPath]);
 
   // מידות
   const { width: screenW } = useWindowDimensions();
@@ -607,6 +682,11 @@ const markNotificationsRead = useCallback(async () => {
 const [notifOpen, setNotifOpen] = useState(false);
 const [notifLoading, setNotifLoading] = useState(true);
 const [notifItems, setNotifItems] = useState([]); // [{key, title, body, ts, ...}]
+const [notifBaselineAt, setNotifBaselineAt] = useState(0); // קו בסיס להדגשת "חדש"
+
+
+
+
 
   const isDark = useMemo(() => themeMode === 'dark' || (themeMode === 'auto' && systemScheme === 'dark'), [themeMode, systemScheme]);
 // ===== Theme -> Firebase logging (event-local) =====
@@ -784,6 +864,35 @@ useEffect(() => {
   console.log('routeNames:', s?.routeNames);
   console.log('routes:', s?.routes?.map(r => r.name));
 }, []);
+const markNotificationsRead = useCallback(async (seenAtOverride) => {
+  if (!user?.uid || !id) return;
+
+  const seenAt = Number(seenAtOverride || latestNotifTsRef.current || Date.now());
+
+  // UI מיידי
+  setLocalNotifSeenAt(seenAt);
+  if (notifSeenKey) saveCache(notifSeenKey, seenAt);
+
+  // Firebase
+  try {
+    await update(ref(database, `Events/${user.uid}/${id}/__meta`), {
+      notificationsLastReadAt: seenAt,
+    });
+  } catch (e) {
+    console.warn('[markNotificationsRead] failed:', e);
+  }
+}, [user?.uid, id, database, notifSeenKey]);
+
+const closeNotifCenter = useCallback(() => {
+  setNotifOpen(false);
+
+  const newestTs =
+    Number(latestNotifTsRef.current) ||
+    Number(notifItems?.[0]?.ts) ||
+    Date.now();
+
+  markNotificationsRead(newestTs);
+}, [markNotificationsRead, notifItems]);
 
 // אם המשתמש/אירוע נטענים אחרי שכבר החלפת תמה — נכתוב כשזה נהיה זמין
 useEffect(() => {
@@ -806,7 +915,7 @@ useEffect(() => {
 
   const unsub = meteredOnValue(r, (snap) => {
     const v = snap.val();
-    setNotifLastReadAt(typeof v === 'number' ? v : 0);
+setNotifLastReadAt(Number(v) || 0);
   });
 
 return () => { try { unsub?.(); } catch {} };
@@ -819,7 +928,7 @@ useEffect(() => {
 
   const r = query(
     ref(database, notifListPath),
-    orderByChild('ts'),
+    orderByChild('clientTs'),
     limitToLast(50)
   );
 
@@ -827,20 +936,59 @@ useEffect(() => {
     const obj = snap.val() || {};
     const arr = Object.values(obj);
 
+    const lastRead = Number(effectiveNotifSeenAt || 0);
+
     const unread = arr.reduce((acc, n) => {
-      const ts = typeof n?.ts === 'number' ? n.ts : 0;
-      return ts > (notifLastReadAt || 0) ? acc + 1 : acc;
+      const ts = Number(n?.clientTs || n?.ts || 0);
+      return ts > lastRead ? acc + 1 : acc;
     }, 0);
 
     setUnreadNotifCount(unread);
   });
 
-  return () => {
-    try { off(r, 'value', unsub); } catch {}
-  };
-}, [database, notifListPath, notifLastReadAt]);
+  return () => { try { unsub?.(); } catch {} };
+}, [database, notifListPath, effectiveNotifSeenAt]);
+
+
+const muteNotifications = useCallback(async () => {
+  if (!user?.uid || !id || !notifListPath) return;
+
+  try {
+    // נביא את ההתראה האחרונה לפי ts (server time)
+    const qLast = query(
+      ref(database, notifListPath),
+      orderByChild('ts'),
+      limitToLast(1)
+    );
+
+    const snap = await meteredGet(qLast);
+
+    let latestTs = 0;
+    if (snap.exists()) {
+      const v = snap.val() || {};
+      const only = Object.values(v)[0];
+      latestTs = typeof only?.ts === 'number' ? only.ts : 0;
+    }
+
+    // עד כאן נחשב כ"נראה" (אם אין כלום, לפחות עכשיו)
+    const until = Math.max(latestTs || 0, Date.now(), notifLastReadAt || 0);
+
+    await update(ref(database, `Events/${user.uid}/${id}/__meta`), {
+      notificationsMutedUntil: until,
+      notificationsLastReadAt: Math.max(notifLastReadAt || 0, until),
+    });
+
+    // UI מיידי
+    setNotifMutedUntil(until);
+    setNotifOpen(false);
+  } catch (e) {
+    console.warn('[notif] mute failed:', e?.message || e);
+  }
+}, [user?.uid, id, database, notifListPath, notifLastReadAt]);
+
 
 // 3) מאזין לתוכן ההתראות (לרשימה בתוך המסך)
+
 useEffect(() => {
   if (!notifListPath) return;
 
@@ -848,21 +996,23 @@ useEffect(() => {
 
   const r = query(
     ref(database, notifListPath),
-    orderByChild('ts'),
+    orderByChild('clientTs'),
     limitToLast(80)
   );
 
   const unsub = meteredOnValue(r, (snap) => {
     const v = snap.val() || {};
     const arr = Object.entries(v).map(([key, n]) => ({ key, ...(n || {}) }));
-    // מיון חדש->ישן
-    arr.sort((a, b) => (Number(b.ts || 0) - Number(a.ts || 0)));
+
+    // חדש->ישן לפי clientTs
+    arr.sort((a, b) => Number(b.clientTs || b.ts || 0) - Number(a.clientTs || a.ts || 0));
+
+    latestNotifTsRef.current = Number(arr[0]?.clientTs || arr[0]?.ts || 0);
     setNotifItems(arr);
     setNotifLoading(false);
   }, () => setNotifLoading(false));
 
-  // ✅ במודולרי onValue מחזיר unsubscribe — לא off()
-  return () => { try { unsub(); } catch {} };
+  return () => { try { unsub?.(); } catch {} };
 }, [database, notifListPath]);
 
 
@@ -922,7 +1072,7 @@ useEffect(() => {
       setDontShowAgain(v === 1 || v === '1' || v === true);
       setCheckboxLoaded(true);
     });
-    return () => off(checkboxRef, 'value', unsub);
+return () => { try { unsub?.(); } catch {} };
   }, [user, id, database]);
 
   const handleCheckboxChange = async () => {
@@ -938,7 +1088,7 @@ useEffect(() => {
   useEffect(() => {
   if (!user?.uid || !id) return;
   const stopRollups = startRollups(database, user.uid, id);
-  const stopTraffic = startTrafficBuckets(database, user.uid, id, 10000); // כל 10 שניות
+const stopTraffic = startTrafficBuckets(database, user.uid, id, { intervalMs: 10_000 });
   bumpVisitCounters(database, user.uid, id);
   return () => {
     stopRollups?.();
@@ -986,7 +1136,7 @@ useEffect(() => {
       if (data?.imageURL) setSelectedImage(data.imageURL);
       setSelectedImagePath(data?.path ?? null);
     });
-    return () => off(databaseRefMain, 'value', unsub);
+return () => { try { unsub(); } catch {} };
   }, [user, id, database]);
 
   const pickImage = async () => {
@@ -1065,6 +1215,58 @@ useEffect(() => {
     }, 1000);
     return () => clearInterval(interval);
   }, [eventDetails.eventDate]);
+const confirmClearNotifs = () =>
+  new Promise((resolve) => {
+    if (Platform.OS === 'web') {
+      resolve(window.confirm('למחוק את כל ההתראות מהאירוע?'));
+      return;
+    }
+    Alert.alert(
+      'ניקוי התראות',
+      'למחוק את כל ההתראות מהאירוע?',
+      [
+        { text: 'בטל', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'נקה', style: 'destructive', onPress: () => resolve(true) },
+      ],
+      { cancelable: true }
+    );
+  });
+
+const clearAllNotifications = useCallback(async () => {
+  if (!user?.uid || !id || !notifListPath) return;
+
+  const ok = await confirmClearNotifs();
+  if (!ok) return;
+
+  const now = Date.now();
+  const seenAt = Math.max(
+    now,
+    Number(latestNotifTsRef.current || 0),
+    Number(effectiveNotifSeenAt || 0)
+  );
+
+  try {
+    // 1) מחיקה מלאה של ההתראות מהאירוע
+    await remove(ref(database, notifListPath));
+
+    // 2) עדכון meta כדי שלא יקפוץ שוב + איפוס "חדש"
+    await update(ref(database, `Events/${user.uid}/${id}/__meta`), {
+      notificationsLastReadAt: seenAt,
+      notificationsMutedUntil: seenAt,
+    });
+
+    // 3) UI מיידי
+    latestNotifTsRef.current = seenAt;
+    setNotifItems([]);
+    setUnreadNotifCount(0);
+    setNotifBaselineAt(seenAt);
+    setLocalNotifSeenAt(seenAt);
+    if (notifSeenKey) saveCache(notifSeenKey, seenAt);
+  } catch (e) {
+    console.warn('[notif] clear failed:', e?.message || e);
+    if (Platform.OS !== 'web') Alert.alert('שגיאה', 'לא הצלחתי לנקות התראות');
+  }
+}, [user?.uid, id, database, notifListPath, effectiveNotifSeenAt, notifSeenKey]);
 
   // ========================= טבלת מוזמנים — Cache + Live =========================
   const findTableByPhone = useCallback((phone, tablesObj) => {
@@ -1078,6 +1280,38 @@ useEffect(() => {
     }
     return null;
   }, []);
+
+
+  // ... existing state ...
+// ===== אנימציות נגישות =====
+const a11yAnim = useRef(new Animated.Value(0)).current; // 0 = סגור, 1 = פתוח
+
+const toggleA11yPanel = () => {
+  const next = !a11yOpen;
+  setA11yOpen(next);
+  
+  Animated.spring(a11yAnim, {
+    toValue: next ? 1 : 0,
+    useNativeDriver: true,
+    friction: 7,
+    tension: 40
+  }).start();
+};
+
+const a11yTranslateY = a11yAnim.interpolate({
+  inputRange: [0, 1],
+  outputRange: [20, 0] // גלישה קלה מלמטה
+});
+
+const a11yOpacity = a11yAnim.interpolate({
+  inputRange: [0, 1],
+  outputRange: [0, 1]
+});
+
+const fabRotate = a11yAnim.interpolate({
+  inputRange: [0, 1],
+  outputRange: ['0deg', '45deg'] // סיבוב ה-X
+});
 
   const hydratedFromCacheRef = useRef(false);
   const rebuildScheduledRef = useRef(false);
@@ -1162,11 +1396,12 @@ const unsubC = meteredOnValue(cRef, (s) => {
   // ✅ התראות על כסף/ברכה כש־contacts משתנה
   emitGiftNotifs(memRefs.current.contacts);
 
-  // ✅ אם ה־responses כבר קיימים, נרנדר שמות נכון (לא יוצר ספאם כי אין שינוי בסטטוס)
-  emitRsvpNotifs(memRefs.current.responses, memRefs.current.contacts);
+  // ❌ אל תפעיל RSVP מפה (זה יוצר prime עם {})
+  // emitRsvpNotifs(memRefs.current.responses, memRefs.current.contacts);
 
   maybeRebuild();
 });
+
 
 const unsubR = meteredOnValue(rRef, (s) => {
   memRefs.current.responses = s.val() || {};
@@ -1201,7 +1436,12 @@ const unsubM = meteredOnValue(mRef, (snap) => {
     const unsubT = meteredOnValue(tRef, (s) => { memRefs.current.tables   = s.val() || {}; saveCache(ckT, memRefs.current.tables);   maybeRebuild(); });
 
 
-    return () => { off(cRef,'value',unsubC); off(tRef,'value',unsubT); off(rRef,'value',unsubR); off(mRef,'value',unsubM); };
+return () => {
+  try { unsubC(); } catch {}
+  try { unsubT(); } catch {}
+  try { unsubR(); } catch {}
+  try { unsubM(); } catch {}
+};
   }, [user, id, database, rebuild]);
 
   // אנימציות
@@ -1360,13 +1600,14 @@ useEffect(() => {
             {`${eventDetails.eventDate || ''}  ●  ${eventDetails.eventName || ''}  ●  ${eventDetails.eventLocation || ''}`}
           </Text>
         </View>
-<View style={[styles.headerActions, { width: ACTIONS_W }]}>
-  {/* Theme button (image from assets) */}
+          <View style={[styles.headerActions, { width: ACTIONS_W }]}>
+
+  {/* --- כפתור 1: שינוי מצב תצוגה (Theme) --- */}
   <Pressable
     onPress={cycleThemeMode}
     onLongPress={() => setThemeMode('auto')}
     hitSlop={hit}
-    style={[
+    style={({ pressed }) => [
       styles.headerIconBtn,
       {
         width: headerBtnSize,
@@ -1374,11 +1615,16 @@ useEffect(() => {
         backgroundColor: COLORS.chipBg,
         borderColor: COLORS.chipBorder,
         borderWidth: StyleSheet.hairlineWidth,
+        opacity: pressed ? 0.7 : 1,
       },
     ]}
     accessibilityRole="button"
     accessibilityLabel={themeA11yLabel}
   >
+    {/* טיפ חשוב: הוספתי tintColor גם כאן.
+        זה אומר שלא משנה אם התמונה המקורית שחורה או כחולה,
+        היא תהפוך ללבנה ב-Dark Mode ולשחורה ב-Light Mode.
+    */}
     <Image
       source={
         themeMode === 'auto'
@@ -1387,57 +1633,76 @@ useEffect(() => {
           ? require('../assets/nightmode.png')
           : require('../assets/lightmode.png')
       }
-      style={{ width: iconSize + 6, height: iconSize + 6, resizeMode: 'contain' }}
+      style={{ 
+        width: iconSize + 4, 
+        height: iconSize + 4, 
+        resizeMode: 'contain',
+        tintColor: COLORS.text // <--- זה התיקון שהופך את האייקון לברור
+      }}
     />
   </Pressable>
 
 
+  {/* --- כפתור 2: פעמון התראות --- */}
+  <Pressable
+    onPress={async () => {
+      const next = !notifOpen;
+      if (next) {
+        setNotifBaselineAt(effectiveNotifSeenAt || 0);
+        setNotifOpen(true);
+      } else {
+        closeNotifCenter();
+      }
+    }}
+    hitSlop={hit}
+    style={({ pressed }) => [
+      styles.headerIconBtn,
+      {
+        width: headerBtnSize,
+        height: headerBtnSize,
+        backgroundColor: COLORS.chipBg,
+        borderColor: COLORS.chipBorder,
+        borderWidth: StyleSheet.hairlineWidth,
+        position: 'relative',
+        opacity: pressed ? 0.7 : 1,
+      },
+    ]}
+    accessibilityRole="button"
+    accessibilityLabel="התראות"
+  >
+    {/* הפעמון יקבל את צבע הטקסט (לבן בחושך, שחור באור) */}
+    <Image
+      source={require('../assets/notification.png')}
+      style={{
+        width: iconSize + 2,
+        height: iconSize + 2,
+        resizeMode: 'contain',
+        tintColor: COLORS.text, // <--- מוודא שזה לא "סתם לבן" אלא דינמי
+      }}
+    />
 
-<Pressable
-  onPress={async () => {
-    const next = !notifOpen;
-    setNotifOpen(next);
-    if (next) await markNotificationsRead();
-  }}
-  hitSlop={hit}
-  style={[
-    styles.headerIconBtn,
-    {
-      width: headerBtnSize,
-      height: headerBtnSize,
-      backgroundColor: COLORS.chipBg,
-      borderColor: COLORS.chipBorder,
-      borderWidth: StyleSheet.hairlineWidth,
-      position: 'relative',
-    },
-  ]}
-  accessibilityRole="button"
-  accessibilityLabel="התראות"
->
-  <Ionicons name="notifications-outline" size={iconSize + 2} color={COLORS.text} />
-
-  {unreadNotifCount > 0 && (
-    <View style={{
-      position: 'absolute',
-      top: 4,
-      right: 4,
-      minWidth: 18,
-      height: 18,
-      paddingHorizontal: 5,
-      borderRadius: 999,
-      backgroundColor: '#EF4444',
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: 'rgba(0,0,0,0.35)',
-    }}>
-      <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>
-        {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
-      </Text>
-    </View>
-  )}
-</Pressable>
-
+    {/* עיגול אדום למספר התראות (אם יש) */}
+    {unreadNotifCount > 0 && (
+      <View style={{
+        position: 'absolute',
+        top: -2,
+        right: -2,
+        minWidth: 16,
+        height: 16,
+        paddingHorizontal: 4,
+        borderRadius: 8,
+        backgroundColor: '#EF4444',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: COLORS.bg, 
+      }}>
+        <Text style={{ color: '#fff', fontSize: 9, fontWeight: 'bold' }}>
+          {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+        </Text>
+      </View>
+    )}
+  </Pressable>
 
 </View>
 
@@ -1447,58 +1712,95 @@ useEffect(() => {
   visible={notifOpen}
   transparent
   animationType="fade"
-  onRequestClose={() => setNotifOpen(false)}
+  onRequestClose={closeNotifCenter}   // ✅
+  
 >
   <View style={styles.notifOverlay}>
-    <Pressable style={StyleSheet.absoluteFill} onPress={() => setNotifOpen(false)} />
+<Pressable style={StyleSheet.absoluteFill} onPress={closeNotifCenter} />
 
     <View style={[
       styles.notifCardFloating,
       { backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }
     ]}>
-      <View style={styles.notifHeader}>
-        <Text style={[t(16), { fontWeight: '800' }]}>מרכז התראות</Text>
+<View style={styles.notifHeader}>
+  <Text style={[t(16), { fontWeight: '800' }]}>מרכז התראות</Text>
 
-        <Pressable
-          onPress={() => setNotifOpen(false)}
-          style={[styles.notifMiniBtn, { backgroundColor: COLORS.inputBg }]}
-        >
-          <Text style={[t(12), { fontWeight: '700' }]}>סגור</Text>
-        </Pressable>
-      </View>
+<View style={{ flexDirection: 'row-reverse', gap: 8 }}>
+{notifItems.length > 0 && (
+  <Pressable
+    onPress={clearAllNotifications}
+    style={[styles.notifMiniBtn, { backgroundColor: '#EF4444' }]}
+  >
+    <Text style={[t(12), { fontWeight: '800', color: '#fff' }]}>נקה</Text>
+  </Pressable>
+)}
+
+
+  <Pressable
+    onPress={closeNotifCenter}
+    style={[styles.notifMiniBtn, { backgroundColor: COLORS.inputBg }]}
+  >
+    <Text style={[t(12), { fontWeight: '700' }]}>סגור</Text>
+  </Pressable>
+</View>
+
+</View>
+
 
       {notifLoading ? (
         <Text style={[t(13, COLORS.subtext)]}>טוען התראות…</Text>
       ) : notifItems.length === 0 ? (
         <Text style={[t(13, COLORS.subtext)]}>אין התראות כרגע</Text>
       ) : (
-        <FlatList
-          data={notifItems}
-          keyExtractor={(item) => item.key}
-          style={{ maxHeight: 380 }}
-          renderItem={({ item }) => (
-            <View style={[
-              styles.notifRow,
-              { backgroundColor: COLORS.inputBg, borderColor: COLORS.cardBorder }
-            ]}>
-              <Text style={[t(13), { fontWeight: '800' }]} numberOfLines={1}>
-                {item.title || item.type || 'התראה'}
-              </Text>
+<FlatList
+  data={notifItems}
+  keyExtractor={(item) => item.key}
+  style={{ maxHeight: 380 }}
+  renderItem={({ item }) => {
+const tsForUi = Number(item.clientTs || item.ts || 0);
+const isUnread = tsForUi > (notifBaselineAt || (effectiveNotifSeenAt || 0));
 
-              {!!item.body && (
-                <Text style={[t(12, COLORS.subtext)]} numberOfLines={2}>
-                  {item.body}
-                </Text>
-              )}
+    return (
+        <View
+  style={[
+    styles.notifRow,
+    {
+      backgroundColor: isUnread ? 'rgba(108,99,255,0.14)' : COLORS.inputBg,
+      borderColor: isUnread ? COLORS.primary : COLORS.cardBorder,
+      borderWidth: isUnread ? 2 : StyleSheet.hairlineWidth,
+      opacity: 1,
+    },
+  ]}
+>
+  <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' }}>
+    <Text style={[t(13), { fontWeight: isUnread ? '900' : '800' }]} numberOfLines={1}>
+      {item.title || item.type || 'התראה'}
+    </Text>
 
-              {!!item.ts && (
-                <Text style={[t(11, COLORS.subtext), { marginTop: 4 }]}>
-                  {new Date(item.ts).toLocaleString('he-IL')}
-                </Text>
-              )}
-            </View>
-          )}
-        />
+    {isUnread && (
+      <View style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, backgroundColor: COLORS.primary }}>
+        <Text style={{ color: COLORS.onPrimary, fontSize: 11, fontWeight: '900' }}>חדש</Text>
+      </View>
+    )}
+  </View>
+
+  {!!item.body && (
+    <Text style={[t(12, COLORS.subtext)]} numberOfLines={2}>
+      {item.body}
+    </Text>
+  )}
+
+  {!!item.ts && (
+    <Text style={[t(11, COLORS.subtext), { marginTop: 4 }]}>
+      {new Date(item.ts).toLocaleString('he-IL')}
+    </Text>
+  )}
+</View>
+
+    );
+  }}
+/>
+
       )}
     </View>
   </View>
@@ -1520,7 +1822,15 @@ useEffect(() => {
 
             {selectedImage && (
               <Pressable onPress={deleteSelectedImage} disabled={uploading} style={[styles.deleteBtn, uploading && { opacity: 0.6 }]} hitSlop={8} accessibilityRole="button" accessibilityLabel="מחק תמונה">
-                <Ionicons name="close" size={18} color="#fff" />
+<Image
+  source={require('../assets/close.png')}
+  style={{
+    width: 18,
+    height: 18,
+    resizeMode: 'contain',
+    tintColor: '#fff', // כי הכפתור אדום
+  }}
+/>
               </Pressable>
             )}
 
@@ -1758,107 +2068,234 @@ useEffect(() => {
           </View>
         </View>
 
-        {/* מודל הדרכה */}
-        <Modal visible={isFocused && hydrated && eventExists && isModalVisible} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContainer, { width: Math.min(screenW * 0.9, 370) }]}>
-              <ScrollView contentContainerStyle={styles.scrollViewContainer}>
-                <ImageBackground source={require('../assets/backg1.png')} style={styles.icon3}>
-                  <TouchableOpacity style={styles.closeButton} onPress={() => setIsModalVisible(false)}>
-                    <Ionicons name="close" size={24} color="#fff" />
-                  </TouchableOpacity>
+                  {/* מודל הדרכה */}
+<Modal
+  visible={isFocused && hydrated && eventExists && isModalVisible}
+  transparent
+  animationType="fade"
+>
+  <View style={styles.modalOverlay}>
+    <View style={[styles.modalContainer, { width: Math.min(screenW * 0.9, 370) }]}>
+      <ScrollView contentContainerStyle={styles.scrollViewContainer} showsVerticalScrollIndicator={false}>
+        <ImageBackground
+          source={require('../assets/backg1.png')}
+          style={styles.modalBg}
+          imageStyle={styles.modalBgImage}
+        >
+{/* X עגול בפינה */}
+<TouchableOpacity
+  onPress={() => setIsModalVisible(false)}
+  activeOpacity={0.85}
+  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+  style={styles.closeTextBtn}
+>
+  <Text style={styles.closeTextBtnText}>✕</Text>
+</TouchableOpacity>
 
-                  <View style={styles.modalContent}>
-                    <Text style={[styles.modalTitle, t(22, '#333')]}>ברוכים הבאים ל- EasyVent!</Text>
-                    <Text style={[styles.modalSubtitle, t(16, '#555')]}>מערכת לניהול אירועים</Text>
-                    <Text style={[styles.modalSubtitle, t(16, '#555')]}>כדי להתחיל את האירוע יש להשלים את השלבים הבאים:</Text>
 
-                    <View style={styles.stepsContainer}>
-                      <Text style={[styles.modalStep, t(15, '#222')]}>✔ ניהול אורחים</Text>
-                      <Text style={[styles.modalStep, t(15, '#222')]}>✔ ניהול הושבה</Text>
-                      <Text style={[styles.modalStep, t(15, '#222')]}>✔ אישורי הגעה</Text>
-                    </View>
 
-                    <Text style={[styles.modalSubtitle, t(16, '#555')]}>בחרו שלב להתחלה:</Text>
+          <View style={styles.modalContent}>
+            <Text style={[styles.modalTitle, t(22, '#333')]}>ברוכים הבאים ל- EasyVent!</Text>
+            <Text style={[styles.modalSubtitle, t(16, '#555')]}>מערכת לניהול אירועים</Text>
+            <Text style={[styles.modalSubtitle, t(16, '#555')]}>
+              כדי להתחיל את האירוע יש להשלים את השלבים הבאים:
+            </Text>
 
-                    <View style={styles.buttonsContainer}>
-                      {isScheduled_contact && (
-                        <TouchableOpacity style={styles.modalButton} onPress={() => { setIsModalVisible(false); navigation.navigate('Management', { id }); adminLog('פתיחת מסך ניהול אורחים'); }}>
-                          <Image source={require('../assets/buttonmodal1.png')} style={styles.icon2} />
-                        </TouchableOpacity>
-                      )}
-                      {isScheduled_table && (
-                        <TouchableOpacity style={styles.modalButton} onPress={() => { setIsModalVisible(false); navigation.navigate('SeatedAtTable', { id }); adminLog('פתיחת מסך הושבה'); }}>
-                          <Image source={require('../assets/buttonmodal2.png')} style={styles.icon2} />
-                        </TouchableOpacity>
-                      )}
-                      {isScheduled_rspv && (
-                        <TouchableOpacity style={styles.modalButton} onPress={() => { setIsModalVisible(false); navigation.navigate('RSVPstwo', { id }); adminLog('פתיחת מסך RSVP'); }}>
-                          <Image source={require('../assets/buttonmodal3.png')} style={styles.icon2} />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-
-                    <TouchableOpacity style={styles.checkboxContainer} onPress={() => { handleCheckboxChange(); adminLog('סימון אל תציג שוב'); }}>
-                      <View style={styles.checkbox}>{dontShowAgain && <Text style={styles.checkboxMark}>✔</Text>}</View>
-                      <Text style={styles.checkboxText}>אל תציג הודעה זו שוב</Text>
-                    </TouchableOpacity>
-
-                    {dontShowAgain && (
-                      <TouchableOpacity style={styles.closeModalButton} onPress={() => setIsModalVisible(false)}>
-                        <Text style={styles.closeModalButtonText}>סגור</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </ImageBackground>
-              </ScrollView>
+            <View style={styles.stepsContainer}>
+              <Text style={[styles.modalStep, t(15, '#222')]}>✔ ניהול אורחים</Text>
+              <Text style={[styles.modalStep, t(15, '#222')]}>✔ ניהול הושבה</Text>
+              <Text style={[styles.modalStep, t(15, '#222')]}>✔ אישורי הגעה</Text>
             </View>
+
+            <Text style={[styles.modalSubtitle, t(16, '#555')]}>בחרו שלב להתחלה:</Text>
+
+            <View style={styles.buttonsContainer}>
+              {isScheduled_contact && (
+                <TouchableOpacity
+                  style={styles.modalButton}
+                  onPress={() => {
+                    setIsModalVisible(false);
+                    navigation.navigate('Management', { id });
+                    adminLog('פתיחת מסך ניהול אורחים');
+                  }}
+                  activeOpacity={0.9}
+                >
+                  <Image source={require('../assets/buttonmodal1.png')} style={styles.icon2} />
+                </TouchableOpacity>
+              )}
+
+              {isScheduled_table && (
+                <TouchableOpacity
+                  style={styles.modalButton}
+                  onPress={() => {
+                    setIsModalVisible(false);
+                    navigation.navigate('SeatedAtTable', { id });
+                    adminLog('פתיחת מסך הושבה');
+                  }}
+                  activeOpacity={0.9}
+                >
+                  <Image source={require('../assets/buttonmodal2.png')} style={styles.icon2} />
+                </TouchableOpacity>
+              )}
+
+              {isScheduled_rspv && (
+                <TouchableOpacity
+                  style={styles.modalButton}
+                  onPress={() => {
+                    setIsModalVisible(false);
+                    navigation.navigate('RSVPstwo', { id });
+                    adminLog('פתיחת מסך RSVP');
+                  }}
+                  activeOpacity={0.9}
+                >
+                  <Image source={require('../assets/buttonmodal3.png')} style={styles.icon2} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={styles.checkboxContainer}
+              onPress={() => {
+                handleCheckboxChange();
+                adminLog('סימון אל תציג שוב');
+              }}
+              activeOpacity={0.9}
+            >
+              <View style={styles.checkbox}>
+                {dontShowAgain && <Text style={styles.checkboxMark}>✔</Text>}
+              </View>
+              <Text style={styles.checkboxText}>אל תציג הודעה זו שוב</Text>
+            </TouchableOpacity>
           </View>
-        </Modal>
+        </ImageBackground>
+      </ScrollView>
+    </View>
+  </View>
+</Modal>
+
       </ScrollView>
 
       {/* FAB נגישות */}
-      <View pointerEvents="box-none" style={styles.fabWrap}>
-        <Pressable onPress={() => setA11yOpen((o) => !o)} style={[styles.fabBtn, { backgroundColor: COLORS.primary }]} hitSlop={hit} accessibilityRole="button" accessibilityLabel="פתח אפשרויות נגישות">
-          <Ionicons name="accessibility-outline" size={22} color={COLORS.onPrimary} />
-        </Pressable>
-
-        {a11yOpen && (
-          <View style={[styles.fabPanel, { backgroundColor: COLORS.card, borderColor: COLORS.cardBorder }]}>
-            <View style={styles.fabRow}>
-              <Text style={[t(13)]}>גודל טקסט</Text>
-              <View style={{ flexDirection: 'row' }}>
-                <Pressable onPress={() => setFontScale((s) => Math.max(0.85, s - 0.05))} style={[styles.fabChip, { backgroundColor: COLORS.primary, marginRight: 6 }]}><Text style={styles.fabChipText}>–</Text></Pressable>
-                <Pressable onPress={() => setFontScale((s) => Math.min(1.4, s + 0.05))} style={[styles.fabChip, { backgroundColor: COLORS.primary }]}><Text style={styles.fabChipText}>+</Text></Pressable>
-              </View>
-            </View>
-
-            <View style={styles.fabRow}><Text style={[t(13)]}>ניגודיות גבוהה</Text>
-              <Pressable onPress={() => setHighContrast((v) => !v)} style={[styles.toggle, highContrast && styles.toggleOn]}><View style={styles.toggleKnob} /></Pressable>
-            </View>
-
-            <View style={styles.fabRow}><Text style={[t(13)]}>טקסט מודגש</Text>
-              <Pressable onPress={() => setTextBold((v) => !v)} style={[styles.toggle, textBold && styles.toggleOn]}><View style={styles.toggleKnob} /></Pressable>
-            </View>
-
-            <View style={styles.fabRow}><Text style={[t(13)]}>מצב קריאות</Text>
-              <Pressable onPress={() => setReadabilityMode((v) => !v)} style={[styles.toggle, readabilityMode && styles.toggleOn]}><View style={styles.toggleKnob} /></Pressable>
-            </View>
-
-            <View style={styles.fabRow}><Text style={[t(13)]}>יעדי־מגע גדולים</Text>
-              <Pressable onPress={() => setBigTargets((v) => !v)} style={[styles.toggle, bigTargets && styles.toggleOn]}><View style={styles.toggleKnob} /></Pressable>
-            </View>
-
-            <View style={styles.fabRow}><Text style={[t(13)]}>להפחית אנימציות</Text>
-              <Pressable onPress={() => setReduceMotion((v) => !v)} style={[styles.toggle, reduceMotion && styles.toggleOn]}><View style={styles.toggleKnob} /></Pressable>
-            </View>
-
-            <View style={[styles.fabRow, { marginTop: 6 }]}><Text style={[t(13)]}>איפוס הכל</Text>
-              <Pressable onPress={resetA11y} style={[styles.fabChip, { backgroundColor: '#EF4444' }]}><Text style={styles.fabChipText}>איפוס</Text></Pressable>
-            </View>
-          </View>
-        )}
+                {/* FAB נגישות משודרג */}
+<View pointerEvents="box-none" style={styles.fabWrap}>
+  
+  {/* החלונית עצמה */}
+              {/* החלונית עצמה */}
+  {a11yOpen && (
+    <Animated.View 
+      style={[
+        styles.fabPanel, 
+        { 
+          backgroundColor: COLORS.card, 
+          borderColor: COLORS.cardBorder,
+          opacity: a11yOpacity,
+          transform: [{ translateY: a11yTranslateY }]
+        }
+      ]}
+    >
+      <View style={styles.panelHeader}>
+        <Text style={[t(16), { fontWeight: '800' }]}>הגדרות נגישות</Text>
       </View>
+
+      <View style={styles.panelDivider} />
+
+      {/* גודל טקסט */}
+      <View style={styles.fabRow}>
+        <View style={styles.rowLabelWrap}>
+          {/* החלפנו את האייקון בטקסט פשוט ואלגנטי */}
+          <Text style={{ fontSize: 18, marginLeft: 8, color: COLORS.subtext }}>Aa</Text>
+          <Text style={[t(14)]}>גודל טקסט</Text>
+        </View>
+        <View style={styles.resizeControls}>
+          <Pressable 
+            onPress={() => setFontScale((s) => Math.max(0.85, s - 0.05))} 
+            style={[styles.resizeBtn, { borderColor: COLORS.cardBorder, backgroundColor: COLORS.inputBg }]}
+          >
+            <Text style={[t(16), { lineHeight: 18 }]}>-</Text>
+          </Pressable>
+          <View style={styles.resizeIndicator}>
+            <Text style={[t(12, COLORS.subtext)]}>{Math.round(fontScale * 100)}%</Text>
+          </View>
+          <Pressable 
+            onPress={() => setFontScale((s) => Math.min(1.4, s + 0.05))} 
+            style={[styles.resizeBtn, { borderColor: COLORS.cardBorder, backgroundColor: COLORS.inputBg }]}
+          >
+            <Text style={[t(16), { lineHeight: 18 }]}>+</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* מתגים - שימוש באימוג'ים במקום אייקונים כדי למנוע ריבועים */}
+      {[
+        { label: 'ניגודיות גבוהה', icon: '🌗', val: highContrast, set: setHighContrast },
+        { label: 'טקסט מודגש', icon: '𝗕', val: textBold, set: setTextBold },
+        { label: 'מצב קריאות', icon: '👁️', val: readabilityMode, set: setReadabilityMode },
+        { label: 'כפתורים גדולים', icon: '👆', val: bigTargets, set: setBigTargets },
+        { label: 'הפחתת תזוזה', icon: '✋', val: reduceMotion, set: setReduceMotion },
+      ].map((item, idx) => (
+        <Pressable 
+          key={idx} 
+          onPress={() => item.set(v => !v)} 
+          style={styles.fabRow}
+        >
+          <View style={styles.rowLabelWrap}>
+            {/* כאן השינוי - טקסט במקום Ionicons */}
+            <Text style={{ fontSize: 18, marginLeft: 8 }}>{item.icon}</Text>
+            <Text style={[t(14)]}>{item.label}</Text>
+          </View>
+          
+          {/* המתג המעוצב */}
+          <View style={[styles.modernToggle, item.val && { backgroundColor: COLORS.primary }]}>
+            <Animated.View style={[
+              styles.modernToggleCircle, 
+              { 
+                transform: [{ translateX: item.val ? -18 : 0 }], 
+                backgroundColor: '#fff' 
+              }
+            ]} />
+          </View>
+        </Pressable>
+      ))}
+
+      <View style={styles.panelDivider} />
+
+      {/* איפוס */}
+      <Pressable 
+        onPress={resetA11y} 
+        style={({pressed}) => [styles.resetBtn, { opacity: pressed ? 0.7 : 1 }]}
+      >
+        <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 14 }}>אפס הגדרות</Text>
+      </Pressable>
+
+    </Animated.View>
+  )}
+
+  {/* הכפתור הראשי */}
+  <Pressable 
+    onPress={toggleA11yPanel} 
+    style={[styles.fabBtn, { backgroundColor: COLORS.primary }]} 
+    hitSlop={hit} 
+    accessibilityRole="button" 
+    accessibilityLabel="אפשרויות נגישות"
+  >
+    <Animated.View style={{ transform: [{ rotate: fabRotate }] }}>
+       {/* אם יש לך תמונה מקומית, נשתמש בה. אם לא - עדיף אייקון וקטורי */}
+       {/* אופציה א: התמונה המקורית שלך */}
+       <Image
+        source={require('../assets/accessibility.png')}
+        style={{
+          width: 26,
+          height: 26,
+          resizeMode: 'contain',
+          tintColor: COLORS.onPrimary,
+        }}
+      />
+      {/* אופציה ב (מומלצת אם התמונה לא נראית טוב בסיבוב): 
+          <Ionicons name="accessibility" size={28} color={COLORS.onPrimary} /> 
+      */}
+    </Animated.View>
+  </Pressable>
+</View>
     </View>
   );
 }
@@ -1984,6 +2421,7 @@ notifOverlay: {
   justifyContent: 'flex-start',
   paddingTop: 70,
 },
+
 notifCardFloating: {
   width: '92%',
   maxWidth: 980,
@@ -1993,8 +2431,145 @@ notifCardFloating: {
   borderWidth: StyleSheet.hairlineWidth,
   maxHeight: '70%',
 },
+closeTextBtn: {
+  paddingHorizontal: 14,
+  paddingVertical: 8,
+  borderRadius: 999,
+},
 
+closeTextBtnText: {
+  color: '#fff',
+  fontWeight: '900',
+  fontSize: 14,
+},
+closeTextBtn: {
+  position: 'absolute',
+  top: 10,
+  right: 10,            // 👉 זה ה”קצת יותר ימינה” (נסה 8/6 אם אתה רוצה עוד)
+  width: 34,
+  height: 34,
+  borderRadius: 17,     // ✅ עגול
+  backgroundColor: '#EF4444',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 999,
+  shadowColor: '#000',
+  shadowOpacity: 0.25,
+  shadowRadius: 6,
+  shadowOffset: { width: 0, height: 3 },
+  elevation: 6,
+  ...(Platform.OS === 'web' ? { cursor: 'pointer' } : {}),
+},
 
+closeTextBtnText: {
+  color: '#fff',
+  fontSize: 18,
+  fontWeight: '900',
+  lineHeight: 18,
+},
+// החלף או הוסף את הסטיילים הבאים בסוף הקובץ:
+
+fabWrap: {
+  position: 'absolute',
+  right: 20,
+  bottom: 24,
+  alignItems: 'flex-end',
+  zIndex: 10000, // מעל הכל
+},
+fabBtn: {
+  width: 56,
+  height: 56,
+  borderRadius: 28,
+  alignItems: 'center',
+  justifyContent: 'center',
+  shadowColor: '#000',
+  shadowOpacity: 0.3,
+  shadowRadius: 6,
+  shadowOffset: { width: 0, height: 4 },
+  elevation: 8, // Android shadow
+},
+fabPanel: {
+  marginBottom: 16,
+  paddingVertical: 16,
+  paddingHorizontal: 16,
+  borderRadius: 16,
+  borderWidth: 1,
+  width: 280,
+  shadowColor: '#000',
+  shadowOpacity: 0.15,
+  shadowRadius: 10,
+  shadowOffset: { width: 0, height: 5 },
+  elevation: 10,
+},
+panelHeader: {
+  alignItems: 'center',
+  marginBottom: 8,
+},
+panelDivider: {
+  height: 1,
+  backgroundColor: 'rgba(0,0,0,0.05)',
+  marginVertical: 10,
+  width: '100%',
+},
+fabRow: {
+  flexDirection: 'row-reverse', // RTL
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  marginBottom: 12,
+  minHeight: 32,
+},
+rowLabelWrap: {
+  flexDirection: 'row-reverse',
+  alignItems: 'center',
+},
+// ... styles אחרים
+
+resizeControls: {
+  flexDirection: 'row-reverse',
+  alignItems: 'center',
+  backgroundColor: 'rgba(0,0,0,0.03)', 
+  borderRadius: 8,
+  padding: 2,
+},
+
+resizeBtn: {
+  width: 32,
+  height: 32,
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: 6,
+  borderWidth: StyleSheet.hairlineWidth,
+},
+
+// ... styles אחרים
+resizeIndicator: {
+  width: 40,
+  alignItems: 'center',
+},
+modernToggle: {
+  width: 46,
+  height: 26,
+  borderRadius: 13,
+  backgroundColor: '#E0E0E0',
+  padding: 2,
+  justifyContent: 'center',
+  alignItems: 'flex-end', // למצב כבוי (RTL)
+},
+modernToggleCircle: {
+  width: 22,
+  height: 22,
+  borderRadius: 11,
+  shadowColor: '#000',
+  shadowOpacity: 0.2,
+  shadowRadius: 2,
+  shadowOffset: { width: 0, height: 1 },
+  elevation: 2,
+},
+resetBtn: {
+  alignItems: 'center',
+  justifyContent: 'center',
+  paddingVertical: 4,
+},
 });
 
 export default ListItem;

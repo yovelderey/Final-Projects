@@ -1606,8 +1606,9 @@ function DeviceMonitorsPane() {
 }
 
 // ==== UI atoms ====
-const KPI = ({ label, value, tint = '#6C63FF', isText }) => (
-  <View style={styles.kpiCard}>
+// שינוי: הוספנו את הפרמטר style והחלנו אותו על ה-View
+const KPI = ({ label, value, tint = '#6C63FF', isText, style }) => (
+  <View style={[styles.kpiCard, style]}>
     <Text style={styles.kpiLabel}>{label}</Text>
     <Text style={[styles.kpiValue, { color: tint }]} numberOfLines={1}>
       {isText ? String(value) : Number(value || 0).toLocaleString('he-IL')}
@@ -2395,7 +2396,11 @@ const setEventPlan = async (uid, eventId, plan) => {
         </View>
       </View>
     );
-  }, [
+
+
+  }
+  
+  , [
     totalEvents,
     newToday,
     newWeek,
