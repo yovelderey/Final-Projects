@@ -36,6 +36,9 @@ import AdminPanel from './screens/AdminPanel';
 import OwnerDashboard from './screens/OwnerDashboard';
 import ServerMonitorsPane from './screens/ServerMonitorsPane';
 import NotificationsCenter from './screens/NotificationsCenter';
+import SupportDashboard from './screens/SupportDashboard';
+import EventGuests from './screens/EventGuests';
+import TablePlanningViewScreen from './screens/TablePlanningViewScreen';
 
 
 const Stack = createNativeStackNavigator();
@@ -79,6 +82,9 @@ const App = () => {
         <Stack.Screen name="OwnerDashboard" component={OwnerDashboard} />
         <Stack.Screen name="ServerMonitorsPane" component={ServerMonitorsPane} />
         <Stack.Screen name="NotificationsCenter" component={NotificationsCenter} />
+        <Stack.Screen name="SupportDashboard" component={SupportDashboard} />
+        <Stack.Screen name="EventGuests" component={EventGuests} />
+        <Stack.Screen name="TablePlanningViewScreen" component={TablePlanningViewScreen} />
 
       </Stack.Navigator>
     </NavigationContainer>

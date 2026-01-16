@@ -1,10 +1,3 @@
-// SeatedAtTable.js — DarkMode + Fixed Modals (no overflow) + Firebase theme mode
-// ✅ שיפורים:
-// 1) אין יותר window.alert / Alert — במקום זה Toast בתוך האפליקציה
-// 2) ברשימת השולחנות: אורחים מוצגים כ־Chips עם צבע סטטוס (ירוק/אדום/כתום/אפור)
-// 3) מודל עריכת שולחן משודרג: מידות נכונות, Scroll פנימי, בלי overflow
-// 4) תיקון "מספר שולחן" שלא ייחתך + אין כפתור ✕ (יש כפתור סגור)
-// 5) תאריך יצירה לשולחן (createdAt) + הצגה במודל עריכה (+ fallback לשולחנות ישנים)
 
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import {
@@ -146,6 +139,23 @@ const SeatedAtTable = (props) => {
   const [imgBusy, setImgBusy] = useState(false);
   const [busyText, setBusyText] = useState('');
   const [uploadProgress, setUploadProgress] = useState(null);
+// ===== Crop (WEB + optional) =====
+const [cropVisible, setCropVisible] = useState(false);
+const [pendingImageUri, setPendingImageUri] = useState(null);
+const [pendingImageSize, setPendingImageSize] = useState({ w: 0, h: 0 });
+const [cropFrac, setCropFrac] = useState({ top: 0.05, bottom: 0.05, left: 0.05, right: 0.05 });
+
+const [cropBoxLayout, setCropBoxLayout] = useState({ w: 1, h: 1 });
+
+const getImageSizeAsync = useCallback((uri) => {
+  return new Promise((resolve) => {
+    Image.getSize(
+      uri,
+      (w, h) => resolve({ w, h }),
+      () => resolve({ w: 0, h: 0 })
+    );
+  });
+}, []);
 
   // =========================
   // ✅ Toast
@@ -342,6 +352,8 @@ const SeatedAtTable = (props) => {
         },
         async () => {
           const url = await getDownloadURL(fileRef);
+            await set(ref(database, `Events/${userId2}/${id}/seatOnTables/imageUrl`), url);
+
           setSelectedImage(url);
           setImgBusy(false);
           notify('הצלחה', 'התרשים הועלה בהצלחה!', 'success');
@@ -353,14 +365,114 @@ const SeatedAtTable = (props) => {
     }
   };
 
-  const handleButtonPress = async () => {
-    const pick = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.8,
-    });
-    if (!pick.canceled) await uploadImage(pick.assets[0].uri);
-  };
+const handleButtonPress = async () => {
+  const pick = await ImagePicker.launchImageLibraryAsync({
+    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    // ✅ במובייל תן לעורך המובנה (קרופ עם זום/אצבעות)
+    allowsEditing: Platform.OS !== 'web',
+    aspect: [16, 9],
+    quality: 0.9,
+  });
+
+  if (pick.canceled) return;
+
+  const uri = pick.assets?.[0]?.uri;
+  if (!uri) return;
+
+  // ✅ ב-WEB: פותחים מודל חיתוך עם סרגלים
+  if (Platform.OS === 'web') {
+    const sz = await getImageSizeAsync(uri);
+    setPendingImageUri(uri);
+    setPendingImageSize(sz);
+    setCropFrac({ top: 0.05, bottom: 0.05, left: 0.05, right: 0.05 });
+    setCropVisible(true);
+    return;
+  }
+
+  // ✅ Native: התמונה כבר יכולה להיות חתוכה ע"י העורך המובנה
+  await uploadImage(uri);
+};
+const applyCropAndUpload = async () => {
+  if (!pendingImageUri) return;
+
+  try {
+    const iw = pendingImageSize.w || 0;
+    const ih = pendingImageSize.h || 0;
+
+    const clamp = (v) => Math.max(0, Math.min(0.45, v));
+    const left = clamp(cropFrac.left);
+    const right = clamp(cropFrac.right);
+    const top = clamp(cropFrac.top);
+    const bottom = clamp(cropFrac.bottom);
+
+    const originX = Math.round(iw * left);
+    const originY = Math.round(ih * top);
+    const width = Math.max(1, Math.round(iw * (1 - left - right)));
+    const height = Math.max(1, Math.round(ih * (1 - top - bottom)));
+
+    setBusyText('חותך ומעלה...');
+    setImgBusy(true);
+
+    // ✅ WEB: crop בעזרת canvas ולהעלות blob ישירות
+    if (Platform.OS === 'web') {
+      const img = new window.Image();
+      img.crossOrigin = 'anonymous';
+      img.src = pendingImageUri;
+
+      await new Promise((res, rej) => {
+        img.onload = () => res();
+        img.onerror = (e) => rej(e);
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, originX, originY, width, height, 0, 0, width, height);
+
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+      if (!blob) throw new Error('Failed to create blob from canvas');
+
+      // העלאה ל-Storage (כמו uploadImage רק עם blob)
+      const fileRef = sRef(storage, `users/${userId2}/${id}/seatOnTables/image_0.jpg`);
+      const task = uploadBytesResumable(fileRef, blob);
+      uploadTaskRef.current = task;
+
+      task.on(
+        'state_changed',
+        (snap) => setUploadProgress(snap.totalBytes ? snap.bytesTransferred / snap.totalBytes : 0),
+        () => {
+          setImgBusy(false);
+          notify('שגיאה', 'העלאה נכשלה', 'error');
+        },
+        async () => {
+          const url = await getDownloadURL(fileRef);
+          await set(ref(database, `Events/${userId2}/${id}/seatOnTables/imageUrl`), url);
+
+          setSelectedImage(url);
+          setImgBusy(false);
+          setCropVisible(false);
+          setPendingImageUri(null);
+          notify('הצלחה', 'התרשים נחתך והועלה!', 'success');
+        }
+      );
+
+      return;
+    }
+
+    // ✅ Native: אם תרצה עדיין להשתמש בעורך המובנה (allowsEditing) אז אפשר פשוט:
+    setCropVisible(false);
+    setPendingImageUri(null);
+    await uploadImage(pendingImageUri);
+  } catch (e) {
+    setCropVisible(false);
+    notify('שגיאה', String(e?.message || e), 'error');
+  } finally {
+    setImgBusy(false);
+    setBusyText('');
+  }
+};
+
 
   const deleteImage = async () => {
     if (!userId2) return;
@@ -539,15 +651,20 @@ const deleteTable = async () => {
     return;
   }
 
-  try {
-    await remove(ref(database, `Events/${user.uid}/${id}/tables/${selectedTable.recordID}`));
-    notify('בוצע', 'השולחן נמחק', 'success');
-    // לא מחזירים את מודל העריכה כי השולחן נמחק
-  } catch (e) {
-    notify('שגיאה', String(e?.message || e), 'error');
-    // במקרה כשלון – נחזיר את מודל העריכה כדי שהמשתמש לא ייתקע
-    setTimeout(() => setEditModalVisible(true), 50);
-  }
+try {
+  const rid = selectedTable.recordID;
+
+  await update(ref(database, `Events/${user.uid}/${id}`), {
+    [`tables/${rid}`]: null,
+    [`tablesPlace/${rid}`]: null,
+  });
+
+  notify('בוצע', 'השולחן נמחק (כולל המיקום)', 'success');
+} catch (e) {
+  notify('שגיאה', String(e?.message || e), 'error');
+  setTimeout(() => setEditModalVisible(true), 50);
+}
+
 };
 
 
@@ -621,7 +738,11 @@ const deleteTable = async () => {
       id: table.recordID,
       name: table.displayName,
     }));
-
+    console.log('✅ Planning payload:', {
+      id: id,
+      imageUrl: selectedImage,
+      tableData: tableDataForPlanning,
+    });
     props.navigation.navigate('TablePlanningScreen', {
       id,
       selectedImage,
@@ -1493,6 +1614,169 @@ const deleteTable = async () => {
           </View>
         </View>
       </Modal>
+      {/* ===== Crop Modal (WEB) ===== */}
+<Modal visible={cropVisible} transparent animationType="fade" onRequestClose={() => setCropVisible(false)}>
+  <View style={[styles.modalOverlay, { backgroundColor: C.overlay }]}>
+    <View style={[styles.modalCard, { backgroundColor: C.card2, borderColor: C.border, shadowColor: C.shadow, maxWidth: 720 }]}>
+      <View style={styles.modalTopBar}>
+        <Text style={[styles.modalTitle, { color: C.text }]}>חיתוך תרשים</Text>
+        <TouchableOpacity onPress={() => setCropVisible(false)} style={styles.modalX} activeOpacity={0.85}>
+          <Text style={{ color: C.subText, fontSize: 18, fontWeight: '900' }}>✕</Text>
+        </TouchableOpacity>
+      </View>
+
+      {!!pendingImageUri && (
+        <View
+          style={[styles.cropPreviewBox, { borderColor: C.border }]}
+          onLayout={(e) => setCropBoxLayout({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+        >
+          <Image source={{ uri: pendingImageUri }} style={styles.cropPreviewImg} resizeMode="contain" />
+
+          {/* Masks (הכהה מסביב) */}
+          <View pointerEvents="none" style={[styles.cropMaskTop, { height: cropBoxLayout.h * cropFrac.top }]} />
+          <View pointerEvents="none" style={[styles.cropMaskBottom, { height: cropBoxLayout.h * cropFrac.bottom }]} />
+          <View pointerEvents="none" style={[styles.cropMaskLeft, { width: cropBoxLayout.w * cropFrac.left }]} />
+          <View pointerEvents="none" style={[styles.cropMaskRight, { width: cropBoxLayout.w * cropFrac.right }]} />
+
+          {/* Crop frame */}
+          <View
+            pointerEvents="none"
+            style={[
+              styles.cropFrame,
+              {
+                left: cropBoxLayout.w * cropFrac.left,
+                right: cropBoxLayout.w * cropFrac.right,
+                top: cropBoxLayout.h * cropFrac.top,
+                bottom: cropBoxLayout.h * cropFrac.bottom,
+                borderColor: C.primary,
+              },
+            ]}
+          />
+        </View>
+      )}
+
+      {/* Sliders */}
+      <View style={{ width: '100%', marginTop: 12 }}>
+{[
+  ['למעלה', 'top'],
+  ['למטה', 'bottom'],
+  ['שמאל', 'left'],
+  ['ימין', 'right'],
+].map(([label, key]) => {
+  const percent = Math.round((cropFrac[key] || 0) * 100);
+
+  return (
+    <View key={key} style={{ width: '100%', marginBottom: 12 }}>
+      <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <Text style={{ color: C.subText, fontWeight: '900', textAlign: 'right' }}>
+          חתוך {label}
+        </Text>
+
+        <Text style={{ color: C.subText, fontWeight: '900' }}>
+          {percent}%
+        </Text>
+      </View>
+
+      <View style={{ flexDirection: 'row-reverse', gap: 10, alignItems: 'center' }}>
+        {/* כפתורי -/+ קטנים */}
+        <TouchableOpacity
+          onPress={() =>
+            setCropFrac((p) => {
+              const cur = p[key] || 0;
+              const next = Math.max(0, Math.min(0.35, cur - 0.01));
+              return { ...p, [key]: next };
+            })
+          }
+          activeOpacity={0.85}
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: C.soft,
+            borderWidth: 1,
+            borderColor: C.border,
+          }}
+        >
+          <Text style={{ color: C.text, fontWeight: '900', fontSize: 18 }}>−</Text>
+        </TouchableOpacity>
+
+        {/* TextInput אחוזים */}
+        <TextInput
+          style={[
+            inputCommon({
+              flex: 1,
+              height: 42,
+              paddingVertical: 0,
+              textAlign: 'center',
+              writingDirection: 'ltr',
+            }),
+          ]}
+          keyboardType={Platform.OS === 'web' ? 'default' : 'numeric'}
+          value={String(percent)}
+          onChangeText={(t) => {
+            const n = Math.max(0, Math.min(35, Number(String(t).replace(/[^\d]/g, '')) || 0));
+            setCropFrac((p) => ({ ...p, [key]: n / 100 }));
+          }}
+          placeholder="0-35"
+          placeholderTextColor={C.placeholder}
+        />
+
+        <TouchableOpacity
+          onPress={() =>
+            setCropFrac((p) => {
+              const cur = p[key] || 0;
+              const next = Math.max(0, Math.min(0.35, cur + 0.01));
+              return { ...p, [key]: next };
+            })
+          }
+          activeOpacity={0.85}
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: C.soft,
+            borderWidth: 1,
+            borderColor: C.border,
+          }}
+        >
+          <Text style={{ color: C.text, fontWeight: '900', fontSize: 18 }}>+</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={{ color: C.muted, fontWeight: '800', fontSize: 11, marginTop: 6, textAlign: 'right' }}>
+        טווח מותר: 0–35 (%)
+      </Text>
+    </View>
+  );
+})}
+
+      </View>
+
+      <View style={styles.modalFooter}>
+        <TouchableOpacity
+          style={[styles.modalBtn, { backgroundColor: C.soft, borderColor: C.border }]}
+          onPress={() => setCropVisible(false)}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.btnTextCancel, { color: C.text }]}>ביטול</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.modalBtn, { backgroundColor: C.primary, borderColor: C.primary }]}
+          onPress={applyCropAndUpload}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.btnTextPrimary, { color: '#fff' }]}>אישור חיתוך והעלה</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+</Modal>
+
     </SafeAreaView>
   );
 };
@@ -1909,6 +2193,26 @@ addGuestsText: {
     fontWeight: '900',
     letterSpacing: 0.4,
   },
+cropPreviewBox: {
+  width: '100%',
+  height: 340,
+  borderWidth: 1,
+  borderRadius: 14,
+  overflow: 'hidden',
+  position: 'relative',
+},
+cropPreviewImg: { width: '100%', height: '100%' },
+
+cropMaskTop: { position: 'absolute', left: 0, right: 0, top: 0, backgroundColor: 'rgba(0,0,0,0.45)' },
+cropMaskBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)' },
+cropMaskLeft: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)' },
+cropMaskRight: { position: 'absolute', right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.45)' },
+
+cropFrame: {
+  position: 'absolute',
+  borderWidth: 2,
+  borderRadius: 10,
+},
 
 
 });
